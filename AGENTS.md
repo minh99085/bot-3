@@ -2,7 +2,7 @@
 
 ## Cursor Cloud specific instructions
 
-This repository (`bot-3-clone-of-bot-1-`) is intended to hold a flat copy of **Bot-1** on `main` — no nested clone folder. The source must be `https://github.com/minh99085/Bot-1` only. **Do not use `Arb-bot` or other repos as a substitute.**
+This repository (`bot-3-clone-of-bot-1-`) is intended to hold a flat copy of **Bot-1** on `main` — no nested clone folder. The source must be `https://github.com/minh99085/Bot-1` only.
 
 ### Current state
 
