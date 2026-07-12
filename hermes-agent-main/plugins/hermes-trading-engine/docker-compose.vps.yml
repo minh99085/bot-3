@@ -1,0 +1,13 @@
+# VPS deploy overlay (Bot 3). Skips pytest in Docker build — same as local training.
+name: bot3-vps
+
+services:
+  hermes-trading-engine:
+    build:
+      args:
+        RUN_TESTS: "0"
+
+  hermes-training:
+    build:
+      args:
+        RUN_TESTS: "0"

@@ -140,9 +140,9 @@ cd $VpsRepo
 python3 scripts/setup-vps-training-env.py
 python3 scripts/pulse-babysit/validate-frozen-lock.py $PluginPath/.env || exit 1
 cd $PluginPath
-docker compose down --remove-orphans
-docker compose build
-docker compose up -d --force-recreate --remove-orphans
+docker compose -f docker-compose.yml -f docker-compose.vps.yml down --remove-orphans
+docker compose -f docker-compose.yml -f docker-compose.vps.yml build
+docker compose -f docker-compose.yml -f docker-compose.vps.yml up -d --force-recreate --remove-orphans
 sleep 8
 docker ps --format '{{.Names}} {{.Status}}' | grep -E 'hermes-training|hermes-trading-engine'
 "@

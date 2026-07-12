@@ -54,9 +54,9 @@ fi
 python3 scripts/setup-vps-training-env.py || true
 
 cd "$PLUGIN"
-docker compose down --remove-orphans 2>/dev/null || true
-docker compose build
-docker compose up -d --force-recreate --remove-orphans
+docker compose -f docker-compose.yml -f docker-compose.vps.yml down --remove-orphans 2>/dev/null || true
+docker compose -f docker-compose.yml -f docker-compose.vps.yml build
+docker compose -f docker-compose.yml -f docker-compose.vps.yml up -d --force-recreate --remove-orphans
 
 sleep 8
 docker ps --format 'table {{.Names}}\t{{.Status}}' | grep -E 'hermes|NAMES' || docker ps
