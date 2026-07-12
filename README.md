@@ -1,34 +1,38 @@
-# Bot-1
+# Bot-3 (clone of Bot-1)
 
-**Bot 1** — standalone BTC pulse paper bot (Hermes trading engine).
+**Bot 3 Directional** — standalone BTC/ETH pulse paper bot (Hermes trading engine).
 
-| | Bot 1 |
+| | Bot 3 |
 |---|-------|
-| **Strategy** | `arb_first_perfect_wr_v1` (sweet-spot 0.47–0.55 entry band) |
-| **VPS** | `144.202.122.120` (`ssh bot1` / `root@144.202.122.120`) |
-| **Dashboard** | http://144.202.122.120/ |
-| **Path** | `/opt/Bot-1` |
-| **Deploy** | `.\scripts\sync-vps.ps1` |
+| **Strategy** | Directional paper (tier engine + loop architecture) |
+| **VPS** | `144.202.122.120` (`/opt/Bot-3`) |
+| **Dashboard** | http://144.202.122.120/dashboard |
+| **TradingView** | http://144.202.122.120/webhooks/tradingview |
+| **Deploy** | `.\scripts\sync-vps-bot3.ps1` |
 
-## Quick start (operator)
+## Quick start (VPS deploy)
+
+1. Paste your TradingView secret into `hermes-agent-main/plugins/hermes-trading-engine/tradingview.secret` (one line).
+2. From the repo root on your laptop:
 
 ```powershell
-cd C:\Users\tieut\Bot-1
-.\scripts\sync-vps.ps1
+cd C:\hermes-agent\bot-3-clone-of-bot-1-
+git pull origin main
+.\scripts\sync-vps-bot3.ps1
 ```
 
-**Bot 3 local training (Docker Desktop):**
+The deploy script applies env (`Bot 3 Directional` dashboard label, TV context/tier gates ON, port 80), validates secrets, rebuilds Docker, and starts the loop.
+
+**Note:** Port 80 can host only one bot. If Bot-1 is still running on this VPS, stop it first (`docker compose down` in `/opt/Bot-1/...`) or use a different `VpsHost` in `sync-vps-bot3.ps1`.
+
+## Local training (Docker Desktop)
 
 ```powershell
 .\scripts\run-bot3-local-training.ps1
 ```
 
-Dashboard: http://localhost:8810/dashboard
+Dashboard: http://localhost:8810/dashboard (label: `Bot 3 - Local Training`, TV gates OFF for focused local runs).
 
-**TradingView (one secret file):** copy `hermes-agent-main/plugins/hermes-trading-engine/tradingview.secret.example` to `tradingview.secret`, paste your secret, restart with `.\scripts\run-bot3-local-training.ps1`. Expose with `ngrok http 8810` → `https://<ngrok>/webhooks/tradingview`.
+**TradingView (local):** copy `tradingview.secret.example` → `tradingview.secret`, paste secret, restart. Expose with `ngrok http 8810` → `https://<ngrok>/webhooks/tradingview`.
 
 Profile: `scripts/bot-profile.json`
-
-**Loop runtime:** paper loop runs 24×7 on VPS (`hermes-training`). GitHub Actions
-`.github/workflows/bot-1_loop.yml` is a **15m health monitor only** (no trading) — see
-`docs/cloud-vs-vps-loop.md`.

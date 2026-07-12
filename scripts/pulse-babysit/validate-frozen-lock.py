@@ -12,7 +12,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = Path(__file__).resolve().parent / "frozen-env-keys.json"
 DEFAULT_ENV = ROOT / "hermes-agent-main" / "plugins" / "hermes-trading-engine" / ".env"
-VPS_ENV = Path("/opt/Bot-1/hermes-agent-main/plugins/hermes-trading-engine/.env")
+VPS_ENV = Path("/opt/Bot-3/hermes-agent-main/plugins/hermes-trading-engine/.env")
+BOT1_VPS_ENV = Path("/opt/Bot-1/hermes-agent-main/plugins/hermes-trading-engine/.env")
 
 
 def _parse_env(path: Path) -> dict[str, str]:
@@ -111,7 +112,9 @@ def validate_env(env: dict[str, str], manifest: dict) -> list[dict]:
 
 def main() -> int:
     env_path = Path(sys.argv[1]) if len(sys.argv) > 1 else (
-        VPS_ENV if VPS_ENV.exists() else DEFAULT_ENV
+        VPS_ENV if VPS_ENV.exists() else (
+            BOT1_VPS_ENV if BOT1_VPS_ENV.exists() else DEFAULT_ENV
+        )
     )
     if not MANIFEST.exists():
         print(json.dumps({"healthy": False, "error": f"missing {MANIFEST}"}, indent=2))

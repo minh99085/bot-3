@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Apply loop-engine architecture env on VPS: quant baseline owns trades; Grok/TV observe-only."""
+"""Apply loop-engine architecture env on VPS: quant baseline owns trades; TV observe/context ON."""
+import json
 import sys
 from pathlib import Path
 
@@ -12,15 +13,39 @@ from engine.pulse.config_coupling import (  # noqa: E402
     window_seconds_for_slugs,
 )
 
-ENV_PATH = Path("/opt/Bot-1/hermes-agent-main/plugins/hermes-trading-engine/.env")
-if not ENV_PATH.exists():
-    ENV_PATH = ENGINE_ROOT / ".env"
+
+def _resolve_env_path() -> Path:
+    profile_path = ROOT / "scripts" / "bot-profile.json"
+    if profile_path.exists():
+        try:
+            prof = json.loads(profile_path.read_text(encoding="utf-8"))
+            vps_repo = (prof.get("vps_repo") or "").strip()
+            if vps_repo:
+                candidate = Path(vps_repo) / "hermes-agent-main/plugins/hermes-trading-engine/.env"
+                if candidate.exists() or Path(vps_repo).exists():
+                    return candidate
+        except (json.JSONDecodeError, OSError):
+            pass
+    for candidate in (
+        Path("/opt/Bot-3/hermes-agent-main/plugins/hermes-trading-engine/.env"),
+        Path("/opt/Bot-1/hermes-agent-main/plugins/hermes-trading-engine/.env"),
+        ENGINE_ROOT / ".env",
+    ):
+        if candidate.exists():
+            return candidate
+    return ENGINE_ROOT / ".env"
+
+
+ENV_PATH = _resolve_env_path()
 
 # FROZEN (operator lock 2026-06-27): TV gate keys in UPDATES below marked [TV-LOCK] must not be
 # re-enabled in babysit/autopilot fixes. See .grok/rules/tv-observe-only-lock.md
 
 UPDATES = {
-    "PULSE_DASHBOARD_BOT_LABEL": "Bot 1 · Directional Paper",
+    "PULSE_DASHBOARD_BOT_LABEL": "Bot 3 Directional",
+    # VPS public endpoints (TradingView requires HTTP port 80).
+    "PULSE_DASHBOARD_PUBLISH": "0.0.0.0:80",
+    "TRADINGVIEW_WEBHOOK_PUBLISH": "0.0.0.0:80",
     "TRADINGVIEW_WEBHOOK_MIRROR_URL": "",
     # LLM COUNCIL wiring (operator 2026-07-01 "utilize computing power of Grok and Claude"):
     # Grok is back to SHADOW so it is NOT a solo fail-closed gate (which was blocking trades); instead
@@ -110,14 +135,14 @@ UPDATES = {
     "PULSE_VERIFIER_FOLLOW_REQUIRE_VERDICT": "0",
     # [TV-LOCK] observe-only — webhooks feed features/Grok; no MTF or signal trade authority.
     "PULSE_TRADINGVIEW_SIGNAL_GATE": "0",
-    "PULSE_TV_EVENT_ID_SUFFIX": "bot1",
+    "PULSE_TV_EVENT_ID_SUFFIX": "bot3",
     "PULSE_TV_MIN_SIGNAL_STRENGTH": "0",
-    "PULSE_TV_MTF_CONFLICT_GATE": "0",
+    "PULSE_TV_MTF_CONFLICT_GATE": "1",
     "PULSE_TV_MTF_REQUIRE_CONFIRM": "0",
     "PULSE_TV_MTF_REQUIRE_ALL_CONFIRM": "0",
     "PULSE_TV_MTF_REQUIRE_SIDE_ALIGN": "0",
     # UP restrictor floors: block proven-losing UP contexts.
-    "PULSE_TV_DOWN_BIAS_GATE": "0",
+    "PULSE_TV_DOWN_BIAS_GATE": "1",
     "PULSE_TV_DOWN_BIAS_BLOCK_UP_AGAINST_CONFIRMED_DOWN": "1",
     "PULSE_TV_DOWN_BIAS_BLOCK_UP_RANGE_TOP": "1",
     "PULSE_TV_DOWN_BIAS_BLOCK_UP_MARKOV_CHOP_NOISE": "1",
@@ -175,10 +200,10 @@ UPDATES = {
     # since quant is ~calibrated -> naturally self-capping. Per-price-bucket realized-vs-implied WR is
     # tracked on the dashboard so we measure whether the favorite band actually pays here.
     "PULSE_MAX_PRICE": "0.85",
-    # [TV-LOCK] context gate off — TV never blocks entries.
-    "PULSE_TV_CONTEXT_GATE": "0",
+    # TV context gate ON (restrict-only): blocks proven-losing contexts; not trade authority.
+    "PULSE_TV_CONTEXT_GATE": "1",
     # TV confidence tier: modulate min_edge/max_price at 15m sweet spot (not a trade gate).
-    "PULSE_TV_CONFIDENCE_TIER_ENABLED": "0",
+    "PULSE_TV_CONFIDENCE_TIER_ENABLED": "1",
     "PULSE_TV_TIER_REQUIRE_SWEET_SPOT": "1",
     "PULSE_TV_TIER_15M_ONLY": "0",
     "PULSE_TV_TIER_ALIGNED_STRENGTH_MIN": "0.72",
@@ -286,7 +311,7 @@ UPDATES = {
     "PULSE_GATE_AUTO_TUNE_COOLDOWN": "6",
     # DOWN overconfidence filter (ask_down - fair_p_up); blocks FULL_REPORT loser cluster.
     "PULSE_DOWN_MAX_ASK_FAIR_GAP": "0.12",
-    # Quant-only tier path when TradingView MTF is absent (operator: no TV alerts).
+    # Quant-only tier fallback when TradingView MTF is absent (sparse alerts / cold start).
     "PULSE_TIER_QUANT_ONLY_WHEN_NO_TV": "1",
     "PULSE_TIER_QUANT_ONLY_MIN_EDGE": "0.02",
     "PULSE_TIER_QUANT_ONLY_MIN_CONVICTION": "0.08",
@@ -295,8 +320,6 @@ UPDATES = {
     "PULSE_LOSS_STREAK_CUT_AFTER": "2",
     "PULSE_LOSS_STREAK_CUT_TRADES": "5",
     "PULSE_LOSS_STREAK_SIZE_MULT": "0.5",
-    # TV confidence tier OFF — no alerts expected; use quant-only tier path instead.
-    "PULSE_TV_CONFIDENCE_TIER_ENABLED": "0",
     # Cost-aware capture (deep-scan 2026-06-29, operator-authorized): the flat 0.015 epsilon
     # double-counted execution risk and never fired on tight BTC books. We now make the
     # PER-OPPORTUNITY non-atomic sim the real cost filter (market impact + 50bps leg-2 slippage +

@@ -3,14 +3,14 @@
   "bot_id": "bot3",
   "strategy_id": "arb_first_perfect_wr_v1",
   "github": "https://github.com/minh99085/bot-3-clone-of-bot-1-",
-  "local_workspace": "C:\\Users\\tieut\\bot-3-clone-of-bot-1-",
-  "vps_host": null,
-  "vps_user": null,
-  "vps_repo": null,
-  "ssh_alias": null,
-  "ssh_key": null,
+  "local_workspace": "C:\\hermes-agent\\bot-3-clone-of-bot-1-",
+  "vps_host": "144.202.122.120",
+  "vps_user": "root",
+  "vps_repo": "/opt/Bot-3",
+  "ssh_alias": "bot3",
+  "ssh_key": "~/.ssh/bot1_grok_temp",
   "plugin_path": "hermes-agent-main/plugins/hermes-trading-engine",
-  "dashboard": "http://localhost:8810/dashboard",
+  "dashboard": "http://144.202.122.120/dashboard",
   "bundle_name": null,
   "scheduled_task": null,
   "babysit_autopilot": false,
@@ -22,5 +22,11 @@
       "hermes-agent-main/plugins/hermes-trading-engine/docker-compose.yml",
       "hermes-agent-main/plugins/hermes-trading-engine/docker-compose.local.yml"
     ]
+  },
+  "vps_training": {
+    "setup_script": "scripts/setup-vps-training-env.py",
+    "deploy_script_ps1": "scripts/sync-vps-bot3.ps1",
+    "tradingview_webhook": "http://144.202.122.120/webhooks/tradingview",
+    "dashboard_bot_label": "Bot 3 Directional"
   }
 }

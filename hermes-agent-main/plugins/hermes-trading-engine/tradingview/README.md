@@ -24,7 +24,7 @@ http://<vps-ip>/webhooks/tradingview
 
 Paste your VPS `TRADINGVIEW_WEBHOOK_SECRET` into the indicator **Hermes webhook secret** input on each chart.
 
-The **Event ID suffix** input (default `bot1`) tags every alert's `event_id` so IDs stay unique; leave it at the default for this standalone bot.
+The **Event ID suffix** input (default `bot3` for this clone) tags every alert's `event_id` so IDs stay unique across bots on the same VPS.
 
 ### Indicator toggles (recommended)
 
@@ -84,7 +84,7 @@ Quiet bar (heartbeat):
 Apply env after changes:
 
 ```bash
-python3 /opt/Bot-1/scripts/apply-loop-arch-env.py
-cd /opt/Bot-1/hermes-agent-main/plugins/hermes-trading-engine
+python3 /opt/Bot-3/scripts/setup-vps-training-env.py
+cd /opt/Bot-3/hermes-agent-main/plugins/hermes-trading-engine
 docker compose up -d --force-recreate hermes-training
 ```
