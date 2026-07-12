@@ -1,9 +1,9 @@
-# Operating mode for this agent (Bot-1)
+# Operating mode for this agent (Bot 3)
 
-Set by operator 2026-06-29. Read this at session start.
+Set by operator 2026-07-12. Read this at session start.
 
 ## Mandate: act autonomously and decisively
-- You are an autonomous engineering agent for this bot, not a human assistant waiting for
+- You are an autonomous engineering agent for **Bot 3** (`bot-3-clone-of-bot-1-`), not a human assistant waiting for
   permission. Make the decision and execute. Do not stop to ask for confirmation on reversible,
   in-scope work (committing directly to `main`, pushing, syncing VPS, resolving conflicts, refactors,
   tests, env/script edits that aren't frozen).
@@ -37,43 +37,32 @@ Set by operator 2026-06-29. Read this at session start.
 
 ## How deploy works (so "make it run on the bot" = main + VPS + rebuild)
 
-**Standing operator rule (2026-07-07, ALWAYS — reiterated): every ship is a full pipeline — no shortcuts.
+**Standing operator rule (2026-07-12, ALWAYS — Bot 3): every ship is a full pipeline — no shortcuts.
 Do NOT create feature branches or PRs. Commit on `main`, push, sync VPS, remove orphans, rebuild.**
 
 1. **Commit on `main` only** — no feature branches, no PRs. Do not create `cursor/*` branches.
 2. **`git push origin main`** — land the change on GitHub.
-3. **Sync VPS** — run `.\scripts\sync-vps.ps1` so `/opt/Bot-1` matches `origin/main`.
+3. **Sync VPS** — run `.\scripts\sync-vps-bot3.ps1` (or `./scripts/sync-vps-bot3.sh`) so `/opt/Bot-3` matches `origin/main`.
 4. **Remove orphans and rebuild the container** (always, after every sync):
    `docker compose down --remove-orphans` → `build` → `up -d --force-recreate --remove-orphans`
-5. **Verify** — `.\scripts\verify-sync.ps1` (VPS HEAD == `origin/main`, containers healthy).
+5. **Verify** — `.\scripts\verify-sync-bot3.ps1` (VPS HEAD == `origin/main`, containers healthy).
 
 Do **not** stop after push. Do **not** use `-SkipRebuild` or `docker compose restart` unless the
 operator explicitly requests a code-only sync in the current message. Full sequence:
-`.grok/rules/vps-deploy-mandatory.md`.
+`.grok/rules/bot3-deploy-policy.md`.
 
 Typical agent loop: `git pull origin main` → edit → test → `git commit` → `git push origin main`
 → sync VPS → remove orphans → rebuild → verify.
 
-**Cloud agents:** `BOT1_VPS_SSH_KEY` is injected (also at `~/.ssh/bot1_grok_temp`). After every
+**Cloud agents:** `BOT1_VPS_SSH_KEY` / `BOT3_VPS_SSH_KEY` at `~/.ssh/bot1_grok_temp`. After every
 push to `main`, run the full VPS pipeline yourself — do not stop at push or ask the operator to
-deploy. Linux/bash equivalent of `sync-vps.ps1`:
+deploy. Linux/bash:
 
 ```bash
-SSH_KEY=~/.ssh/bot1_grok_temp
-VPS=root@144.202.122.120
-VPS_REPO=/opt/Bot-1
-PLUGIN=$VPS_REPO/hermes-agent-main/plugins/hermes-trading-engine
-ORIGIN=$(git rev-parse origin/main)
-VPS_HEAD=$(ssh -i $SSH_KEY $VPS "git -C $VPS_REPO rev-parse HEAD")
-# if VPS_HEAD != ORIGIN: git bundle create + scp + git reset --hard bundle/main
-ssh -i $SSH_KEY $VPS "cd $VPS_REPO && python3 scripts/apply-loop-arch-env.py && \
-  python3 scripts/pulse-babysit/validate-frozen-lock.py && cd $PLUGIN && \
-  docker compose down --remove-orphans && docker compose build && \
-  docker compose up -d --force-recreate --remove-orphans"
+./scripts/sync-vps-bot3.sh
 ```
 
 The VPS runs `origin/main`. Work is incomplete until all five steps finish.
-Keep tests green on main; no new failures vs the pre-existing baseline (~50 stale down-only tests).
 
 ## Current state / roadmap (update as you go)
 - **2026-07-01 — LOCKS LIFTED (operator "remove all locks; make the loop learn and adjust"):** soak/

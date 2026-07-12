@@ -42,7 +42,22 @@ explicitly requests a code-only sync in the current message. No `docker compose 
 - `docker compose restart` or single-service recreate instead of full down → build → up.
 - Deploy Bot 1 changes to Bot 2 VPS (or vice versa).
 
-## Bot 1 targets
+## Bot 3 targets (operator rule 2026-07-12 — primary for this repo)
+
+| Item | Value |
+|------|-------|
+| Repo | `https://github.com/minh99085/bot-3-clone-of-bot-1-` |
+| Branch | `main` only — no feature branches, no PRs |
+| VPS | `root@144.202.122.120` |
+| Dashboard | `http://144.202.122.120/dashboard` (`Bot 3 Directional`) |
+| Path | `/opt/Bot-3` |
+| Script (Windows) | `.\scripts\sync-vps-bot3.ps1` |
+| Script (Linux) | `./scripts/sync-vps-bot3.sh` |
+| Policy doc | `.grok/rules/bot3-deploy-policy.md` |
+
+Cloud agents on **Bot 3** must run `sync-vps-bot3` after every push to `main`.
+
+## Bot 1 targets (legacy — do not use for Bot 3 deploy)
 
 | Item | Value |
 |------|-------|

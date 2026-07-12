@@ -26,6 +26,11 @@
   "vps_training": {
     "setup_script": "scripts/setup-vps-training-env.py",
     "deploy_script_ps1": "scripts/sync-vps-bot3.ps1",
+    "deploy_script_sh": "scripts/sync-vps-bot3.sh",
+    "deploy_policy": ".grok/rules/bot3-deploy-policy.md",
+    "git_branch": "main",
+    "no_feature_branches": true,
+    "always_rebuild": true,
     "tradingview_webhook": "http://144.202.122.120/webhooks/tradingview",
     "dashboard_bot_label": "Bot 3 Directional"
   }
