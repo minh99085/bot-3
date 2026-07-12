@@ -142,3 +142,14 @@ def test_triage_flat_exploration_allows_flat_trend(monkeypatch):
     v = skill.evaluate(window=w, side="up", ask_price=0.50, now=1_000_100.0,
                        tv_feature=feat, symbol="BTCUSD")
     assert v.status == PROCEED_SWEEP
+
+
+def test_trend_fallback_flat_when_open_missing(monkeypatch):
+    monkeypatch.setenv("PULSE_PRICE_TREND_FALLBACK_FLAT", "1")
+    feed = _StaticFeed(100.0)
+    w = SimpleNamespace(event_id="e2", open_ts=999_990.0, series_slug="btc-up-or-down-15m")
+    # No open snapshot seeded — fallback should emit flat.
+    t = trend_for_window(window=w, price_feed=feed, now=1_000_000.0, max_price_age_s=60.0)
+    assert t is not None
+    assert t["trend"] == TREND_FLAT
+    assert "fallback" in str(t.get("note") or "")

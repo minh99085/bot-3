@@ -171,15 +171,15 @@ UPDATES = {
     "PULSE_DIRECTIONAL_EXPLORE_RATE": "0.12",
     "PULSE_DIRECTIONAL_WINNING_MIN_SAMPLES": "30",
     # Training throughput: lower edge floors; execution gate still paper-only.
-    "PULSE_MIN_EDGE": "0.01",
-    "PULSE_BASIS_BUFFER": "0.003",
-    "PULSE_EDGE_BUFFER": "0.003",
+    "PULSE_MIN_EDGE": "0.005",
+    "PULSE_BASIS_BUFFER": "0.002",
+    "PULSE_EDGE_BUFFER": "0.002",
     # Reject only very wide books during training probes.
-    "PULSE_EXEC_MAX_SPREAD": "0.06",
+    "PULSE_EXEC_MAX_SPREAD": "0.08",
     # Allow marginal paper fills for loop learning (post-trade / Grok evidence).
     "PULSE_EXEC_MIN_EV": "0",
-    # Paper training: allow underdog-side probes below favorite floor.
-    "PULSE_MIN_ENTRY_PRICE": "0.38",
+    # Paper training: disable underdog floor so execution gate stops blocking cheap sides.
+    "PULSE_MIN_ENTRY_PRICE": "0",
     # Favorites have lower R:R; 0.25 allows entries up to ~0.80 while still skipping dust.
     "PULSE_MIN_REWARD_RISK": "0.25",
     "PULSE_MIN_REWARD_RISK_UP_PREMIUM": "0.10",
@@ -450,12 +450,12 @@ UPDATES = {
     "PULSE_PRISM_THOMPSON_GATE_ENABLED": "0",
     "PULSE_PRISM_AGENT_GATE_ENABLED": "0",
     "PULSE_PRISM_BNB_BLOCK": "0",
-    "PULSE_TRIAGE_MIN_DEPTH_USD": "50",
-    "PULSE_TRIAGE_MAX_SLIPPAGE_PCT": "2",
+    "PULSE_TRIAGE_MIN_DEPTH_USD": "25",
+    "PULSE_TRIAGE_MAX_SLIPPAGE_PCT": "3",
     "PULSE_TRIAGE_MIN_SHARES": "5",
     # Per-asset triage parity: ETH hourly uses the same thresholds as BTC (override per key if needed).
-    "PULSE_TRIAGE_BTC_MIN_DEPTH_USD": "50",
-    "PULSE_TRIAGE_BTC_MAX_SLIPPAGE_PCT": "2",
+    "PULSE_TRIAGE_BTC_MIN_DEPTH_USD": "25",
+    "PULSE_TRIAGE_BTC_MAX_SLIPPAGE_PCT": "3",
     "PULSE_TRIAGE_BTC_MIN_SHARES": "5",
     # Throughput sweet band 0.45-0.85 (BTC+ETH). GateAutoTuner raises floor if WR bleeds.
     "PULSE_TRIAGE_BTC_SWEET_MIN": "0.48",
@@ -464,8 +464,8 @@ UPDATES = {
     "PULSE_TRIAGE_BTC_TAIL_MAX": "0.08",
     "PULSE_TRIAGE_BTC_TAIL_MIN_STRENGTH": "0.70",
     "PULSE_TRIAGE_BTC_TV_MAX_AGE_S": "3600",
-    "PULSE_TRIAGE_ETH_MIN_DEPTH_USD": "50",
-    "PULSE_TRIAGE_ETH_MAX_SLIPPAGE_PCT": "2",
+    "PULSE_TRIAGE_ETH_MIN_DEPTH_USD": "25",
+    "PULSE_TRIAGE_ETH_MAX_SLIPPAGE_PCT": "3",
     "PULSE_TRIAGE_ETH_MIN_SHARES": "5",
     "PULSE_TRIAGE_ETH_SWEET_MIN": "0.48",
     "PULSE_TRIAGE_ETH_SWEET_MAX": "0.72",
@@ -482,10 +482,13 @@ UPDATES = {
     "PULSE_TRIAGE_TREND_SOURCE": "price",
     "PULSE_GROK_TREND_SOURCE": "price",
     # Detect trend sooner — flat windows were starving Discovery (REJECT_TREND_MISALIGNED).
-    "PULSE_PRICE_TREND_MIN_MOVE_BPS": "0.1",
+    "PULSE_PRICE_TREND_MIN_MOVE_BPS": "0.05",
+    "PULSE_PRICE_MAX_AGE_S": "180",
+    # When window-open snapshot missing, emit flat (pairs with flat exploration).
+    "PULSE_PRICE_TREND_FALLBACK_FLAT": "1",
     # Flat + counter-trend probes for paper learning (not forced fills).
-    "PULSE_TRIAGE_FLAT_EXPLORATION_RATE": "0.40",
-    "PULSE_TRIAGE_TREND_EXPLORATION_RATE": "0.30",
+    "PULSE_TRIAGE_FLAT_EXPLORATION_RATE": "0.75",
+    "PULSE_TRIAGE_TREND_EXPLORATION_RATE": "0.65",
     # ---- DIRECTIONAL TIER ENGINE (operator 2026-07-06; $2000 bankroll, trade-like-live) ----
     # Regime-conditioned Bayesian tier system is the directional brain. Explicit 1h + 15m feeds
     # use tier engine on tick path (legacy_tick=0 -> unstructured pulse directional OFF).
@@ -573,8 +576,8 @@ UPDATES = {
     "PULSE_BINARY_INTEL_EXPLORATION_RATE": "0.20",
     "PULSE_BINARY_INTEL_MIN_SIZE_SCALE": "0.40",
     "PULSE_BINARY_INTEL_KELLY_FRACTION": "0.25",
-    # SAWR — Self-Adjusting Win-Rate meta-controller (invented Fill-Quality Pareto).
-    "PULSE_SAWR_ENABLED": "1",
+    # SAWR off during training throughput — was veto_loosen + tighten starving fills.
+    "PULSE_SAWR_ENABLED": "0",
     "PULSE_SAWR_LOOKBACK_N": "40",
     "PULSE_SAWR_MIN_SAMPLES": "8",
     "PULSE_SAWR_TARGET_WR": "0.60",

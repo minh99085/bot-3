@@ -32,6 +32,32 @@ def min_move_bps_from_env() -> float:
     return _envf("PULSE_PRICE_TREND_MIN_MOVE_BPS", 2.0)
 
 
+def fallback_flat_enabled() -> bool:
+    return (os.getenv("PULSE_PRICE_TREND_FALLBACK_FLAT", "0") or "0").strip().lower() in (
+        "1", "true", "yes", "on")
+
+
+def _flat_fallback_feature(
+    *,
+    asset: str,
+    spot_now: float,
+    price_age_s: Optional[float],
+    note: str,
+) -> dict:
+    return {
+        "source": "price_action",
+        "asset": str(asset or "btc").lower(),
+        "trend": TREND_FLAT,
+        "strength": 0.0,
+        "timeframe": "spot",
+        "spot_now": round(float(spot_now), 4),
+        "open_price": round(float(spot_now), 4),
+        "move_from_open_bps": 0.0,
+        "age_s": (round(float(price_age_s), 2) if price_age_s is not None else None),
+        "note": note,
+    }
+
+
 def trend_aligns_side(trend: Optional[str], side: str) -> bool:
     """Map spot trend to Polymarket contract side (up/down tokens only)."""
     t = str(trend or "").strip().lower()
@@ -117,11 +143,25 @@ def trend_for_window(
     price_feed.snapshot_open(event_id, getattr(window, "open_ts", 0), now=now)
     spot = price_feed.current()
     snap = price_feed.open_snapshot(event_id)
-    if spot is None or snap is None:
-        return None
     age = price_feed.age_s(now) if hasattr(price_feed, "age_s") else None
     slug = str(getattr(window, "series_slug", "") or "").lower()
     asset = "eth" if slug.startswith("eth") else "btc"
+    if spot is None:
+        return None
+    if snap is None:
+        # Training throughput: when boundary open is missing but spot is fresh, emit flat
+        # so Discovery can proceed via PULSE_TRIAGE_FLAT_EXPLORATION_RATE.
+        if fallback_flat_enabled() and (
+                age is None or float(age) <= float(max_price_age_s)):
+            if not getattr(price_feed, "is_fresh", lambda _a: True)(max_price_age_s, now):
+                return None
+            return _flat_fallback_feature(
+                asset=asset,
+                spot_now=float(spot),
+                price_age_s=age,
+                note="fallback_flat_no_open_snapshot",
+            )
+        return None
     raw = compute_trend_from_prices(
         asset=asset,
         spot_now=spot,
