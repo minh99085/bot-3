@@ -1,4 +1,4 @@
-# Osmani Loop Engineering Architecture (Bot-1)
+# Osmani Loop Engineering Architecture (Bot 3)
 
 Implementation of Addy Osmani's 2026 Loop Engineering framework for the pulse paper bot.
 

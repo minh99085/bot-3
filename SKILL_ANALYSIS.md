@@ -1,6 +1,6 @@
 # SKILL_ANALYSIS.md — Bot External Cognitive Boundary
 
-_This file is the deterministic evaluation contract for Bot-1 Discovery Lane. The pulse loop
+_This file is the deterministic evaluation contract for Bot 3 Discovery Lane. The pulse loop
 reads it on wake from disk. It is not interpreted by an LLM at runtime — thresholds and protocol
 are parsed into code (`AssetTriageSkill`). PAPER ONLY._
 
@@ -52,8 +52,8 @@ Execution Lane still runs skeptical `TradeEvaluator` (independent API book re-fe
 
 | Component | Path |
 |-----------|------|
-| Parser / loader | `scripts/skill_analysis_loader.py` (cloud), `engine/pulse/loop_architecture/skill_analysis_boundary.py` (VPS) |
-| Cloud cycle | `automated_10x_arb.py` (GitHub Actions — persists repo `MEMORY.md`) |
+| Parser / loader | `engine/pulse/loop_architecture/skill_analysis_boundary.py` (VPS) |
+| Cloud cycle | (removed — Bot 3 uses VPS loop only) |
 | Executor | `engine/pulse/loop_architecture/asset_triage.py` |
 | Wake load | `OsmaniLoopCoordinator.wake()` |
 | Disk copy | `{HTE_DATA_DIR}/SKILL_ANALYSIS.md` (synced on wake) |

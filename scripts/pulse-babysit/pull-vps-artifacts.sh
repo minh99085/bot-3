@@ -5,10 +5,10 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 DEST="$REPO_ROOT/vps_full_reports/latest"
-SSH_KEY="${BOT1_VPS_SSH_KEY:-$HOME/.ssh/bot1_grok_temp}"
-VPS_HOST="${BOT1_VPS_HOST:-144.202.122.120}"
-VPS_USER="${BOT1_VPS_USER:-root}"
-CONTAINER="${BOT1_VPS_CONTAINER:-hermes-training}"
+SSH_KEY="${BOT3_VPS_SSH_KEY:-${BOT1_VPS_SSH_KEY:-$HOME/.ssh/hermes-laptop-vps}}"
+VPS_HOST="${BOT3_VPS_HOST:-${BOT1_VPS_HOST:-207.246.96.45}}"
+VPS_USER="${BOT3_VPS_USER:-${BOT1_VPS_USER:-root}}"
+CONTAINER="${BOT3_VPS_CONTAINER:-${BOT1_VPS_CONTAINER:-hermes-training}}"
 SKIP_PUSH="${SKIP_PUSH:-0}"
 
 SSH=(ssh -i "$SSH_KEY" -o ConnectTimeout=20 -o StrictHostKeyChecking=no "${VPS_USER}@${VPS_HOST}")

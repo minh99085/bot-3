@@ -22,7 +22,7 @@ Charts 1+3 can share one BTC 5m layout (BarClose overlay + RSI pane). Same for E
 | Condition | **Any `alert()` function call** |
 | Frequency UI | **Not shown** — Pine sets `alert.freq_once_per_bar_close` |
 | Interval | **5m** |
-| Webhook URL | `http://144.202.122.120/webhooks/tradingview` |
+| Webhook URL | `http://207.246.96.45/webhooks/tradingview` |
 | Message | `{{message}}` |
 | Inputs → Hermes webhook secret | VPS `TRADINGVIEW_WEBHOOK_SECRET` |
 

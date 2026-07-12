@@ -11,7 +11,7 @@ from urllib.request import urlopen
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_DIR = Path(__file__).resolve().parent
-DEFAULT_BASE = "http://144.202.122.120"
+DEFAULT_BASE = "http://207.246.96.45"
 
 
 def _issue(code: str, severity: str, detail: str, hint: str = "") -> dict:

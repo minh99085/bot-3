@@ -45,7 +45,7 @@ Grok reads `tradingview_15m_price_path.focus.short_term` + `.regime`. Lane learn
 Paste VPS `TRADINGVIEW_WEBHOOK_SECRET` into **Inputs → Hermes webhook secret** on both charts.
 
 ```bash
-ssh root@144.202.122.120 "grep ^TRADINGVIEW_WEBHOOK_SECRET= /opt/Bot-1/hermes-agent-main/plugins/hermes-trading-engine/.env | cut -d=-f2-"
+ssh root@207.246.96.45 "grep ^TRADINGVIEW_WEBHOOK_SECRET= /opt/Bot-3/hermes-agent-main/plugins/hermes-trading-engine/.env | cut -d=-f2-"
 ```
 
 ## Alert (each chart)
@@ -54,7 +54,7 @@ ssh root@144.202.122.120 "grep ^TRADINGVIEW_WEBHOOK_SECRET= /opt/Bot-1/hermes-ag
 |-------|----------------|
 | **Condition** | **Any `alert()` function call** |
 | **Frequency** | **Once per bar close** |
-| **Webhook URL** | `http://144.202.122.120/webhooks/tradingview` |
+| **Webhook URL** | `http://207.246.96.45/webhooks/tradingview` |
 | **Message** | `{{message}}` |
 
 ## Payload fields (Hermes JSON)
@@ -64,7 +64,7 @@ ssh root@144.202.122.120 "grep ^TRADINGVIEW_WEBHOOK_SECRET= /opt/Bot-1/hermes-ag
 ## Verify
 
 ```bash
-curl -s http://144.202.122.120/api/polymarket/training/btc_pulse | python3 -c "
+curl -s http://207.246.96.45/api/polymarket/training/btc_pulse | python3 -c "
 import sys,json
 s=json.load(sys.stdin)
 tv=s.get('tradingview') or {}

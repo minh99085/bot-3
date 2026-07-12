@@ -1,7 +1,7 @@
 {
   "schema": "grok_bot_profile/1.0",
   "bot_id": "bot3",
-  "strategy_id": "arb_first_perfect_wr_v1",
+  "strategy_id": "directional_tier_loop_v1",
   "github": "https://github.com/minh99085/bot-3-clone-of-bot-1-",
   "local_workspace": "C:\\hermes-agent\\bot-3-clone-of-bot-1-",
   "vps_host": "207.246.96.45",

@@ -5,7 +5,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 BABYSIT="$REPO_ROOT/scripts/pulse-babysit"
-VPS_URL="${BOT1_VPS_URL:-http://144.202.122.120}"
+VPS_URL="${BOT3_VPS_URL:-${BOT1_VPS_URL:-http://207.246.96.45}}"
 APPLY_WR_TUNE="${APPLY_WR_TUNE:-1}"
 SKIP_PUSH="${SKIP_PUSH:-0}"
 

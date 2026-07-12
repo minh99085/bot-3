@@ -20,7 +20,7 @@ LATEST = ROOT / "vps_full_reports" / "latest"
 MONITOR = ROOT / "monitoring"
 TIMELINE = MONITOR / "timeline.jsonl"
 MANIFEST = MONITOR / "design-manifest.json"
-DEFAULT_BASE = "http://144.202.122.120"
+DEFAULT_BASE = "http://207.246.96.45"
 
 
 def _load_json(path: Path) -> dict:

@@ -21,13 +21,13 @@ repo copy already omits them so `alert()` works.
 4. Create alert **with RSI indicator selected**:
    - Condition: **Any `alert()` function call**
    - Message: `{{message}}`
-   - Webhook URL: `http://144.202.122.120/webhooks/tradingview`
+   - Webhook URL: `http://207.246.96.45/webhooks/tradingview`
 5. Re-save alert after changing the secret input
 
 ## Read secret from VPS
 
 ```bash
-ssh root@144.202.122.120 "grep ^TRADINGVIEW_WEBHOOK_SECRET= /opt/Bot-1/hermes-agent-main/plugins/hermes-trading-engine/.env | cut -d= -f2-"
+ssh root@207.246.96.45 "grep ^TRADINGVIEW_WEBHOOK_SECRET= /opt/Bot-3/hermes-agent-main/plugins/hermes-trading-engine/.env | cut -d= -f2-"
 ```
 
 ## What the bot stores
@@ -44,9 +44,9 @@ Hidden divergences still plot if enabled in inputs but **do not webhook** (bot o
 ## Verify delivery
 
 ```bash
-curl -s http://144.202.122.120/api/health
+curl -s http://207.246.96.45/api/health
 # then check status JSON on VPS:
-ssh root@144.202.122.120 "docker exec hermes-trading-engine python -c \"
+ssh root@207.246.96.45 "docker exec hermes-trading-engine python -c \"
 import json; from pathlib import Path
 tv=json.loads(Path('/data/btc_pulse_status.json').read_text())['tradingview']
 print('rsi', (tv.get('tradingview_alert_history') or {}).get('rsi_divergence_by_symbol'))

@@ -20,7 +20,7 @@ match `TRADINGVIEW_WEBHOOK_SECRET` in the plugin `.env` exactly (wrong/missing s
 
 ```bash
 # read from VPS (operator)
-ssh root@144.202.122.120 "grep ^TRADINGVIEW_WEBHOOK_SECRET= /opt/Bot-1/hermes-agent-main/plugins/hermes-trading-engine/.env | cut -d= -f2-"
+ssh root@207.246.96.45 "grep ^TRADINGVIEW_WEBHOOK_SECRET= /opt/Bot-3/hermes-agent-main/plugins/hermes-trading-engine/.env | cut -d= -f2-"
 ```
 
 After pasting the secret on a chart, re-save the alert (TradingView does not auto-refresh indicator
@@ -31,7 +31,7 @@ inputs on existing alerts).
 | Input | Value |
 |-------|-------|
 | **Hermes webhook secret** | VPS `TRADINGVIEW_WEBHOOK_SECRET` (see command above) |
-| **Hermes webhook URL** | `http://144.202.122.120/webhooks/tradingview` (reference only — also set in Alert) |
+| **Hermes webhook URL** | `http://207.246.96.45/webhooks/tradingview` (reference only — also set in Alert) |
 | **Bot name** | `hermes` (default) |
 
 ## Alert (each chart — one alert per chart)
@@ -40,7 +40,7 @@ inputs on existing alerts).
 |-------|----------------|---------------------|
 | **Condition** | **Any `alert()` function call** | `Regular Bullish Divergence` / other `alertcondition` names send English text, not JSON → bot rejects |
 | **Frequency** | **Once per bar close** | `Once per bar` can fire mid-candle then cancel when the pivot/divergence condition vanishes |
-| **Webhook URL** | `http://144.202.122.120/webhooks/tradingview` | |
+| **Webhook URL** | `http://207.246.96.45/webhooks/tradingview` | |
 | **Message** | `{{message}}` | Fixed text breaks JSON parsing |
 
 ## Why many alerts do not fire (expected vs misconfiguration)
@@ -73,14 +73,14 @@ inputs on existing alerts).
 
 ```bash
 # bot-side: last accepts / rejects
-curl -s http://144.202.122.120/api/polymarket/training/btc_pulse | python3 -c "
+curl -s http://207.246.96.45/api/polymarket/training/btc_pulse | python3 -c "
 import sys,json; tv=json.load(sys.stdin).get('tradingview',{})
 print('received',tv.get('tradingview_alerts_received'),'valid',tv.get('tradingview_alerts_valid'),'rejected',tv.get('tradingview_alerts_rejected'))
 print('reject_reasons',tv.get('tradingview_reject_reasons'))
 "
 
 # VPS logs (recent ACCEPTED / REJECTED)
-ssh root@144.202.122.120 "docker logs hermes-training 2>&1 | grep tradingview | tail -20"
+ssh root@207.246.96.45 "docker logs hermes-training 2>&1 | grep tradingview | tail -20"
 ```
 
 ## How the bot uses alerts (observe-only — not trade gates)

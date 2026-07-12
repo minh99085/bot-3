@@ -1,8 +1,8 @@
 # Pull pulse artifacts from VPS (docker volume via hermes-training) into vps_full_reports/latest/
 # Always commits + pushes to origin/main by default (includes report.docx).
 param(
-    [string]$SshKey = "$env:USERPROFILE\.ssh\bot1_grok_temp",
-    [string]$VpsHost = "144.202.122.120",
+    [string]$SshKey = "$env:USERPROFILE\.ssh\hermes-laptop-vps",
+    [string]$VpsHost = "207.246.96.45",
     [string]$VpsUser = "root",
     [string]$Container = "hermes-training",
     [switch]$SkipPush
