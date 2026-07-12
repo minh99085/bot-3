@@ -72,3 +72,6 @@ if ($ok) {
 } else {
     Write-Host "Dashboard API not ready yet. Run: .\scripts\diagnose-bot3-local.ps1" -ForegroundColor Yellow
 }
+
+Set-Location $Root
+& "$Root\scripts\print-tradingview-local.ps1"

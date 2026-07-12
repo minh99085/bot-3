@@ -25,6 +25,8 @@ cd C:\Users\tieut\Bot-1
 
 Dashboard: http://localhost:8810/dashboard
 
+**TradingView (one secret file):** copy `hermes-agent-main/plugins/hermes-trading-engine/tradingview.secret.example` to `tradingview.secret`, paste your secret, restart with `.\scripts\run-bot3-local-training.ps1`. Expose with `ngrok http 8810` → `https://<ngrok>/webhooks/tradingview`.
+
 Profile: `scripts/bot-profile.json`
 
 **Loop runtime:** paper loop runs 24×7 on VPS (`hermes-training`). GitHub Actions

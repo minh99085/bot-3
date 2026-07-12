@@ -14,6 +14,7 @@ inspection_reports/
 .env
 .env.*
 !.env.example
+tradingview.secret
 metrics/
 reports/
 # Laptop operator layer (scripts/laptop_agent.py): real local config + collected
