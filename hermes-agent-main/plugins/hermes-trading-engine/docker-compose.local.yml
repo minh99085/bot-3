@@ -1,11 +1,15 @@
 # Local laptop training overlay (Bot 3). Used by scripts/run-bot3-local-training.*
-# Skips the Dockerfile pytest gate (~67 known-stale tests) so first build succeeds.
+# Isolated project name + container names so Bot-1/VPS containers on the same machine do not collide.
+name: bot3-local
+
 services:
   hermes-trading-engine:
+    container_name: bot3-hermes-trading-engine
     build:
       args:
         RUN_TESTS: "0"
   hermes-training:
+    container_name: bot3-hermes-training
     build:
       args:
         RUN_TESTS: "0"

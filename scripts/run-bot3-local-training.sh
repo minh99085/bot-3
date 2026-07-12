@@ -5,14 +5,14 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PLUGIN="$ROOT/hermes-agent-main/plugins/hermes-trading-engine"
+PROJECT="bot3-local"
+COMPOSE=(-p "$PROJECT" -f docker-compose.yml -f docker-compose.local.yml)
 
 cd "$ROOT"
 echo "==> Preparing .env (Bot 3 local training)..."
 python3 "$ROOT/scripts/setup-local-training-env.py"
 
 cd "$PLUGIN"
-COMPOSE=(-f docker-compose.yml -f docker-compose.local.yml)
-
 echo "==> Stopping old containers..."
 docker compose "${COMPOSE[@]}" down --remove-orphans
 
@@ -26,7 +26,7 @@ echo ""
 echo "Bot 3 local training is up."
 echo "  Dashboard : http://localhost:8800/dashboard"
 echo "  Health    : http://localhost:8800/api/health"
-echo "  Logs      : docker compose -f docker-compose.yml -f docker-compose.local.yml logs -f hermes-training"
+echo "  Logs      : docker compose -p $PROJECT -f docker-compose.yml -f docker-compose.local.yml logs -f hermes-training"
 echo ""
 sleep 8
 if curl -sf http://localhost:8800/api/health >/dev/null 2>&1; then
