@@ -43,9 +43,9 @@ ENV_PATH = _resolve_env_path()
 
 UPDATES = {
     "PULSE_DASHBOARD_BOT_LABEL": "Bot 3 Directional",
-    # VPS public endpoints (TradingView requires HTTP port 80).
+    # VPS public endpoints (TradingView delivers to :80 via hermes-trading-engine proxy).
     "PULSE_DASHBOARD_PUBLISH": "0.0.0.0:80",
-    "TRADINGVIEW_WEBHOOK_PUBLISH": "0.0.0.0:80",
+    "TRADINGVIEW_WEBHOOK_PUBLISH": "127.0.0.1:18787",
     "TRADINGVIEW_WEBHOOK_MIRROR_URL": "",
     # LLM COUNCIL wiring (operator 2026-07-01 "utilize computing power of Grok and Claude"):
     # Grok is back to SHADOW so it is NOT a solo fail-closed gate (which was blocking trades); instead
