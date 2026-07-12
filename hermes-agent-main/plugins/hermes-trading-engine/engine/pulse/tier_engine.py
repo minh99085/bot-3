@@ -101,6 +101,12 @@ class TierConfig:
     sweet_min: float = 0.47
     sweet_max: float = 0.55
     min_seconds_since_open: float = 180.0
+    # When TradingView MTF is empty, allow quant-only sweet-band probes/harvests so the
+    # loop is not starved of settled samples (FULL_REPORT: ~91% tier WAIT without TV).
+    quant_only_when_no_tv: bool = True
+    quant_only_min_edge: float = 0.02
+    quant_only_min_conviction: float = 0.08
+    down_max_ask_fair_gap: float = 0.12
 
     @classmethod
     def from_env(cls) -> "TierConfig":
@@ -109,6 +115,10 @@ class TierConfig:
                 return float(os.getenv(k, str(d)))
             except (TypeError, ValueError):
                 return d
+
+        def _b(k, d):
+            return str(os.getenv(k, "1" if d else "0")).strip().lower() in (
+                "1", "true", "yes", "on")
         return cls(
             bankroll_usd=_f("PULSE_TIER_BANKROLL_USD", 2000.0),
             snipe_max_usd=_f("PULSE_TIER_SNIPE_MAX_USD", 200.0),
@@ -126,6 +136,10 @@ class TierConfig:
             sweet_max=_f("PULSE_TIER_SWEET_MAX", 0.55),
             min_seconds_since_open=_f("PULSE_TIER_MIN_SECONDS_SINCE_OPEN", 180.0),
             slippage_buffer=_f("PULSE_TIER_SLIPPAGE_BUFFER", 0.01),
+            quant_only_when_no_tv=_b("PULSE_TIER_QUANT_ONLY_WHEN_NO_TV", True),
+            quant_only_min_edge=_f("PULSE_TIER_QUANT_ONLY_MIN_EDGE", 0.02),
+            quant_only_min_conviction=_f("PULSE_TIER_QUANT_ONLY_MIN_CONVICTION", 0.08),
+            down_max_ask_fair_gap=_f("PULSE_DOWN_MAX_ASK_FAIR_GAP", 0.12),
         )
 
 
@@ -397,6 +411,9 @@ class DirectionalTierEngine:
         if edge < 0:
             return mk(Tier.WAIT, "negative_edge", 0.0)
 
+        tv_absent = all(
+            int((mtf_terms.get(tf) or {}).get("sign", 0) or 0) == 0 for tf in MTF_TFS)
+
         # SNIPE — last minutes, decisive displacement, stale book, jump-veto clear
         if ttc_s <= snipe_ttc and abs(z) >= c.snipe_z_min and edge >= c.slippage_buffer:
             if jump_risk:
@@ -413,6 +430,13 @@ class DirectionalTierEngine:
                 and mtf_aligned and regime_ok and rising):
             return mk(Tier.STRIKE, "mtf_aligned_regime", self._size(Tier.STRIKE, edge, p_chosen, ask, depth, open_corr))
 
+        # Gap filter applies to opinion/harvest paths (not SNIPE/STRIKE).
+        from engine.pulse.execution_gate import down_ask_fair_gap_blocks
+        if down_ask_fair_gap_blocks(
+                side=side, ask=ask, fair_p_up=fair_disp,
+                max_gap=float(c.down_max_ask_fair_gap)):
+            return mk(Tier.WAIT, "down_ask_fair_gap", 0.0)
+
         # HARVEST — regime bias + one confirm + sweet price + modest edge
         one_confirm = any(mtf_terms.get(tf, {}).get("sign", 0) == (1 if side == "up" else -1)
                           for tf in MTF_TFS)
@@ -420,10 +444,24 @@ class DirectionalTierEngine:
         if (edge >= harvest_edge and one_confirm and sweet and regime != Regime.CHOP):
             return mk(Tier.HARVEST, "regime_bias_sweet", self._size(Tier.HARVEST, edge, p_chosen, ask, depth, open_corr))
 
+        # QUANT-ONLY harvest/probe — no TV MTF available; digital fair + sweet band only.
+        if (c.quant_only_when_no_tv and tv_absent and sweet
+                and edge >= float(c.quant_only_min_edge)
+                and conviction >= float(c.quant_only_min_conviction)):
+            size = self._size(Tier.HARVEST, edge, p_chosen, ask, depth, open_corr)
+            size = min(size, max(float(c.probe_usd), float(c.harvest_max_usd) * 0.5))
+            return mk(Tier.HARVEST, "quant_only_sweet", max(float(c.probe_usd), size))
+
         # PROBE — early learning, tiny flat size, only with some HTF bias
         if (probe_enabled and sso < probe_sso_max
                 and regime in (Regime.TREND_UP, Regime.TREND_DOWN) and edge >= 0.01):
             return mk(Tier.PROBE, "early_probe", c.probe_usd)
+
+        # QUANT-ONLY probe — TV absent, early/mid window, soft sweet band, tiny size.
+        if (c.quant_only_when_no_tv and tv_absent and probe_enabled
+                and edge >= max(0.015, float(c.quant_only_min_edge) * 0.75)
+                and (sweet_min - 0.02) <= float(ask) <= (sweet_max + 0.02)):
+            return mk(Tier.PROBE, "quant_only_probe", c.probe_usd)
 
         return mk(Tier.WAIT, "below_tier_thresholds", 0.0)
 

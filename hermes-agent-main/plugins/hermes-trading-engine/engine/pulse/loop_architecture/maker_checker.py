@@ -66,15 +66,36 @@ class VerifiedTrade:
 class TradeGenerator:
     """Maker: converts a sweet-spot opportunity into a trade proposal."""
 
+    def __init__(self) -> None:
+        import os
+        self.loss_streak = 0
+        self._cut_remaining = 0
+        self._loss_streak_trigger = int(os.getenv("PULSE_LOSS_STREAK_CUT_AFTER", "2") or 2)
+        self._loss_streak_trades = int(os.getenv("PULSE_LOSS_STREAK_CUT_TRADES", "5") or 5)
+        self._loss_streak_mult = float(os.getenv("PULSE_LOSS_STREAK_SIZE_MULT", "0.5") or 0.5)
+
+    def record_outcome(self, won: bool) -> None:
+        """Update loss-streak sizing after a settled Osmani fill."""
+        if won:
+            self.loss_streak = 0
+            return
+        self.loss_streak += 1
+        if self.loss_streak >= self._loss_streak_trigger:
+            self._cut_remaining = max(self._cut_remaining, self._loss_streak_trades)
+
     def propose(self, opp: TradeOpportunity, *, worktree_id: str) -> TradeProposal:
         outcome_prob = float(opp.fair_p if opp.side == "up" else (1.0 - opp.fair_p))
+        size = float(opp.size_usd)
+        if self._cut_remaining > 0:
+            size = max(1.0, size * float(self._loss_streak_mult))
+            self._cut_remaining -= 1
         return TradeProposal(
             proposal_id=str(uuid.uuid4()),
             opportunity_id=opp.opportunity_id,
             event_id=opp.event_id,
             side=opp.side,
             outcome_prob=outcome_prob,
-            size_usd=float(opp.size_usd),
+            size_usd=size,
             reason=f"sweet_spot_edge={opp.edge:.4f} ask={opp.ask_price:.4f}",
             generated_at=time.time(),
             worktree_id=worktree_id,
@@ -83,6 +104,7 @@ class TradeGenerator:
                 "ttc_s": opp.ttc_s,
                 "tick_size": opp.tick_size,
                 "discovered_edge": opp.edge,
+                "loss_streak_cut": self._cut_remaining > 0 or self.loss_streak >= self._loss_streak_trigger,
             },
         )
 

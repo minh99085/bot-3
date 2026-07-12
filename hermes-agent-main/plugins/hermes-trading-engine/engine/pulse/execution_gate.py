@@ -24,8 +24,35 @@ PARTIAL_FILL_RISK = "partial_fill_risk"
 MISSING_MARKET_DATA = "missing_market_data"
 STALE_ORDERBOOK = "stale_orderbook"
 UNDERDOG_PRICE = "underdog_price_below_floor"
+DOWN_ASK_FAIR_GAP = "down_ask_fair_gap"
 REASONS = (WIDE_SPREAD, INSUFFICIENT_DEPTH, NEGATIVE_EV, TOO_CLOSE, MIN_SIZE_OR_TICK,
-           PARTIAL_FILL_RISK, MISSING_MARKET_DATA, STALE_ORDERBOOK, UNDERDOG_PRICE)
+           PARTIAL_FILL_RISK, MISSING_MARKET_DATA, STALE_ORDERBOOK, UNDERDOG_PRICE,
+           DOWN_ASK_FAIR_GAP)
+
+
+def down_ask_fair_gap_blocks(
+    *,
+    side: str,
+    ask: Optional[float],
+    fair_p_up: Optional[float],
+    max_gap: float = 0.12,
+) -> bool:
+    """True when a DOWN buy looks overconfident vs digital fair (FULL_REPORT loser pattern).
+
+    Uses ``ask_down - fair_p_up``. Large gaps mean the model is very bearish while still
+    paying mid/favorite prices for DOWN — the two local losses clustered here. ``max_gap<=0``
+    disables the check.
+    """
+    if str(side or "").strip().lower() != "down":
+        return False
+    if max_gap is None or float(max_gap) <= 0:
+        return False
+    if ask is None or fair_p_up is None:
+        return False
+    try:
+        return (float(ask) - float(fair_p_up)) > float(max_gap)
+    except (TypeError, ValueError):
+        return False
 
 
 @dataclass

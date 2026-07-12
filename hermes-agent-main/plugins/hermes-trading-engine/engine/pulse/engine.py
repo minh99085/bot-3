@@ -3984,6 +3984,15 @@ class PulseEngine:
                                                     pnl_usd=float(pos.pnl_usd or 0.0), now=now)
                 except Exception:  # noqa: BLE001 — never break settlement
                     pass
+            # Osmani maker loss-streak sizing (paper) — cut size after consecutive losses.
+            try:
+                _emode = str((pos.research or {}).get("entry_mode") or "")
+                if _emode.startswith("osmani") and self.osmani_loop is not None:
+                    gen = getattr(self.osmani_loop, "_generator", None)
+                    if gen is not None and hasattr(gen, "record_outcome"):
+                        gen.record_outcome(bool(pos.won))
+            except Exception:  # noqa: BLE001
+                pass
             if getattr(self, "cell_learning", None) is not None:
                 try:
                     self.cell_learning.record_settled(
@@ -6644,6 +6653,17 @@ class PulseEngine:
         fill = float(verified.fill_price or 0)
         if fill <= 0 or fill >= 1:
             return False
+
+        # DOWN overconfidence filter (FULL_REPORT loser pattern: ask_down - fair_p_up gap).
+        try:
+            from engine.pulse.execution_gate import down_ask_fair_gap_blocks
+            _fair_gap = self._osmani_fair_p(w, now)
+            _max_gap = float(os.getenv("PULSE_DOWN_MAX_ASK_FAIR_GAP", "0.12") or 0.12)
+            if down_ask_fair_gap_blocks(
+                    side=proposal.side, ask=fill, fair_p_up=_fair_gap, max_gap=_max_gap):
+                return False
+        except Exception:  # noqa: BLE001
+            pass
 
         # Unified p_exec: Grok-MC + digital + mkt, self-tuned by context (same as legacy tick)
         p_win = float(proposal.outcome_prob)

@@ -30,6 +30,21 @@ LOCAL_OVERRIDES = {
     "PULSE_GROK_DECIDER_MODE": "shadow",
     "PULSE_RESEARCH_LOOP_ENABLED": "0",
     "PULSE_VERIFIER_ENABLED": "0",
+    # Focused fix profile: no TV alerts; quant-only + auto-tune + gap filter.
+    "PULSE_TRADINGVIEW_SIGNAL_GATE": "0",
+    "PULSE_TV_CONTEXT_GATE": "0",
+    "PULSE_TV_DOWN_BIAS_GATE": "0",
+    "PULSE_TV_MTF_CONFLICT_GATE": "0",
+    "PULSE_TV_CONFIDENCE_TIER_ENABLED": "0",
+    "PULSE_GATE_AUTO_TUNE_ENABLED": "1",
+    "PULSE_DOWN_MAX_ASK_FAIR_GAP": "0.12",
+    "PULSE_TIER_QUANT_ONLY_WHEN_NO_TV": "1",
+    "PULSE_TIER_QUANT_ONLY_MIN_EDGE": "0.02",
+    "PULSE_TIER_HARVEST_EDGE_MIN": "0.02",
+    "PULSE_SELECTIVITY_MIN_WIN_RATE": "0.52",
+    "PULSE_SELECTIVITY_MIN_PROFIT_FACTOR": "0.85",
+    "PULSE_LOSS_STREAK_CUT_AFTER": "2",
+    "PULSE_LOSS_STREAK_SIZE_MULT": "0.5",
 }
 
 # TradingView observe-only intake - wired for local; user only supplies tradingview.secret

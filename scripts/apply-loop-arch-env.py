@@ -178,7 +178,7 @@ UPDATES = {
     # [TV-LOCK] context gate off — TV never blocks entries.
     "PULSE_TV_CONTEXT_GATE": "0",
     # TV confidence tier: modulate min_edge/max_price at 15m sweet spot (not a trade gate).
-    "PULSE_TV_CONFIDENCE_TIER_ENABLED": "1",
+    "PULSE_TV_CONFIDENCE_TIER_ENABLED": "0",
     "PULSE_TV_TIER_REQUIRE_SWEET_SPOT": "1",
     "PULSE_TV_TIER_15M_ONLY": "0",
     "PULSE_TV_TIER_ALIGNED_STRENGTH_MIN": "0.72",
@@ -274,8 +274,9 @@ UPDATES = {
     # TV strong-fade observe-only for throughput; auto-tuner + selectivity still protect WR.
     "PULSE_TV_STRONG_FADE_ENABLED": "0",
     "PULSE_TV_STRONG_FADE_EXEMPT_TIER_SNIPE": "1",
-    # Disabled: this legacy tuner pools BTC/ETH and loses mutations across restarts.
-    "PULSE_GATE_AUTO_TUNE_ENABLED": "0",
+    # Re-enabled 2026-07-12 for Bot-3 sample starvation recovery (FULL_REPORT n=9, tier choke).
+    # Mutations stay in-process; recreate still resets — acceptable vs permanent WAIT starvation.
+    "PULSE_GATE_AUTO_TUNE_ENABLED": "1",
     "PULSE_GATE_AUTO_TUNE_LOOKBACK_N": "24",
     "PULSE_GATE_AUTO_TUNE_MIN_SAMPLES": "12",
     "PULSE_GATE_AUTO_TUNE_TARGET_WR": "0.65",
@@ -283,6 +284,19 @@ UPDATES = {
     "PULSE_GATE_AUTO_TUNE_STARVE_FPH": "0.8",
     "PULSE_GATE_AUTO_TUNE_RICH_FPH": "3.0",
     "PULSE_GATE_AUTO_TUNE_COOLDOWN": "6",
+    # DOWN overconfidence filter (ask_down - fair_p_up); blocks FULL_REPORT loser cluster.
+    "PULSE_DOWN_MAX_ASK_FAIR_GAP": "0.12",
+    # Quant-only tier path when TradingView MTF is absent (operator: no TV alerts).
+    "PULSE_TIER_QUANT_ONLY_WHEN_NO_TV": "1",
+    "PULSE_TIER_QUANT_ONLY_MIN_EDGE": "0.02",
+    "PULSE_TIER_QUANT_ONLY_MIN_CONVICTION": "0.08",
+    "PULSE_TIER_HARVEST_EDGE_MIN": "0.02",
+    # Loss-streak size cut (Osmani maker).
+    "PULSE_LOSS_STREAK_CUT_AFTER": "2",
+    "PULSE_LOSS_STREAK_CUT_TRADES": "5",
+    "PULSE_LOSS_STREAK_SIZE_MULT": "0.5",
+    # TV confidence tier OFF — no alerts expected; use quant-only tier path instead.
+    "PULSE_TV_CONFIDENCE_TIER_ENABLED": "0",
     # Cost-aware capture (deep-scan 2026-06-29, operator-authorized): the flat 0.015 epsilon
     # double-counted execution risk and never fired on tight BTC books. We now make the
     # PER-OPPORTUNITY non-atomic sim the real cost filter (market impact + 50bps leg-2 slippage +
@@ -561,10 +575,10 @@ UPDATES = {
     # Tier 2: selectivity blocks need PF floor + higher min_samples + BH-FDR.
     # 2026-07-05: exploration was 0 (no cold-bucket probes); loosen PF/WR floors for +EV throughput.
     "PULSE_SELECTIVITY_MIN_SAMPLES": "20",
-    "PULSE_SELECTIVITY_MIN_PROFIT_FACTOR": "0.75",
-    "PULSE_SELECTIVITY_MIN_WIN_RATE": "0.45",
+    "PULSE_SELECTIVITY_MIN_PROFIT_FACTOR": "0.85",
+    "PULSE_SELECTIVITY_MIN_WIN_RATE": "0.52",
     "PULSE_SELECTIVITY_FDR_Q": "0.10",
-    "PULSE_SELECTIVITY_EXPLORATION_RATE": "0.15",
+    "PULSE_SELECTIVITY_EXPLORATION_RATE": "0.12",
 }
 
 

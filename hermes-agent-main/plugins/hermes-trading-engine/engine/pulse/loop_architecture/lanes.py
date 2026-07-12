@@ -79,6 +79,12 @@ class DiscoveryLane:
         edge = float((fair if side == "up" else (1.0 - fair)) - ask_f)
         if edge < self.min_edge:
             return
+        from engine.pulse.execution_gate import down_ask_fair_gap_blocks
+        import os
+        max_gap = float(os.getenv("PULSE_DOWN_MAX_ASK_FAIR_GAP", "0.12") or 0.12)
+        if down_ask_fair_gap_blocks(side=side, ask=ask_f, fair_p_up=fair, max_gap=max_gap):
+            self.triage_rejected += 1
+            return
         mode = (verdict.status if verdict else "TIMER_SWEEP")
         opp = TradeOpportunity(
             opportunity_id=str(uuid.uuid4()),
