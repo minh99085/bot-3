@@ -25,10 +25,10 @@ requests code-only sync in the current message.
 
 | Item | Value |
 |------|-------|
-| VPS | `root@144.202.122.120` |
+| VPS | `root@207.246.96.45` |
 | Path | `/opt/Bot-3` |
-| Dashboard | http://144.202.122.120/dashboard (`Bot 3 Directional`) |
-| TradingView | http://144.202.122.120/webhooks/tradingview |
+| Dashboard | http://207.246.96.45/dashboard (`Bot 3 Directional`) |
+| TradingView | http://207.246.96.45/webhooks/tradingview |
 | Local laptop | `C:\hermes-agent\bot-3-clone-of-bot-1-` |
 
 ---

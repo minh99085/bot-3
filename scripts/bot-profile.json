@@ -4,13 +4,13 @@
   "strategy_id": "arb_first_perfect_wr_v1",
   "github": "https://github.com/minh99085/bot-3-clone-of-bot-1-",
   "local_workspace": "C:\\hermes-agent\\bot-3-clone-of-bot-1-",
-  "vps_host": "144.202.122.120",
+  "vps_host": "207.246.96.45",
   "vps_user": "root",
   "vps_repo": "/opt/Bot-3",
   "ssh_alias": "bot3",
-  "ssh_key": "~/.ssh/bot1_grok_temp",
+  "ssh_key": "~/.ssh/hermes-laptop-vps",
   "plugin_path": "hermes-agent-main/plugins/hermes-trading-engine",
-  "dashboard": "http://144.202.122.120/dashboard",
+  "dashboard": "http://207.246.96.45/dashboard",
   "bundle_name": null,
   "scheduled_task": null,
   "babysit_autopilot": false,
@@ -31,7 +31,7 @@
     "git_branch": "main",
     "no_feature_branches": true,
     "always_rebuild": true,
-    "tradingview_webhook": "http://144.202.122.120/webhooks/tradingview",
+    "tradingview_webhook": "http://207.246.96.45/webhooks/tradingview",
     "dashboard_bot_label": "Bot 3 Directional"
   }
 }

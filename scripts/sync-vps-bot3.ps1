@@ -4,8 +4,8 @@
 param(
     [switch]$SkipRebuild,
     [switch]$VerifyOnly,
-    [string]$SshKey = "$env:USERPROFILE\.ssh\bot1_grok_temp",
-    [string]$VpsHost = "144.202.122.120",
+    [string]$SshKey = "$env:USERPROFILE\.ssh\hermes-laptop-vps",
+    [string]$VpsHost = "207.246.96.45",
     [string]$VpsUser = "root",
     [string]$VpsRepo = "/opt/Bot-3",
     [string]$PluginPath = "/opt/Bot-3/hermes-agent-main/plugins/hermes-trading-engine",

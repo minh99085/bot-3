@@ -48,8 +48,8 @@ explicitly requests a code-only sync in the current message. No `docker compose 
 |------|-------|
 | Repo | `https://github.com/minh99085/bot-3-clone-of-bot-1-` |
 | Branch | `main` only — no feature branches, no PRs |
-| VPS | `root@144.202.122.120` |
-| Dashboard | `http://144.202.122.120/dashboard` (`Bot 3 Directional`) |
+| VPS | `root@207.246.96.45` |
+| Dashboard | `http://207.246.96.45/dashboard` (`Bot 3 Directional`) |
 | Path | `/opt/Bot-3` |
 | Script (Windows) | `.\scripts\sync-vps-bot3.ps1` |
 | Script (Linux) | `./scripts/sync-vps-bot3.sh` |

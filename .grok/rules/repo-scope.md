@@ -27,10 +27,10 @@ Execute yourself; never leave VPS stale.
 
 ### VPS access (Bot 3)
 
-- Host: `144.202.122.120`, user `root`, repo: `/opt/Bot-3`
-- Dashboard: http://144.202.122.120/dashboard
-- TradingView: http://144.202.122.120/webhooks/tradingview
-- SSH key: `$env:USERPROFILE\.ssh\bot1_grok_temp` / `~/.ssh/bot1_grok_temp`
+- Host: `207.246.96.45`, user `root`, repo: `/opt/Bot-3`
+- Dashboard: http://207.246.96.45/dashboard
+- TradingView: http://207.246.96.45/webhooks/tradingview
+- SSH key: `$env:USERPROFILE\.ssh\hermes-laptop-vps` / `~/.ssh/hermes-laptop-vps`
 - Plugin compose: `/opt/Bot-3/hermes-agent-main/plugins/hermes-trading-engine`
 - Profile: `scripts/bot-profile.json`
 

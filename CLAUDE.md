@@ -54,7 +54,7 @@ operator explicitly requests a code-only sync in the current message. Full seque
 Typical agent loop: `git pull origin main` → edit → test → `git commit` → `git push origin main`
 → sync VPS → remove orphans → rebuild → verify.
 
-**Cloud agents:** `BOT1_VPS_SSH_KEY` / `BOT3_VPS_SSH_KEY` at `~/.ssh/bot1_grok_temp`. After every
+**Cloud agents:** `BOT3_VPS_SSH_KEY` at `~/.ssh/hermes-laptop-vps`. After every
 push to `main`, run the full VPS pipeline yourself — do not stop at push or ask the operator to
 deploy. Linux/bash:
 

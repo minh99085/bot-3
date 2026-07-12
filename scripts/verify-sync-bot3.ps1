@@ -1,7 +1,7 @@
 # Exit 0 if origin/main == Bot 3 VPS HEAD; exit 1 if diverged.
 param(
-    [string]$SshKey = "$env:USERPROFILE\.ssh\bot1_grok_temp",
-    [string]$VpsHost = "144.202.122.120",
+    [string]$SshKey = "$env:USERPROFILE\.ssh\hermes-laptop-vps",
+    [string]$VpsHost = "207.246.96.45",
     [string]$VpsUser = "root",
     [string]$VpsRepo = "/opt/Bot-3"
 )

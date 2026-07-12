@@ -5,9 +5,9 @@
 | | Bot 3 |
 |---|-------|
 | **Strategy** | Directional paper (tier engine + loop architecture) |
-| **VPS** | `144.202.122.120` (`/opt/Bot-3`) |
-| **Dashboard** | http://144.202.122.120/dashboard |
-| **TradingView** | http://144.202.122.120/webhooks/tradingview |
+| **VPS** | `207.246.96.45` (`/opt/Bot-3`) |
+| **Dashboard** | http://207.246.96.45/dashboard |
+| **TradingView** | http://207.246.96.45/webhooks/tradingview |
 | **Deploy** | `.\scripts\sync-vps-bot3.ps1` |
 
 ## Quick start (VPS deploy)

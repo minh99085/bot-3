@@ -17,14 +17,14 @@ code-only sync in the current message.
 | GitHub repo | `https://github.com/minh99085/bot-3-clone-of-bot-1-` |
 | Default branch | `main` (only) |
 | Local workspace | `C:\hermes-agent\bot-3-clone-of-bot-1-` |
-| VPS host | `root@144.202.122.120` |
+| VPS host | `root@207.246.96.45` |
 | VPS path | `/opt/Bot-3` |
-| Dashboard | http://144.202.122.120/dashboard (`Bot 3 Directional`) |
-| TradingView webhook | http://144.202.122.120/webhooks/tradingview |
+| Dashboard | http://207.246.96.45/dashboard (`Bot 3 Directional`) |
+| TradingView webhook | http://207.246.96.45/webhooks/tradingview |
 | Deploy (Windows) | `.\scripts\sync-vps-bot3.ps1` |
 | Deploy (Linux/bash) | `./scripts/sync-vps-bot3.sh` |
 | Env setup on VPS | `python3 scripts/setup-vps-training-env.py` |
-| SSH key | `$env:USERPROFILE\.ssh\bot1_grok_temp` / `~/.ssh/bot1_grok_temp` |
+| SSH key | `$env:USERPROFILE\.ssh\hermes-laptop-vps` / `~/.ssh/hermes-laptop-vps` |
 | Profile | `scripts/bot-profile.json` |
 
 ## Required sequence (every ship)

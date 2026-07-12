@@ -5,8 +5,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-SSH_KEY="${BOT3_VPS_SSH_KEY:-${BOT1_VPS_SSH_KEY:-$HOME/.ssh/bot1_grok_temp}}"
-VPS_HOST="${BOT3_VPS_HOST:-144.202.122.120}"
+SSH_KEY="${BOT3_VPS_SSH_KEY:-$HOME/.ssh/hermes-laptop-vps}"
+VPS_HOST="${BOT3_VPS_HOST:-207.246.96.45}"
 VPS_USER="${BOT3_VPS_USER:-root}"
 VPS_REPO="${BOT3_VPS_REPO:-/opt/Bot-3}"
 PLUGIN_PATH="$VPS_REPO/hermes-agent-main/plugins/hermes-trading-engine"
