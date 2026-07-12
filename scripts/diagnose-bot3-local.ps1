@@ -62,16 +62,14 @@ Section "Last 25 lines — bot3-hermes-training (training loop)"
 docker logs --tail 25 bot3-hermes-training 2>&1
 
 Section "Quick fixes"
-Write-Host @"
-1. Restart everything:
-     .\scripts\run-bot3-local-training.ps1
-2. Dashboard URL (try both):
-     http://127.0.0.1:8800/dashboard
-     http://localhost:8800/dashboard
-3. If port 8800 is taken, edit hermes-agent-main\plugins\hermes-trading-engine\.env
-     PULSE_DASHBOARD_PUBLISH=0.0.0.0:8801
-   then re-run run-bot3-local-training.ps1 and open http://127.0.0.1:8801/dashboard
-4. Live logs:
-     cd hermes-agent-main\plugins\hermes-trading-engine
-     docker compose -p bot3-local -f docker-compose.yml -f docker-compose.local.yml logs -f hermes-training
-"@
+Write-Host "1. Restart everything:"
+Write-Host "     .\scripts\run-bot3-local-training.ps1"
+Write-Host "2. Dashboard URL (try both):"
+Write-Host "     http://127.0.0.1:8800/dashboard"
+Write-Host "     http://localhost:8800/dashboard"
+Write-Host "3. If port 8800 is taken, edit hermes-agent-main\plugins\hermes-trading-engine\.env"
+Write-Host "     PULSE_DASHBOARD_PUBLISH=0.0.0.0:8801"
+Write-Host "   then re-run run-bot3-local-training.ps1 and open http://127.0.0.1:8801/dashboard"
+Write-Host "4. Live logs:"
+Write-Host "     cd hermes-agent-main\plugins\hermes-trading-engine"
+Write-Host "     docker compose -p bot3-local -f docker-compose.yml -f docker-compose.local.yml logs -f hermes-training"
