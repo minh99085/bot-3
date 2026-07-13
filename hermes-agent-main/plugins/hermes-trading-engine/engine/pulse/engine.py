@@ -1930,6 +1930,10 @@ class PulseEngine:
         self.osmani_loop = None
         if bool(getattr(self.cfg, "osmani_loop_enabled", False)):
             from engine.pulse.loop_architecture import OsmaniLoopCoordinator
+            from engine.pulse.training_throughput import training_throughput_enabled, training_min_ev
+            _exec_ev = float(self.cfg.exec_min_ev_after_slippage)
+            if training_throughput_enabled():
+                _exec_ev = training_min_ev()
             self.osmani_loop = OsmaniLoopCoordinator(
                 data_dir=Path(self.cfg.data_dir),
                 windows_fn=lambda now: self._osmani_directional_windows(now),
@@ -1941,7 +1945,7 @@ class PulseEngine:
                 size_usd=float(self.cfg.size_usd),
                 min_edge=float(self.cfg.min_edge),
                 discovery_interval_s=float(self.cfg.osmani_discovery_interval_s),
-                exec_min_ev=float(self.cfg.exec_min_ev_after_slippage),
+                exec_min_ev=_exec_ev,
                 exec_max_spread=float(self.cfg.exec_max_spread),
                 min_entry_price=float(self.cfg.min_entry_price),
                 beat_fn=self.loops.beat,

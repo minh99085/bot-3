@@ -235,14 +235,25 @@ class AssetTriageSkill:
         time_boundary = str(close_ts) if close_ts is not None else ""
 
         if not tv_feature:
-            reject = (TriageReject.NO_PRICE_TREND if trend_source == "price"
-                      else TriageReject.NO_TV_SIGNAL)
-            self._bump_reject(reject.value)
-            return TriageVerdict(
-                status=reject.value,
-                side=side, ask_price=ask_price, token_id=token_id,
-                symbol=symbol, time_boundary=time_boundary,
-            )
+            from engine.pulse.training_throughput import training_throughput_enabled
+            if training_throughput_enabled():
+                from engine.pulse.price_action_trend import TREND_FLAT, to_triage_feature
+                tv_feature = to_triage_feature({
+                    "trend": TREND_FLAT,
+                    "strength": 0.0,
+                    "timeframe": "spot",
+                    "source": "price_action",
+                    "note": "training_throughput_synthetic_flat",
+                })
+            else:
+                reject = (TriageReject.NO_PRICE_TREND if trend_source == "price"
+                          else TriageReject.NO_TV_SIGNAL)
+                self._bump_reject(reject.value)
+                return TriageVerdict(
+                    status=reject.value,
+                    side=side, ask_price=ask_price, token_id=token_id,
+                    symbol=symbol, time_boundary=time_boundary,
+                )
 
         use_price = trend_source == "price" or tv_feature.get("source") == "price_action"
         tf = str(tv_feature.get("timeframe") or tv_feature.get("interval") or "")
@@ -286,7 +297,10 @@ class AssetTriageSkill:
                     detail="no_trend",
                 )
             if trend == "flat":
-                if not _exploration_allows("PULSE_TRIAGE_FLAT_EXPLORATION_RATE"):
+                from engine.pulse.training_throughput import training_throughput_enabled
+                if training_throughput_enabled() or _exploration_allows("PULSE_TRIAGE_FLAT_EXPLORATION_RATE"):
+                    pass  # proceed past flat gate
+                else:
                     self._bump_reject(TriageReject.TREND_MISALIGNED.value)
                     return TriageVerdict(
                         status=TriageReject.TREND_MISALIGNED.value,
@@ -295,7 +309,10 @@ class AssetTriageSkill:
                         detail="trend=flat",
                     )
             elif not _trend_side_ok(trend, side):
-                if not _exploration_allows("PULSE_TRIAGE_TREND_EXPLORATION_RATE"):
+                from engine.pulse.training_throughput import training_throughput_enabled
+                if training_throughput_enabled() or _exploration_allows("PULSE_TRIAGE_TREND_EXPLORATION_RATE"):
+                    pass
+                else:
                     self._bump_reject(TriageReject.TREND_MISALIGNED.value)
                     return TriageVerdict(
                         status=TriageReject.TREND_MISALIGNED.value,

@@ -84,7 +84,9 @@ class TradeGenerator:
             self._cut_remaining = max(self._cut_remaining, self._loss_streak_trades)
 
     def propose(self, opp: TradeOpportunity, *, worktree_id: str) -> TradeProposal:
+        from engine.pulse.training_throughput import paper_floor_outcome_prob
         outcome_prob = float(opp.fair_p if opp.side == "up" else (1.0 - opp.fair_p))
+        outcome_prob = paper_floor_outcome_prob(outcome_prob, float(opp.ask_price))
         size = float(opp.size_usd)
         if self._cut_remaining > 0:
             size = max(1.0, size * float(self._loss_streak_mult))

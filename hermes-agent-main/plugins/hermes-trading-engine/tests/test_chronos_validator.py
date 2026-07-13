@@ -100,3 +100,14 @@ def test_cold_probe_when_no_history():
         positions=[], asset="btc", lane="15m", side="up", ask=0.50, now=1000)
     assert cert.verdict == "probe"
     assert cert.cohort_n == 0
+
+
+def test_training_throughput_observe_only(monkeypatch):
+    monkeypatch.setenv("PULSE_TRAINING_THROUGHPUT_MODE", "1")
+    v = ChronosValidator(ChronosConfig(enabled=True, min_cohort_n=4, exploration_rate=0.0))
+    positions = [_pos(1000 + i, False, -5.0, ask=0.55) for i in range(8)]
+    cert = v.validate_trade(
+        positions=positions, asset="btc", lane="15m", side="up", ask=0.55,
+        now=2000, ttc_s=450, window_seconds=900)
+    assert cert.verdict == "probe"
+    assert cert.note == "training_throughput_observe_only"

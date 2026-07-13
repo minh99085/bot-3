@@ -33,6 +33,9 @@ def min_move_bps_from_env() -> float:
 
 
 def fallback_flat_enabled() -> bool:
+    from engine.pulse.training_throughput import training_throughput_enabled
+    if training_throughput_enabled():
+        return True
     return (os.getenv("PULSE_PRICE_TREND_FALLBACK_FLAT", "0") or "0").strip().lower() in (
         "1", "true", "yes", "on")
 
@@ -152,9 +155,7 @@ def trend_for_window(
         # Training throughput: when boundary open is missing but spot is fresh, emit flat
         # so Discovery can proceed via PULSE_TRIAGE_FLAT_EXPLORATION_RATE.
         if fallback_flat_enabled() and (
-                age is None or float(age) <= float(max_price_age_s)):
-            if not getattr(price_feed, "is_fresh", lambda _a: True)(max_price_age_s, now):
-                return None
+                age is None or float(age) <= float(max_price_age_s) * 3.0):
             return _flat_fallback_feature(
                 asset=asset,
                 spot_now=float(spot),
@@ -171,7 +172,18 @@ def trend_for_window(
         min_move_bps=min_move_bps,
     )
     if raw is None:
+        if fallback_flat_enabled() and (
+                age is None or float(age) <= float(max_price_age_s) * 3.0):
+            return _flat_fallback_feature(
+                asset=asset,
+                spot_now=float(spot),
+                price_age_s=age,
+                note="fallback_flat_stale_or_missing_trend",
+            )
         return None
+    from engine.pulse.training_throughput import training_throughput_enabled
+    if training_throughput_enabled():
+        return raw
     if not getattr(price_feed, "is_fresh", lambda _a: True)(max_price_age_s, now):
         return None
     return raw

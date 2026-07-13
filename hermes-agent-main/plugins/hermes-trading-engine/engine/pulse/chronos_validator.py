@@ -349,6 +349,17 @@ class ChronosValidator:
         model_p_win: Optional[float] = None,
     ) -> TradeCertificate:
         """Layer A: chronological cohort replay → trade certificate."""
+        from engine.pulse.training_throughput import training_throughput_enabled
+        if training_throughput_enabled():
+            return TradeCertificate(
+                verdict="probe", cvs=0.0, wilson_lb=0.5, wilson_ub=0.5,
+                breakeven_wr=breakeven_wr_at_ask(ask), cohort_n=0,
+                kelly_dry_run=0.0, size_cap_mult=1.0, exploration=True,
+                context=context_key(
+                    asset=asset, lane=lane, side=side, ask=ask,
+                    ttc_s=ttc_s, window_seconds=window_seconds),
+                note="training_throughput_observe_only",
+            )
         if not self.cfg.enabled:
             return TradeCertificate(
                 verdict="proceed", cvs=1.0, wilson_lb=0.5, wilson_ub=0.5,
