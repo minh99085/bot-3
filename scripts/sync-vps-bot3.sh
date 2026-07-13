@@ -13,6 +13,7 @@ VPS_REPO="${BOT3_VPS_REPO:-/opt/Bot-3}"
 PLUGIN_PATH="$VPS_REPO/hermes-agent-main/plugins/hermes-trading-engine"
 GITHUB_REPO="${BOT3_GITHUB_REPO:-https://github.com/minh99085/bot-3-clone-of-bot-1-.git}"
 SKIP_REBUILD="${SKIP_REBUILD:-0}"
+VPS_SETUP_SCRIPT="${BOT3_VPS_SETUP_SCRIPT:-scripts/setup-vps-favorites-ab-env.py}"
 
 SSH=(ssh -i "$SSH_KEY" -o ConnectTimeout=20 -o StrictHostKeyChecking=no "${VPS_USER}@${VPS_HOST}")
 SCP=(scp -i "$SSH_KEY" -o StrictHostKeyChecking=no)
@@ -91,7 +92,7 @@ if [[ "$SKIP_REBUILD" != "1" ]]; then
   remote_script "$(cat <<EOF
 set -e
 cd $VPS_REPO
-python3 scripts/setup-vps-training-env.py
+python3 $VPS_SETUP_SCRIPT
 python3 scripts/pulse-babysit/validate-frozen-lock.py $PLUGIN_PATH/.env || exit 1
 cd $PLUGIN_PATH
 docker compose -f docker-compose.yml -f docker-compose.vps.yml down --remove-orphans

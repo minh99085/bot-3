@@ -24,14 +24,17 @@
     ]
   },
   "vps_training": {
-    "setup_script": "scripts/setup-vps-training-env.py",
+    "setup_script": "scripts/setup-vps-favorites-ab-env.py",
+    "setup_script_throughput": "scripts/setup-vps-training-env.py",
     "deploy_script_ps1": "scripts/sync-vps-bot3.ps1",
     "deploy_script_sh": "scripts/sync-vps-bot3.sh",
+    "ab_rotate_script": "scripts/rotate-ab-profile.sh",
+    "ab_compare_script": "scripts/pulse-babysit/ab-compare.py",
     "deploy_policy": ".grok/rules/bot3-deploy-policy.md",
     "git_branch": "main",
     "no_feature_branches": true,
     "always_rebuild": true,
     "tradingview_webhook": "http://207.246.96.45/webhooks/tradingview",
-    "dashboard_bot_label": "Bot 3 Directional"
+    "dashboard_bot_label": "Bot 3 Favorites A/B"
   }
 }

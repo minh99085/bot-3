@@ -6637,6 +6637,35 @@ class PulseEngine:
             if hasattr(directional_feed, "on_book_fetch"):
                 directional_feed.on_book_fetch = _on_fetch
 
+    def _ab_experiment_status(self) -> dict:
+        from engine.pulse.favorites_policy import (
+            ab_profile_from_env,
+            favorites_policy_active,
+            ledger_ab_stats,
+            min_entry_price_from_env,
+        )
+        offline = None
+        try:
+            rep_path = self._data_dir / "offline_walk_forward_report.json"
+            if rep_path.exists():
+                import json
+                offline = json.loads(rep_path.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            offline = None
+        return {
+            "active_profile": ab_profile_from_env(),
+            "favorites_policy_active": favorites_policy_active(),
+            "min_entry_price": min_entry_price_from_env(),
+            "cell_phase2_enabled": bool(self.cfg.cell_learning_phase2_enabled),
+            "cell_learning_cells": (
+                len(getattr(self.cell_learning, "cells", {}) or {})
+                if getattr(self, "cell_learning", None) is not None else 0),
+            "by_profile": ledger_ab_stats(self.ledger.positions),
+            "offline_holdout_favorites": (
+                (offline or {}).get("holdout", {}).get("favorites")),
+            "recommendation": (offline or {}).get("recommendation"),
+        }
+
     def _walk_forward_status(self) -> dict:
         try:
             from engine.pulse.walk_forward import passes_walk_forward
@@ -6886,6 +6915,23 @@ class PulseEngine:
         if fill <= 0 or fill >= 1:
             return False
 
+        # Favorites profile B — min entry + offline cell Phase-2 (30d walk-forward).
+        _fav_gate = None
+        try:
+            from engine.pulse.favorites_policy import evaluate_osmani_fill
+            _fav_gate = evaluate_osmani_fill(
+                side=str(proposal.side),
+                ask=fill,
+                window=w,
+                now=now,
+                cell_learning=getattr(self, "cell_learning", None),
+                cell_phase2_enabled=bool(self.cfg.cell_learning_phase2_enabled),
+            )
+            if not _fav_gate.allow:
+                return False
+        except Exception:  # noqa: BLE001
+            logger.exception("favorites policy gate failed; continuing")
+
         # DOWN overconfidence filter (FULL_REPORT loser pattern: ask_down - fair_p_up gap).
         try:
             from engine.pulse.execution_gate import down_ask_fair_gap_blocks
@@ -6927,6 +6973,8 @@ class PulseEngine:
 
         # ---- Autonomous bet size (half-Kelly × pre-trade readiness) ----
         readiness_scale = 1.0
+        if _fav_gate is not None and float(_fav_gate.size_mult) != 1.0:
+            readiness_scale *= float(_fav_gate.size_mult)
         pre_trade_snap = None
         if self.cfg.pre_trade_analysis_enabled and self.pre_trade_gate is not None:
             try:
@@ -6956,7 +7004,7 @@ class PulseEngine:
                     tv_2h_review=tv_2h,
                     tv_per_tf_views=_tv_per_tf,
                 )
-                readiness_scale = float(self.pre_trade_gate.size_scale(analysis))
+                readiness_scale *= float(self.pre_trade_gate.size_scale(analysis))
                 pre_trade_snap = {
                     "score": analysis.get("score"),
                     "recommendation": analysis.get("recommendation"),
@@ -7112,6 +7160,15 @@ class PulseEngine:
         _ttc = float(w.seconds_to_close(now))
         pos.research.update({
             "entry_mode": "osmani_lane",
+            "ab_profile": (_fav_gate.ab_profile if _fav_gate is not None
+                           else (os.getenv("PULSE_AB_PROFILE", "throughput") or "throughput")),
+            "favorites_gate": (
+                None if _fav_gate is None else {
+                    "reason": _fav_gate.reason,
+                    "size_mult": _fav_gate.size_mult,
+                    "cell_verdict": _fav_gate.cell_verdict,
+                    "cell_key": _fav_gate.cell_key,
+                }),
             "ev_after_cost": verified.ev_after_slippage,
             "gate_decision": "osmani_verified",
             "series_slug": getattr(w, "series_slug", ""),
@@ -7701,6 +7758,7 @@ class PulseEngine:
             "osmani_loop": (self.osmani_loop.report()
                             if self.osmani_loop is not None
                             else {"enabled": False}),
+            "ab_experiment": self._ab_experiment_status(),
             "prism_information": getattr(self, "_prism_info_report", {"enabled": True}),
             "prism_stopping": (self.prism_stopping.to_report()
                                if getattr(self, "prism_stopping", None) is not None

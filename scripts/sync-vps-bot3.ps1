@@ -137,7 +137,7 @@ if ($doRebuild) {
     $docker = @"
 set -e
 cd $VpsRepo
-python3 scripts/setup-vps-training-env.py
+python3 scripts/setup-vps-favorites-ab-env.py
 python3 scripts/pulse-babysit/validate-frozen-lock.py $PluginPath/.env || exit 1
 cd $PluginPath
 docker compose -f docker-compose.yml -f docker-compose.vps.yml down --remove-orphans
