@@ -327,6 +327,18 @@ class AssetTriageSkill:
             max_slip_pct=cfg.max_slippage_pct,
             min_shares=cfg.min_shares,
         )
+        from engine.pulse.training_throughput import (
+            training_min_depth_usd,
+            training_min_shares,
+            training_throughput_enabled,
+        )
+        if not ok_depth and training_throughput_enabled():
+            ok_depth, slip_pct, shares = _depth_ok(
+                book,
+                probe_usd=training_min_depth_usd(),
+                max_slip_pct=cfg.max_slippage_pct * 2.0,
+                min_shares=training_min_shares(),
+            )
         if not ok_depth:
             self._bump_reject(TriageReject.INSUFFICIENT_DEPTH.value)
             return TriageVerdict(
@@ -339,6 +351,19 @@ class AssetTriageSkill:
 
         p = float(ask_price)
         strength = float(tv_feature.get("strength") or 0)
+
+        from engine.pulse.training_throughput import training_sweet_band, training_throughput_enabled
+        if training_throughput_enabled():
+            t_lo, t_hi = training_sweet_band()
+            if t_lo <= p <= t_hi:
+                self.proceed_sweep += 1
+                return TriageVerdict(
+                    status=PROCEED_SWEEP,
+                    side=side, ask_price=p, token_id=token_id,
+                    symbol=symbol, timeframe=tf, time_boundary=time_boundary,
+                    slippage_pct=slip_pct, shares_at_probe=shares,
+                    detail="training_throughput_wide_band",
+                )
 
         if cfg.sweet_min <= p <= cfg.sweet_max:
             self.proceed_sweep += 1

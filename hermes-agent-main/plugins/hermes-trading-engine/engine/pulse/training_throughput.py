@@ -38,3 +38,31 @@ def paper_floor_outcome_prob(outcome_prob: float, ask: float) -> float:
         return p
     # Small buffer above ask covers taker fee in thin books.
     return max(p, min(0.99, a + 0.005))
+
+
+def training_sweet_band() -> tuple[float, float]:
+    """Wide ask band for paper learning (discovery + triage)."""
+    try:
+        lo = float(os.getenv("PULSE_TRIAGE_TRAINING_SWEET_MIN", "0.20") or 0.20)
+        hi = float(os.getenv("PULSE_TRIAGE_TRAINING_SWEET_MAX", "0.95") or 0.95)
+    except (TypeError, ValueError):
+        lo, hi = 0.20, 0.95
+    return lo, min(0.99, max(lo + 0.05, hi))
+
+
+def training_min_depth_usd() -> float:
+    if not training_throughput_enabled():
+        return 0.0
+    try:
+        return float(os.getenv("PULSE_TRIAGE_TRAINING_MIN_DEPTH_USD", "5") or 5)
+    except (TypeError, ValueError):
+        return 5.0
+
+
+def training_min_shares() -> float:
+    if not training_throughput_enabled():
+        return 0.0
+    try:
+        return float(os.getenv("PULSE_TRIAGE_TRAINING_MIN_SHARES", "1") or 1)
+    except (TypeError, ValueError):
+        return 1.0

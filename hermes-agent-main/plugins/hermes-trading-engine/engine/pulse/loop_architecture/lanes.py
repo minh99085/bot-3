@@ -138,8 +138,17 @@ class DiscoveryLane:
                 if ask is None:
                     continue
                 ask_f = float(ask)
-                in_sweet = self.sweet_min <= ask_f <= self.sweet_max
-                in_tail = ask_f < 0.10
+                from engine.pulse.training_throughput import (
+                    training_sweet_band,
+                    training_throughput_enabled,
+                )
+                if training_throughput_enabled():
+                    t_lo, t_hi = training_sweet_band()
+                    in_sweet = t_lo <= ask_f <= t_hi
+                    in_tail = ask_f < 0.15
+                else:
+                    in_sweet = self.sweet_min <= ask_f <= self.sweet_max
+                    in_tail = ask_f < 0.10
                 if not in_sweet and not in_tail:
                     continue
 
