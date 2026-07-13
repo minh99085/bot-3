@@ -13,7 +13,8 @@ scp -i "$SSH_KEY" -o StrictHostKeyChecking=no \
   "$ROOT/hermes-agent-main/plugins/hermes-trading-engine/engine/pulse/offline_replay.py" \
   "root@${VPS_HOST}:/tmp/offline_replay.py"
 
-"${SSH[@]}" 'docker cp /opt/Bot-3/scripts/polymarket-backfill hermes-training:/tmp/polymarket-backfill
+"${SSH[@]}" 'docker exec hermes-training mkdir -p /tmp/polymarket-backfill
+docker cp /opt/Bot-3/scripts/polymarket-backfill/. hermes-training:/tmp/polymarket-backfill/
 docker cp /tmp/offline_replay.py hermes-training:/app/engine/pulse/offline_replay.py
 docker exec hermes-training bash -lc "
   set -e
