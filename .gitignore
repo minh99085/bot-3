@@ -41,4 +41,8 @@ monitoring/archives/
 # Python bytecode caches (never commit compiled artifacts)
 __pycache__/
 *.pyc
-LOGS.txt
+# Downloaded Polymarket training datasets (large; keep on T7 / VPS, not in git)
+data/polymarket-training/
+data/polymarket-training-test/
+data/polymarket-training-bundle.tar.gz
+data/polymarket-backfill.log

@@ -172,27 +172,42 @@ class BackfillClient:
         return r.json()
 
     def list_closed_events(self, series_slug: str, since_iso: str) -> list[dict]:
+        """List closed events using weekly date chunks (Gamma offset max ~2000)."""
+        since_dt = datetime.fromisoformat(since_iso.replace("Z", "+00:00"))
+        now_dt = datetime.now(timezone.utc)
         out: list[dict] = []
-        offset = 0
-        while True:
-            batch = self.get_json(
-                "%s/events" % GAMMA_API,
-                {
-                    "series_slug": series_slug,
-                    "closed": "true",
-                    "end_date_min": since_iso,
-                    "limit": 100,
-                    "offset": offset,
-                    "order": "endDate",
-                    "ascending": "false",
-                },
-            )
-            if not isinstance(batch, list) or not batch:
-                break
-            out.extend(batch)
-            offset += len(batch)
-            if len(batch) < 100:
-                break
+        seen: set[str] = set()
+        chunk_start = since_dt
+        while chunk_start < now_dt:
+            chunk_end = min(chunk_start + timedelta(days=7), now_dt)
+            min_iso = chunk_start.strftime("%Y-%m-%dT%H:%M:%SZ")
+            max_iso = chunk_end.strftime("%Y-%m-%dT%H:%M:%SZ")
+            offset = 0
+            while True:
+                batch = self.get_json(
+                    "%s/events" % GAMMA_API,
+                    {
+                        "series_slug": series_slug,
+                        "closed": "true",
+                        "end_date_min": min_iso,
+                        "end_date_max": max_iso,
+                        "limit": 100,
+                        "offset": offset,
+                        "order": "endDate",
+                        "ascending": "false",
+                    },
+                )
+                if not isinstance(batch, list) or not batch:
+                    break
+                for ev in batch:
+                    slug = str(ev.get("slug") or ev.get("id") or "")
+                    if slug and slug not in seen:
+                        seen.add(slug)
+                        out.append(ev)
+                offset += len(batch)
+                if len(batch) < 100 or offset >= 1900:
+                    break
+            chunk_start = chunk_end
         return out
 
     def fetch_price_history(self, token_id: str) -> list[dict]:
