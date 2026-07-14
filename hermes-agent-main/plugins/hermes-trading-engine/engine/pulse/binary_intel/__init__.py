@@ -44,6 +44,8 @@ class BinaryIntelController:
         min_size_scale: float = 0.40,
         price_pattern_enabled: bool = True,
         price_pattern_min_samples: int = 8,
+        use_rsi: bool = True,
+        allow_rsi_div_fallback: bool = False,
     ):
         self.enabled = bool(enabled)
         self.grok_compute_enabled = bool(grok_compute_enabled)
@@ -54,6 +56,8 @@ class BinaryIntelController:
         self.min_intel_score = float(min_intel_score)
         self.exploration_rate = float(exploration_rate)
         self.min_size_scale = float(min_size_scale)
+        self.use_rsi = bool(use_rsi)
+        self.allow_rsi_div_fallback = bool(allow_rsi_div_fallback)
         self.learner = BinaryIntelLearner(enabled=self.enabled)
         self.pattern_learner = TvPricePatternLearner(
             enabled=bool(price_pattern_enabled) and self.enabled,
@@ -106,6 +110,8 @@ class BinaryIntelController:
             min_intel_score=self.min_intel_score,
             exploration_rate=self.exploration_rate,
             min_size_scale=self.min_size_scale,
+            use_rsi=self.use_rsi,
+            allow_rsi_div_fallback=self.allow_rsi_div_fallback,
         )
         # Apply learned blend weights if available
         w = self.learner._weights

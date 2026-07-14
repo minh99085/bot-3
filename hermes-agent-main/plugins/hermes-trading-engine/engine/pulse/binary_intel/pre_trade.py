@@ -44,6 +44,8 @@ def run_pre_trade_intel(
     min_intel_score: float = 0.28,
     exploration_rate: float = 0.05,
     min_size_scale: float = 0.40,
+    use_rsi: bool = True,
+    allow_rsi_div_fallback: bool = False,
 ) -> dict:
     """Invented pre-trade script: binary math × universal 5m TV × readiness."""
     tv = universal_tv_snapshot(
@@ -54,6 +56,8 @@ def run_pre_trade_intel(
         proposed_side=proposed_side,
         aligned_mult=aligned_mult,
         opposed_mult=opposed_mult,
+        use_rsi=bool(use_rsi),
+        allow_rsi_div_fallback=bool(allow_rsi_div_fallback),
     )
     rsi_lean = tv.get("effective_lean")
     rsi_strength = float(((tv.get("focus") or {}).get("strength") or 0.75))

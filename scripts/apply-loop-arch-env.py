@@ -567,8 +567,9 @@ UPDATES = {
     "HERMES_SIZING_BANKROLL_USD": "1000.0",
     "HERMES_SIZING_DAILY_LOSS_CAP_USD": "50.0",
     # Bot 3 lane-aware TV charts (operator 2026-07-14):
-    #   15m lane -> INDEX:BTCUSD / INDEX:ETHUSD (Chainlink settlement oracle), 5m bars
-    #   1h  lane -> BINANCE:BTCUSDT / BINANCE:ETHUSDT (leading liquidity), 5m bars
+    #   TV feed = 5m bar-close ONLY for both symbols (no RSI divergence / band).
+    #   15m lane -> INDEX:BTCUSD / INDEX:ETHUSD (Chainlink settlement oracle)
+    #   1h  lane -> BINANCE:BTCUSDT / BINANCE:ETHUSDT (leading liquidity)
     "PULSE_TV_FEATURE_SYMBOL": "BTCUSD",
     "TRADINGVIEW_ALLOWED_SYMBOLS": (
         "BTCUSD,INDEX:BTCUSD,ETHUSD,INDEX:ETHUSD,"
@@ -577,10 +578,10 @@ UPDATES = {
     "PULSE_TV_DROP_TIMEFRAMES": "2,3,4,10,15,20,25,30,35,40,45,50,55,60",
     "PULSE_TV_MTF_TIMEFRAMES": "5",
     "TRADINGVIEW_WEBHOOK_HOST": "0.0.0.0",
-    "PULSE_TV_ALERT_HISTORY_PER_SYMBOL": "20",
-    "PULSE_TV_RSI_DIV_HISTORY_PER_SYMBOL": "20",
+    "PULSE_TV_ALERT_HISTORY_PER_SYMBOL": "50",
+    "PULSE_TV_RSI_DIV_HISTORY_PER_SYMBOL": "1",
     "PULSE_TV_15M_SHORT_PATH_N": "8",
-    # Price-pattern from TV signal history (bar-close or RSI-div fallback) — all lanes.
+    # Price-pattern from 5m bar-close history — all lanes (RSI off).
     "PULSE_TV_15M_CHART_LEAN_ENABLED": "1",
     "PULSE_TV_15M_CHART_LEAN_SIZE": "1",
     "PULSE_TV_1H_SHORT_PATH_N": "12",
@@ -589,15 +590,16 @@ UPDATES = {
     "PULSE_TV_1H_CHART_LEAN_SIZE": "1",
     "PULSE_TV_PRICE_PATTERN_ENABLED": "1",
     "PULSE_TV_PRICE_PATTERN_MIN_SAMPLES": "8",
-    "PULSE_TV_PRICE_PATTERN_SOURCE": "rsi_div_fallback",
-    "PULSE_TV_RSI_OVERLAY_ENABLED": "1",
-    "PULSE_TV_RSI_OVERLAY_SIZE": "1",
+    "PULSE_TV_PRICE_PATTERN_SOURCE": "bar_close",
+    # RSI fully off — operator switched TV alerts to 5m bar-close only.
+    "PULSE_TV_RSI_OVERLAY_ENABLED": "0",
+    "PULSE_TV_RSI_OVERLAY_SIZE": "0",
     "PULSE_TV_RSI_OVERLAY_MAX_AGE_S": "2700",
     "PULSE_TV_RSI_OVERLAY_ALIGNED_MULT": "1.15",
     "PULSE_TV_RSI_OVERLAY_OPPOSED_MULT": "0.45",
     "PULSE_TV_RSI_BAND_ENABLED": "0",
-    "PULSE_TV_RSI_DIVERGENCE_ANALYSIS_ENABLED": "1",
-    # Binary Intel — invented quant math + universal 5m TV + Grok pre/post-trade scripts.
+    "PULSE_TV_RSI_DIVERGENCE_ANALYSIS_ENABLED": "0",
+    # Binary Intel — invented quant math + universal 5m bar-close TV + Grok scripts.
     "PULSE_BINARY_INTEL_ENABLED": "1",
     "PULSE_BINARY_INTEL_GROK_COMPUTE": "1",
     "PULSE_BINARY_INTEL_MIN_SCORE": "0.15",

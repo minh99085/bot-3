@@ -128,39 +128,52 @@ def _rsi_div_path_rows(now: float, *, n: int = 10, direction: str = "UP", start_
     return rows
 
 
+def _bar_close_path_rows(now: float, *, n: int = 10, direction: str = "UP", start_px: float = 100.0):
+    rows = []
+    for i in range(n):
+        px = start_px + (i * 2.0 if direction == "UP" else -i * 2.0)
+        rows.append({
+            "signal_kind": "bar_close_5m",
+            "direction": direction,
+            "signal_level": "BAR_BULL" if direction == "UP" else "BAR_BEAR",
+            "strength": 0.8,
+            "received_at": now - (n - i) * 300.0,
+            "bar_time": now - (n - i) * 300.0,
+            "price": px,
+            "close": px,
+            "open": px - 1.0 if direction == "UP" else px + 1.0,
+            "high": px + 2.0,
+            "low": px - 2.0,
+            "timeframe": "5",
+        })
+    return rows
+
+
 def test_universal_tv_all_lanes():
     now = 1_000_000.0
-    row = {
-        "signal_kind": "rsi_divergence",
-        "direction": "UP",
-        "signal_level": "REGULAR_BULL_DIV",
-        "divergence_kind": "regular_bullish",
-        "strength": 0.75,
-        "received_at": now - 60,
-        "bar_time": now - 60,
-        "rsi": 32.0,
-        "price": 64000.0,
-        "close": 64000.0,
-    }
-    path_btc = _rsi_div_path_rows(now, n=10, direction="UP", start_px=64000.0)
-    path_eth = _rsi_div_path_rows(now, n=10, direction="UP", start_px=3200.0)
-    intake = _FakeIntake({
-        "BTCUSD": path_btc,
-        "ETHUSD": path_eth,
-    })
+    path_btc = _bar_close_path_rows(now, n=10, direction="UP", start_px=64000.0)
+    path_eth = _bar_close_path_rows(now, n=10, direction="UP", start_px=3200.0)
+    intake = _FakeIntake(
+        {},
+        bar_close_by_sym={"BTCUSD": path_btc, "ETHUSD": path_eth, "ETHUSDT": path_eth},
+    )
 
     class W:
         window_seconds = 900
         series_slug = "btc-up-or-down-15m"
         series_label = "btc_15m"
 
-    snap = universal_tv_snapshot(intake, window=W(), now=now, proposed_side="up")
+    snap = universal_tv_snapshot(
+        intake, window=W(), now=now, proposed_side="up",
+        use_rsi=False, allow_rsi_div_fallback=False)
     assert snap["lane"] == "15m"
+    assert snap["source"] == "tv_5m_bar_close_universal"
+    assert snap["use_rsi"] is False
     assert snap["effective_lean"] == "up"
     assert snap["decision"]["decision"] == "confirm"
     assert snap["size_mult"] >= 1.0
     assert snap["cross_asset"]["status"] == "agree"
-    assert snap["price_pattern"]["path_source"] == "rsi_div"
+    assert snap["price_pattern"]["path_source"] == "bar_close"
     assert snap["price_pattern"]["short_pattern"] is not None
     assert snap["price_pattern"]["trade_lean"] == "up"
 
@@ -169,17 +182,21 @@ def test_universal_tv_all_lanes():
         series_slug = "eth-up-or-down-hourly"
         series_label = "eth_1h"
 
-    snap1h = universal_tv_snapshot(intake, window=W1h(), now=now, proposed_side="up")
+    snap1h = universal_tv_snapshot(
+        intake, window=W1h(), now=now, proposed_side="up",
+        use_rsi=False, allow_rsi_div_fallback=False)
     assert snap1h["lane"] == "1h"
     assert snap1h["asset"] == "eth"
-    # 1h lane requests ETHUSDT but RSI-div fallback resolves INDEX ETHUSD
-    assert snap1h["price_pattern"]["path_source"] == "rsi_div"
+    assert snap1h["price_pattern"]["path_source"] == "bar_close"
     assert snap1h["price_pattern"]["trade_lean"] == "up"
 
 
 def test_pre_trade_intel_script():
     now = 1_000_000.0
-    intake = _FakeIntake({"BTCUSD": _rsi_div_path_rows(now, n=10, direction="UP")})
+    intake = _FakeIntake(
+        {},
+        bar_close_by_sym={"BTCUSD": _bar_close_path_rows(now, n=10, direction="UP")},
+    )
 
     class W:
         window_seconds = 900
@@ -201,6 +218,8 @@ def test_pre_trade_intel_script():
         now=now,
         readiness_score=0.70,
         exploration_rate=0.0,
+        use_rsi=False,
+        allow_rsi_div_fallback=False,
     )
     assert out["script"].startswith("binary_intel")
     assert out["composite_score"] > 0.5
@@ -208,7 +227,7 @@ def test_pre_trade_intel_script():
     assert out["grok_brief"]["role"] == "pre_trade_binary_intel"
     assert out["research_tags"]["tv_rsi_overlay_aligned"] is True
     assert out["research_tags"]["tv_price_short_pattern"] is not None
-    assert out["research_tags"]["tv_price_path_source"] == "rsi_div"
+    assert out["research_tags"]["tv_price_path_source"] == "bar_close"
     assert out["research_tags"]["tv_price_pattern_aligned"] is True
 
 
@@ -236,9 +255,12 @@ def test_post_trade_learner_rsi_and_lessons():
 
 
 def test_controller_roundtrip():
-    ctrl = BinaryIntelController(enabled=True, grok_compute_enabled=True, exploration_rate=0.0)
+    ctrl = BinaryIntelController(
+        enabled=True, grok_compute_enabled=True, exploration_rate=0.0,
+        use_rsi=False, allow_rsi_div_fallback=False)
     now = 1_000_000.0
-    intake = _FakeIntake({"ETHUSD": _rsi_div_path_rows(now, n=12, direction="DOWN", start_px=3200.0)})
+    bars = _bar_close_path_rows(now, n=12, direction="DOWN", start_px=3200.0)
+    intake = _FakeIntake({}, bar_close_by_sym={"ETHUSD": bars, "ETHUSDT": bars})
 
     class W:
         window_seconds = 3600
@@ -262,9 +284,10 @@ def test_controller_roundtrip():
     )
     assert pre is not None
     assert pre["tv_universal"]["lane"] == "1h"
+    assert pre["tv_universal"]["use_rsi"] is False
     assert ctrl.size_mult(pre) > 0
     assert pre.get("tv_pattern_key")
-    assert pre["research_tags"]["tv_price_path_source"] == "rsi_div"
+    assert pre["research_tags"]["tv_price_path_source"] == "bar_close"
     post = ctrl.record_settled(
         won=True, pnl_usd=1.5, side="down", asset="eth", lane="1h",
         research=pre["research_tags"] | {

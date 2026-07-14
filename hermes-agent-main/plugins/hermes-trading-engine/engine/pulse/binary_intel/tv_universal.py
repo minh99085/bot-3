@@ -1,8 +1,8 @@
-"""Universal 5m RSI Divergence feed — ALL lanes + BTC/ETH symbols.
+"""Universal 5m TV feed — ALL lanes + BTC/ETH symbols.
 
-Bot 3 runs INDEX + USDT TV charts. This module makes those alerts available
-to every directional lane (5m/15m/1h) and both assets, with cross-asset
-agreement scoring plus price-pattern indication from TV signal history.
+Bot 3 TV alerts are 5m bar-close for both symbols (INDEX *USD + *USDT).
+RSI divergence/band are optional/off; price-pattern from bar-close history
+drives confirm/fade + sizing when RSI is disabled.
 """
 
 from __future__ import annotations
@@ -18,7 +18,6 @@ from engine.pulse.tv_rsi_overlay import (
 
 
 # Bot 3 chart symbols per lane: INDEX *USD (15m/Chainlink) + *USDT (1h/Binance).
-# Both are candidates so the universal 5m feed resolves whichever lane fired.
 BTC_SYMBOLS = ("BTCUSD", "INDEX:BTCUSD", "BTC", "BTCUSDT", "BINANCE:BTCUSDT")
 ETH_SYMBOLS = ("ETHUSD", "INDEX:ETHUSD", "ETH", "ETHUSDT", "BINANCE:ETHUSDT")
 
@@ -59,7 +58,6 @@ def _resolve_for_cands(intake, candidates: tuple, *, now: float,
         ov = latest_rsi_overlay(rows, now=float(now), max_age_s=float(max_age_s))
         if ov:
             return {**ov, "resolved_symbol": cand}
-    # Fall back to path-aware resolver (handles BINANCE aliases if present)
     for cand in candidates[:1]:
         ov = resolve_rsi_overlay_from_intake(
             intake, cand, now=float(now), max_age_s=float(max_age_s))
@@ -69,7 +67,7 @@ def _resolve_for_cands(intake, candidates: tuple, *, now: float,
 
 
 def cross_asset_agreement(btc: Optional[dict], eth: Optional[dict]) -> dict:
-    """Score BTC vs ETH 5m RSI divergence agreement."""
+    """Score BTC vs ETH lean agreement (RSI overlay or bar-close trade_lean)."""
     b_lean = str((btc or {}).get("lean") or "").lower() or None
     e_lean = str((eth or {}).get("lean") or "").lower() or None
     if not b_lean and not e_lean:
@@ -89,6 +87,7 @@ def _price_pattern_block(
     lane: str,
     short_n: int = 8,
     regime_n: int = 20,
+    allow_rsi_div_fallback: bool = False,
 ) -> dict:
     """Dual-horizon price pattern from TV history for this lane/asset."""
     empty = {
@@ -112,11 +111,11 @@ def _price_pattern_block(
             trade_lean_from_path,
         )
         requested = _chart_symbol_for(asset, lane)
-        # 1h short path slightly longer (≈1h of 5m RSI-div events)
         sn = max(6, int(12 if lane == "1h" else short_n))
         rn = max(sn, int(regime_n))
         sym, alerts, source = resolve_price_path_from_intake(
-            intake, requested, strict_lane=True, allow_rsi_div_fallback=True)
+            intake, requested, strict_lane=True,
+            allow_rsi_div_fallback=bool(allow_rsi_div_fallback))
         if not alerts:
             return {**empty, "symbol": sym, "requested_symbol": requested}
         dual = dual_horizon_price_path(
@@ -158,22 +157,57 @@ def universal_tv_snapshot(
     proposed_side: Optional[str] = None,
     aligned_mult: float = 1.15,
     opposed_mult: float = 0.45,
+    use_rsi: bool = True,
+    allow_rsi_div_fallback: bool = False,
 ) -> dict:
-    """5m RSI divergence + price-pattern for both symbols + lane-aware focus.
+    """5m bar-close price-pattern (+ optional RSI) for all lanes.
 
-    Used by every lane: the same 5m alerts teach 15m and 1h entries.
+    When ``use_rsi=False`` (Bot-3 default), lean/confirm/fade come from
+    bar-close dual-horizon patterns only.
     """
     asset_l = (asset or (_asset_from_window(window) if window is not None else "btc")).lower()
     lane = _lane_from_window(window) if window is not None else "15m"
 
-    btc = _resolve_for_cands(intake, BTC_SYMBOLS, now=now, max_age_s=max_age_s)
-    eth = _resolve_for_cands(intake, ETH_SYMBOLS, now=now, max_age_s=max_age_s)
-    x = cross_asset_agreement(btc, eth)
+    price_pat = _price_pattern_block(
+        intake, asset=asset_l, lane=lane,
+        allow_rsi_div_fallback=bool(allow_rsi_div_fallback))
+    # Cross-asset from the other asset's bar-close pattern (always useful)
+    other = "eth" if asset_l == "btc" else "btc"
+    other_pat = _price_pattern_block(
+        intake, asset=other, lane=lane,
+        allow_rsi_div_fallback=bool(allow_rsi_div_fallback))
 
-    focus = btc if asset_l == "btc" else eth
-    focus_lean = str((focus or {}).get("lean") or "").lower() or None
-    # When focus silent, borrow cross-asset lean (same macro move often hits both)
-    effective_lean = focus_lean or x.get("lean")
+    if use_rsi:
+        btc = _resolve_for_cands(intake, BTC_SYMBOLS, now=now, max_age_s=max_age_s)
+        eth = _resolve_for_cands(intake, ETH_SYMBOLS, now=now, max_age_s=max_age_s)
+        x = cross_asset_agreement(btc, eth)
+        focus = btc if asset_l == "btc" else eth
+        focus_lean = str((focus or {}).get("lean") or "").lower() or None
+        effective_lean = focus_lean or x.get("lean")
+        source = "tv_5m_rsi_divergence_universal"
+        strength = float((focus or {}).get("strength") or 0.75)
+    else:
+        # RSI off: bar-close trade_lean is the TV signal for all lanes
+        btc_pat = price_pat if asset_l == "btc" else other_pat
+        eth_pat = price_pat if asset_l == "eth" else other_pat
+        btc = {
+            "lean": btc_pat.get("trade_lean"),
+            "strength": 0.75,
+            "resolved_symbol": btc_pat.get("symbol"),
+            "source": "bar_close_5m",
+        }
+        eth = {
+            "lean": eth_pat.get("trade_lean"),
+            "strength": 0.75,
+            "resolved_symbol": eth_pat.get("symbol"),
+            "source": "bar_close_5m",
+        }
+        x = cross_asset_agreement(btc, eth)
+        focus = btc if asset_l == "btc" else eth
+        effective_lean = str(price_pat.get("trade_lean") or "").lower() or x.get("lean")
+        source = "tv_5m_bar_close_universal"
+        strength = 0.75
+
     decision = rsi_overlay_decision(
         side=proposed_side,
         overlay={"lean": effective_lean} if effective_lean else None,
@@ -184,30 +218,31 @@ def universal_tv_snapshot(
         aligned_mult=aligned_mult,
         opposed_mult=opposed_mult,
     )
-    # Cross-asset conflict → extra haircut; agreement → mild boost
+    # Soft alignment haircut from dual-horizon when bar-close path is divergent
+    if not use_rsi and str(price_pat.get("alignment") or "") == "divergent":
+        size_mult *= 0.85
     if x.get("status") == "conflict":
         size_mult *= 0.75
     elif x.get("status") == "agree" and decision.get("decision") == "confirm":
         size_mult *= 1.08
 
-    price_pat = _price_pattern_block(intake, asset=asset_l, lane=lane)
-
     return {
         "enabled": True,
-        "source": "tv_5m_rsi_divergence_universal",
+        "source": source,
+        "use_rsi": bool(use_rsi),
         "lane": lane,
         "asset": asset_l,
         "btc": btc,
         "eth": eth,
         "cross_asset": x,
-        "focus": focus,
+        "focus": {**(focus or {}), "strength": strength},
         "effective_lean": effective_lean,
         "decision": decision,
         "size_mult": round(float(size_mult), 4),
         "price_pattern": price_pat,
         "note": (
-            "Same 5m TV alerts feed ALL lanes (5m/15m/1h) and both assets: RSI "
-            "confirm/fade + price-pattern from signal history (bar-close or RSI-div "
-            "fallback). Never overrides Chainlink price_action_trend."
+            "Same 5m bar-close alerts feed ALL lanes (5m/15m/1h) and both assets "
+            "via price-pattern lean. RSI overlay %s. Never overrides Chainlink "
+            "price_action_trend." % ("ON" if use_rsi else "OFF")
         ),
     }

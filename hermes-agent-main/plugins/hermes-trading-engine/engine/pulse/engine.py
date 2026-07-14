@@ -524,8 +524,8 @@ class PulseConfig:
     tv_1h_chart_lean_size: bool = True
     # RSI divergence overlay (separate FIFO; soft confirm/fade).
     tradingview_rsi_div_history_per_symbol: int = 20
-    tv_rsi_overlay_enabled: bool = True
-    tv_rsi_overlay_size: bool = True
+    tv_rsi_overlay_enabled: bool = False
+    tv_rsi_overlay_size: bool = False
     tv_rsi_overlay_max_age_s: float = 2700.0
     tv_rsi_overlay_aligned_mult: float = 1.15
     tv_rsi_overlay_opposed_mult: float = 0.45
@@ -562,7 +562,7 @@ class PulseConfig:
     tradingview_rsi_band_history_per_symbol: int = 50
     tv_rsi_band_enabled: bool = True
     tv_rsi_band_max_age_s: float = 900.0
-    tv_rsi_divergence_analysis_enabled: bool = True
+    tv_rsi_divergence_analysis_enabled: bool = False
     # 2h TV trend review (observe-only by default; pretrade/council flags default OFF).
     tv_2h_review_enabled: bool = True
     tv_2h_lookback_s: float = 7200.0
@@ -1200,10 +1200,10 @@ class PulseConfig:
             tradingview_rsi_div_history_per_symbol=int(
                 _envf("PULSE_TV_RSI_DIV_HISTORY_PER_SYMBOL", 20)),
             tv_rsi_overlay_enabled=str(
-                os.getenv("PULSE_TV_RSI_OVERLAY_ENABLED", "1")).strip().lower()
+                os.getenv("PULSE_TV_RSI_OVERLAY_ENABLED", "0")).strip().lower()
             in ("1", "true", "yes", "on"),
             tv_rsi_overlay_size=str(
-                os.getenv("PULSE_TV_RSI_OVERLAY_SIZE", "1")).strip().lower()
+                os.getenv("PULSE_TV_RSI_OVERLAY_SIZE", "0")).strip().lower()
             in ("1", "true", "yes", "on"),
             tv_rsi_overlay_max_age_s=_envf("PULSE_TV_RSI_OVERLAY_MAX_AGE_S", 2700.0),
             tv_rsi_overlay_aligned_mult=_envf("PULSE_TV_RSI_OVERLAY_ALIGNED_MULT", 1.15),
@@ -1224,7 +1224,7 @@ class PulseConfig:
             tv_price_pattern_min_samples=int(
                 _envf("PULSE_TV_PRICE_PATTERN_MIN_SAMPLES", 8)),
             tv_price_pattern_rsi_div_fallback=str(
-                os.getenv("PULSE_TV_PRICE_PATTERN_SOURCE", "rsi_div_fallback")).strip().lower()
+                os.getenv("PULSE_TV_PRICE_PATTERN_SOURCE", "bar_close")).strip().lower()
             in ("1", "true", "yes", "on", "rsi_div_fallback", "fallback"),
             sawr_enabled=str(os.getenv("PULSE_SAWR_ENABLED", "1")).strip().lower()
             in ("1", "true", "yes", "on"),
@@ -1247,11 +1247,11 @@ class PulseConfig:
             tradingview_rsi_band_history_per_symbol=int(
                 _envf("PULSE_TV_RSI_BAND_HISTORY_PER_SYMBOL", 50)),
             tv_rsi_band_enabled=str(
-                os.getenv("PULSE_TV_RSI_BAND_ENABLED", "1")).strip().lower()
+                os.getenv("PULSE_TV_RSI_BAND_ENABLED", "0")).strip().lower()
             in ("1", "true", "yes", "on"),
             tv_rsi_band_max_age_s=_envf("PULSE_TV_RSI_BAND_MAX_AGE_S", 900.0),
             tv_rsi_divergence_analysis_enabled=str(
-                os.getenv("PULSE_TV_RSI_DIVERGENCE_ANALYSIS_ENABLED", "1")).strip().lower()
+                os.getenv("PULSE_TV_RSI_DIVERGENCE_ANALYSIS_ENABLED", "0")).strip().lower()
             in ("1", "true", "yes", "on"),
             tv_2h_review_enabled=str(os.getenv("PULSE_TV_2H_REVIEW_ENABLED", "1"))
             .strip().lower() in ("1", "true", "yes"),
@@ -1647,6 +1647,9 @@ class PulseEngine:
             price_pattern_enabled=bool(getattr(self.cfg, "tv_price_pattern_enabled", True)),
             price_pattern_min_samples=int(
                 getattr(self.cfg, "tv_price_pattern_min_samples", 8) or 8),
+            use_rsi=bool(getattr(self.cfg, "tv_rsi_overlay_enabled", False)),
+            allow_rsi_div_fallback=bool(
+                getattr(self.cfg, "tv_price_pattern_rsi_div_fallback", False)),
         )
         # SAWR — invented Self-Adjusting Win-Rate meta-controller (Pareto + Beta affinity).
         from engine.pulse.sawr_controller import SawrConfig, SawrController
