@@ -1,0 +1,39 @@
+{
+  "imported_at": "2026-07-13T14:05:30.223939+00:00",
+  "replay_dir": "/data/polymarket-training/replay",
+  "data_dir": "/data",
+  "dry_run": false,
+  "actions": [
+    {
+      "file": "/data/directional_cell_learning.json",
+      "cells": 196
+    },
+    {
+      "file": "/data/lane_15m_learner_offline_prior.json",
+      "bytes": 19980
+    },
+    {
+      "ledger_patch": {
+        "cell_cells": 196,
+        "lane_policy": {
+          "side_mode": "both",
+          "min_sso": 180.0,
+          "max_sso": 480.0,
+          "prefer_ttc_min": 420.0,
+          "prefer_ttc_max": 720.0,
+          "sweet_min": 0.65,
+          "sweet_max": 0.85,
+          "min_edge": 0.025,
+          "min_entry_price": 0.41000000000000003,
+          "probe_enabled": true,
+          "harvest_edge_min": 0.025,
+          "strike_edge_min": 0.034999999999999996,
+          "max_size_usd": 25.0
+        },
+        "ledger": "/data/btc_pulse_ledger.json",
+        "backup": "/data/btc_pulse_ledger.pre_import_20260713T140530Z.json"
+      }
+    }
+  ],
+  "note": "Ledger accounting_state patched so hermes-training restart loads offline cell + lane priors. Restart training container after import."
+}

@@ -1,0 +1,1457 @@
+{
+  "schema": "directional_cell_learning/2.0",
+  "cells": {
+    "btc|15m|up|0-5m|neutral|empty|sweet": {
+      "evals": 219,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|down|0-5m|neutral|empty|sweet": {
+      "evals": 346,
+      "trades": 4,
+      "wins": 2,
+      "pnl_usd": -0.2847
+    },
+    "eth|15m|up|0-5m|neutral|empty|sweet": {
+      "evals": 306,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|down|0-5m|neutral|empty|mid": {
+      "evals": 669,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|down|0-5m|neutral|empty|mid": {
+      "evals": 835,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|0-5m|neutral|empty|mid": {
+      "evals": 487,
+      "trades": 3,
+      "wins": 2,
+      "pnl_usd": 1.3064
+    },
+    "eth|15m|up|0-5m|neutral|empty|mid": {
+      "evals": 756,
+      "trades": 7,
+      "wins": 4,
+      "pnl_usd": -3.1702
+    },
+    "btc|15m|down|0-5m|neutral|empty|tail": {
+      "evals": 329,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|up|0-5m|neutral|empty|tail": {
+      "evals": 440,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|down|0-5m|neutral|empty|tail": {
+      "evals": 384,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|down|5-12m|neutral|empty|tail": {
+      "evals": 1003,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|up|5-12m|neutral|empty|tail": {
+      "evals": 1327,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|down|5-12m|neutral|empty|tail": {
+      "evals": 1313,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|down|5-12m|neutral|empty|mid": {
+      "evals": 334,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|down|12-30m|neutral|empty|tail": {
+      "evals": 491,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|up|12-30m|neutral|empty|tail": {
+      "evals": 645,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|12-30m|neutral|empty|tail": {
+      "evals": 424,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|down|0-5m|neutral|empty|sweet": {
+      "evals": 242,
+      "trades": 1,
+      "wins": 0,
+      "pnl_usd": -5.1139
+    },
+    "btc|1h|down|0-5m|neutral|empty|sweet": {
+      "evals": 131,
+      "trades": 1,
+      "wins": 1,
+      "pnl_usd": 4.529
+    },
+    "btc|1h|up|0-5m|neutral|empty|sweet": {
+      "evals": 77,
+      "trades": 1,
+      "wins": 1,
+      "pnl_usd": 4.302
+    },
+    "btc|1h|up|0-5m|neutral|empty|mid": {
+      "evals": 149,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|down|0-5m|neutral|empty|mid": {
+      "evals": 241,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|5-12m|neutral|empty|mid": {
+      "evals": 273,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|up|5-12m|neutral|empty|sweet": {
+      "evals": 76,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|down|5-12m|neutral|empty|mid": {
+      "evals": 475,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|down|5-12m|neutral|empty|sweet": {
+      "evals": 80,
+      "trades": 2,
+      "wins": 2,
+      "pnl_usd": 3.5592
+    },
+    "btc|15m|up|5-12m|neutral|empty|sweet": {
+      "evals": 79,
+      "trades": 1,
+      "wins": 0,
+      "pnl_usd": -5.1345
+    },
+    "btc|1h|down|5-12m|neutral|empty|mid": {
+      "evals": 260,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|up|5-12m|neutral|empty|mid": {
+      "evals": 130,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|down|5-12m|neutral|empty|sweet": {
+      "evals": 141,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|down|12-30m|neutral|empty|tail": {
+      "evals": 743,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|down|12-30m|neutral|empty|mid": {
+      "evals": 390,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|down|12-30m|neutral|empty|sweet": {
+      "evals": 52,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|down|12-30m|neutral|empty|mid": {
+      "evals": 19,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|down|12-30m|neutral|empty|mid": {
+      "evals": 62,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|up|12-30m|neutral|empty|mid": {
+      "evals": 149,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|down|12-30m|neutral|empty|tail": {
+      "evals": 348,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|0-5m|neutral|empty|tail": {
+      "evals": 269,
+      "trades": 1,
+      "wins": 1,
+      "pnl_usd": 0.9927
+    },
+    "btc|15m|up|5-12m|neutral|empty|tail": {
+      "evals": 817,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|5-12m|neutral|W+|tail": {
+      "evals": 80,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|12-30m|neutral|W+|tail": {
+      "evals": 95,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|down|12-30m|neutral|W-|tail": {
+      "evals": 55,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|5-12m|neutral|W-|tail": {
+      "evals": 39,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|up|5-12m|neutral|W-|tail": {
+      "evals": 278,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|down|5-12m|neutral|W+|tail": {
+      "evals": 80,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|down|5-12m|neutral|W+|tail": {
+      "evals": 34,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|12-30m|neutral|W-|tail": {
+      "evals": 26,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|up|12-30m|neutral|W-|tail": {
+      "evals": 90,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|down|12-30m|neutral|W+|tail": {
+      "evals": 101,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|down|12-30m|neutral|W+|tail": {
+      "evals": 16,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|0-5m|neutral|W-|mid": {
+      "evals": 26,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|up|0-5m|neutral|W-|mid": {
+      "evals": 130,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|up|0-5m|neutral|empty|mid": {
+      "evals": 226,
+      "trades": 1,
+      "wins": 0,
+      "pnl_usd": -5.0801
+    },
+    "btc|15m|up|0-5m|neutral|W-|tail": {
+      "evals": 14,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|up|0-5m|neutral|W-|tail": {
+      "evals": 73,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|up|0-5m|neutral|empty|sweet": {
+      "evals": 146,
+      "trades": 2,
+      "wins": 0,
+      "pnl_usd": -10.226
+    },
+    "eth|15m|up|0-5m|neutral|W-|sweet": {
+      "evals": 37,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|down|0-5m|neutral|W+|sweet": {
+      "evals": 21,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|down|0-5m|neutral|W+|mid": {
+      "evals": 6,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|down|0-5m|neutral|W+|mid": {
+      "evals": 40,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|down|5-12m|neutral|W+|sweet": {
+      "evals": 7,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|up|5-12m|neutral|empty|sweet": {
+      "evals": 93,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|up|5-12m|neutral|W-|mid": {
+      "evals": 51,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|down|5-12m|neutral|W+|mid": {
+      "evals": 24,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|up|5-12m|neutral|empty|mid": {
+      "evals": 248,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|down|5-12m|neutral|empty|mid": {
+      "evals": 259,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|12-30m|neutral|empty|sweet": {
+      "evals": 3,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|up|12-30m|neutral|empty|sweet": {
+      "evals": 58,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|down|12-30m|neutral|empty|mid": {
+      "evals": 421,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|12-30m|neutral|empty|mid": {
+      "evals": 32,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|up|12-30m|neutral|empty|mid": {
+      "evals": 449,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|up|12-30m|neutral|empty|sweet": {
+      "evals": 112,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|down|0-5m|neutral|W+|tail": {
+      "evals": 35,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|up|12-30m|neutral|empty|tail": {
+      "evals": 234,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|up|5-12m|neutral|W-|sweet": {
+      "evals": 17,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|down|12-30m|neutral|empty|tail": {
+      "evals": 634,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|up|12-30m|neutral|W-|mid": {
+      "evals": 11,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|up|12-30m|neutral|W-|sweet": {
+      "evals": 4,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|down|30-45m|neutral|empty|mid": {
+      "evals": 79,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|down|30-45m|neutral|empty|tail": {
+      "evals": 702,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|up|30-45m|neutral|empty|mid": {
+      "evals": 21,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|up|5-12m|neutral|empty|mid": {
+      "evals": 457,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|up|5-12m|neutral|empty|sweet": {
+      "evals": 106,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|down|0-5m|neutral|empty|sweet": {
+      "evals": 146,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|down|0-5m|neutral|empty|mid": {
+      "evals": 199,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|down|5-12m|neutral|empty|sweet": {
+      "evals": 79,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|down|5-12m|neutral|empty|sweet": {
+      "evals": 81,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|up|5-12m|neutral|empty|tail": {
+      "evals": 94,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|up|12-30m|neutral|empty|sweet": {
+      "evals": 7,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|down|12-30m|neutral|empty|sweet": {
+      "evals": 69,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|up|30-45m|neutral|empty|sweet": {
+      "evals": 7,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|up|30-45m|neutral|empty|mid": {
+      "evals": 174,
+      "trades": 1,
+      "wins": 0,
+      "pnl_usd": -5.1115
+    },
+    "eth|1h|up|30-45m|neutral|empty|sweet": {
+      "evals": 63,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|up|30-45m|neutral|empty|tail": {
+      "evals": 247,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|down|30-45m|neutral|empty|tail": {
+      "evals": 384,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|down|30-45m|neutral|empty|mid": {
+      "evals": 101,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|up|30-45m|neutral|empty|tail": {
+      "evals": 476,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|down|45-55m|neutral|empty|tail": {
+      "evals": 353,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|up|45-55m|neutral|empty|mid": {
+      "evals": 52,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|up|45-55m|neutral|empty|tail": {
+      "evals": 272,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|down|45-55m|neutral|empty|mid": {
+      "evals": 45,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|up|45-55m|neutral|empty|tail": {
+      "evals": 141,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|up|45-55m|neutral|empty|sweet": {
+      "evals": 4,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|down|other|neutral|empty|tail": {
+      "evals": 110,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|up|other|neutral|empty|tail": {
+      "evals": 198,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|up|other|neutral|empty|mid": {
+      "evals": 6,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|up|other|neutral|empty|tail": {
+      "evals": 95,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|down|other|neutral|empty|sweet": {
+      "evals": 2,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|up|other|neutral|empty|sweet": {
+      "evals": 1,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|down|other|neutral|empty|mid": {
+      "evals": 2,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|down|other|neutral|empty|tail": {
+      "evals": 189,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|down|other|neutral|empty|mid": {
+      "evals": 2,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|down|other|neutral|empty|sweet": {
+      "evals": 1,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|up|other|neutral|empty|sweet": {
+      "evals": 1,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|up|other|neutral|empty|mid": {
+      "evals": 4,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|up|12-30m|neutral|empty|tail": {
+      "evals": 420,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|down|12-30m|neutral|empty|sweet": {
+      "evals": 16,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|down|30-45m|neutral|empty|sweet": {
+      "evals": 16,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|down|30-45m|neutral|empty|sweet": {
+      "evals": 23,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|up|12-30m|neutral|empty|mid": {
+      "evals": 45,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|down|5-12m|neutral|W-|tail": {
+      "evals": 201,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|0-5m|neutral|W+|sweet": {
+      "evals": 22,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|up|0-5m|neutral|W+|tail": {
+      "evals": 19,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|down|0-5m|neutral|W-|tail": {
+      "evals": 48,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|down|0-5m|neutral|empty|tail": {
+      "evals": 22,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|down|0-5m|neutral|empty|tail": {
+      "evals": 7,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|down|5-12m|neutral|empty|tail": {
+      "evals": 25,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|down|5-12m|neutral|empty|tail": {
+      "evals": 106,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|down|5-12m|neutral|W-|tail": {
+      "evals": 133,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|up|5-12m|neutral|W+|tail": {
+      "evals": 56,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|down|12-30m|neutral|W-|tail": {
+      "evals": 33,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|up|12-30m|neutral|W+|tail": {
+      "evals": 66,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|down|0-5m|neutral|W-|mid": {
+      "evals": 69,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|down|0-5m|neutral|W-|mid": {
+      "evals": 69,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|down|0-5m|neutral|W-|tail": {
+      "evals": 50,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|down|0-5m|neutral|W-|sweet": {
+      "evals": 39,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|down|5-12m|neutral|W-|mid": {
+      "evals": 38,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|down|5-12m|neutral|W-|sweet": {
+      "evals": 14,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|down|5-12m|neutral|W-|mid": {
+      "evals": 30,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|down|5-12m|neutral|W-|sweet": {
+      "evals": 14,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|up|5-12m|neutral|W+|mid": {
+      "evals": 13,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|up|0-5m|neutral|W+|sweet": {
+      "evals": 7,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|down|0-5m|neutral|W-|sweet": {
+      "evals": 31,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|up|0-5m|neutral|W+|mid": {
+      "evals": 21,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|up|0-5m|neutral|empty|tail": {
+      "evals": 25,
+      "trades": 1,
+      "wins": 1,
+      "pnl_usd": 1.9094
+    },
+    "btc|15m|up|0-5m|neutral|W+|mid": {
+      "evals": 69,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|0-5m|neutral|W+|tail": {
+      "evals": 40,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|5-12m|neutral|W+|mid": {
+      "evals": 33,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|5-12m|neutral|W+|sweet": {
+      "evals": 6,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|12-30m|unknown|\u2205|sweet": {
+      "evals": 0,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|down|0-5m|unknown|\u2205|sweet": {
+      "evals": 0,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|down|0-5m|unknown|\u2205|sweet": {
+      "evals": 0,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|down|5-12m|unknown|\u2205|sweet": {
+      "evals": 0,
+      "trades": 162,
+      "wins": 82,
+      "pnl_usd": -2.331
+    },
+    "btc|15m|down|5-12m|unknown|\u2205|sweet": {
+      "evals": 0,
+      "trades": 226,
+      "wins": 120,
+      "pnl_usd": 46.694
+    },
+    "btc|15m|down|0-5m|unknown|\u2205|sweet": {
+      "evals": 0,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|down|0-5m|unknown|\u2205|sweet": {
+      "evals": 0,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|up|5-12m|unknown|\u2205|sweet": {
+      "evals": 0,
+      "trades": 165,
+      "wins": 86,
+      "pnl_usd": 20.3545
+    },
+    "btc|1h|down|12-30m|unknown|\u2205|sweet": {
+      "evals": 0,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|down|12-30m|unknown|\u2205|sweet": {
+      "evals": 0,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|down|30-45m|unknown|\u2205|sweet": {
+      "evals": 0,
+      "trades": 41,
+      "wins": 19,
+      "pnl_usd": -20.7059
+    },
+    "eth|1h|down|45-55m|neutral|empty|tail": {
+      "evals": 451,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|5-12m|unknown|\u2205|sweet": {
+      "evals": 0,
+      "trades": 228,
+      "wins": 117,
+      "pnl_usd": 17.1994
+    },
+    "btc|15m|up|0-5m|unknown|\u2205|sweet": {
+      "evals": 0,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|up|5-12m|unknown|\u2205|mid": {
+      "evals": 0,
+      "trades": 635,
+      "wins": 304,
+      "pnl_usd": -127.9349
+    },
+    "eth|15m|up|0-5m|unknown|\u2205|sweet": {
+      "evals": 0,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|up|0-5m|unknown|\u2205|sweet": {
+      "evals": 0,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|up|0-5m|unknown|\u2205|sweet": {
+      "evals": 0,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|5-12m|neutral|W-|mid": {
+      "evals": 10,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|down|12-30m|unknown|\u2205|sweet": {
+      "evals": 0,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|up|5-12m|neutral|empty|tail": {
+      "evals": 74,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|down|5-12m|neutral|W+|mid": {
+      "evals": 23,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|down|5-12m|unknown|\u2205|sweet": {
+      "evals": 0,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|12-30m|neutral|W+|mid": {
+      "evals": 6,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|down|12-30m|neutral|W-|sweet": {
+      "evals": 2,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|up|5-12m|neutral|W+|sweet": {
+      "evals": 1,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|down|12-30m|neutral|W-|mid": {
+      "evals": 1,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|up|12-30m|neutral|W+|mid": {
+      "evals": 2,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|down|12-30m|neutral|W-|mid": {
+      "evals": 2,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|5-12m|unknown|\u2205|tail": {
+      "evals": 0,
+      "trades": 1174,
+      "wins": 566,
+      "pnl_usd": -265.0364
+    },
+    "btc|15m|down|5-12m|unknown|\u2205|tail": {
+      "evals": 0,
+      "trades": 1181,
+      "wins": 607,
+      "pnl_usd": -390.6222
+    },
+    "btc|15m|up|5-12m|unknown|\u2205|mid": {
+      "evals": 0,
+      "trades": 772,
+      "wins": 393,
+      "pnl_usd": 24.5149
+    },
+    "btc|15m|down|5-12m|unknown|\u2205|mid": {
+      "evals": 0,
+      "trades": 768,
+      "wins": 371,
+      "pnl_usd": -50.7791
+    },
+    "eth|15m|up|5-12m|unknown|\u2205|tail": {
+      "evals": 0,
+      "trades": 933,
+      "wins": 466,
+      "pnl_usd": 67.8592
+    },
+    "eth|15m|down|5-12m|unknown|\u2205|tail": {
+      "evals": 0,
+      "trades": 934,
+      "wins": 468,
+      "pnl_usd": -134.6846
+    },
+    "eth|15m|down|5-12m|unknown|\u2205|mid": {
+      "evals": 0,
+      "trades": 638,
+      "wins": 328,
+      "pnl_usd": 119.9835
+    },
+    "btc|1h|up|30-45m|unknown|\u2205|tail": {
+      "evals": 0,
+      "trades": 263,
+      "wins": 121,
+      "pnl_usd": 16.0994
+    },
+    "btc|1h|down|30-45m|unknown|\u2205|tail": {
+      "evals": 0,
+      "trades": 264,
+      "wins": 142,
+      "pnl_usd": 155.9904
+    },
+    "eth|1h|up|30-45m|unknown|\u2205|tail": {
+      "evals": 0,
+      "trades": 254,
+      "wins": 135,
+      "pnl_usd": 268.1449
+    },
+    "eth|1h|down|30-45m|unknown|\u2205|tail": {
+      "evals": 0,
+      "trades": 254,
+      "wins": 119,
+      "pnl_usd": -74.7839
+    },
+    "btc|1h|up|30-45m|unknown|\u2205|mid": {
+      "evals": 0,
+      "trades": 158,
+      "wins": 81,
+      "pnl_usd": -1.1908
+    },
+    "btc|1h|down|30-45m|unknown|\u2205|mid": {
+      "evals": 0,
+      "trades": 157,
+      "wins": 78,
+      "pnl_usd": -19.6409
+    },
+    "eth|1h|up|30-45m|unknown|\u2205|mid": {
+      "evals": 0,
+      "trades": 155,
+      "wins": 67,
+      "pnl_usd": -118.6743
+    },
+    "eth|1h|down|30-45m|unknown|\u2205|mid": {
+      "evals": 0,
+      "trades": 156,
+      "wins": 87,
+      "pnl_usd": 25.9762
+    },
+    "eth|1h|up|30-45m|unknown|\u2205|sweet": {
+      "evals": 0,
+      "trades": 45,
+      "wins": 30,
+      "pnl_usd": 69.1725
+    },
+    "eth|1h|down|30-45m|unknown|\u2205|sweet": {
+      "evals": 0,
+      "trades": 45,
+      "wins": 16,
+      "pnl_usd": -68.5049
+    },
+    "btc|1h|up|30-45m|unknown|\u2205|sweet": {
+      "evals": 0,
+      "trades": 41,
+      "wins": 21,
+      "pnl_usd": 3.2772
+    },
+    "btc|15m|down|12-30m|neutral|empty|sweet": {
+      "evals": 7,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|12-30m|neutral|W+|sweet": {
+      "evals": 2,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|up|12-30m|unknown|\u2205|sweet": {
+      "evals": 0,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|up|0-5m|neutral|empty|tail": {
+      "evals": 1,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|down|45-55m|neutral|empty|sweet": {
+      "evals": 7,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|down|0-5m|neutral|W+|sweet": {
+      "evals": 5,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|0-5m|neutral|W-|sweet": {
+      "evals": 3,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|up|5-12m|unknown|\u2205|sweet": {
+      "evals": 0,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|1h|down|5-12m|unknown|\u2205|sweet": {
+      "evals": 0,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|up|0-5m|unknown|\u2205|mid": {
+      "evals": 0,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|up|0-5m|unknown|\u2205|mid": {
+      "evals": 0,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|down|12-30m|neutral|W+|mid": {
+      "evals": 4,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|down|12-30m|neutral|W+|sweet": {
+      "evals": 1,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|down|5-12m|neutral|S+|tail": {
+      "evals": 19,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|up|5-12m|neutral|S-|tail": {
+      "evals": 18,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|down|5-12m|neutral|S+|tail": {
+      "evals": 1,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|down|12-30m|neutral|S+|tail": {
+      "evals": 5,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|down|12-30m|neutral|S+|tail": {
+      "evals": 11,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|down|12-30m|neutral|S+|mid": {
+      "evals": 1,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|12-30m|neutral|S-|mid": {
+      "evals": 1,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|12-30m|neutral|S-|tail": {
+      "evals": 3,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|down|12-30m|neutral|S+|sweet": {
+      "evals": 1,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|12-30m|neutral|S-|sweet": {
+      "evals": 1,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|up|12-30m|neutral|S-|tail": {
+      "evals": 1,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|0-5m|neutral|S-|mid": {
+      "evals": 1,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|up|0-5m|neutral|S-|sweet": {
+      "evals": 1,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|down|0-5m|neutral|S-|mid": {
+      "evals": 18,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|down|0-5m|neutral|S-|sweet": {
+      "evals": 8,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|0-5m|neutral|S+|mid": {
+      "evals": 10,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|0-5m|neutral|S+|sweet": {
+      "evals": 2,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|5-12m|neutral|S+|mid": {
+      "evals": 5,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|12-30m|neutral|W-|mid": {
+      "evals": 1,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|down|12-30m|neutral|W+|mid": {
+      "evals": 5,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|0-5m|neutral|S+|tail": {
+      "evals": 1,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|5-12m|neutral|W-|sweet": {
+      "evals": 4,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|5-12m|neutral|S+|tail": {
+      "evals": 4,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|up|5-12m|neutral|S+|tail": {
+      "evals": 3,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|down|5-12m|neutral|S-|tail": {
+      "evals": 4,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|12-30m|neutral|S+|sweet": {
+      "evals": 2,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|down|12-30m|neutral|S-|tail": {
+      "evals": 7,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|12-30m|neutral|S+|mid": {
+      "evals": 1,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|down|12-30m|neutral|S-|tail": {
+      "evals": 5,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|15m|up|12-30m|neutral|S+|tail": {
+      "evals": 4,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|up|12-30m|neutral|S+|tail": {
+      "evals": 5,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "eth|15m|up|0-5m|neutral|S+|sweet": {
+      "evals": 1,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    },
+    "btc|1h|up|0-5m|neutral|S+|sweet": {
+      "evals": 1,
+      "trades": 0,
+      "wins": 0,
+      "pnl_usd": 0.0
+    }
+  }
+}
