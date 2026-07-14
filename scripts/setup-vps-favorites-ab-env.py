@@ -47,9 +47,12 @@ FAVORITES_OVERRIDES = {
     # CHRONOS active (training mode had it off).
     "PULSE_CHRONOS_ENABLED": "1",
     "PULSE_CHRONOS_EXPLORATION_RATE": "0.10",
-    # Moderate discovery — not starvation, not firehose.
-    "PULSE_TRIAGE_FLAT_EXPLORATION_RATE": "0.30",
-    "PULSE_TRIAGE_TREND_EXPLORATION_RATE": "0.20",
+    # Discovery exploration — raised from 0.30/0.20 which starved the Osmani
+    # fill engine (65% REJECT_TREND_MISALIGNED in ranging/misaligned markets).
+    # Trend-aligned setups always pass; these rates control how many of the
+    # misaligned/flat setups are still explored so the bot keeps trading.
+    "PULSE_TRIAGE_FLAT_EXPLORATION_RATE": "0.60",
+    "PULSE_TRIAGE_TREND_EXPLORATION_RATE": "0.55",
     "PULSE_EXEC_MIN_EV": "0",
     "PULSE_EXEC_MAX_SPREAD": "0.08",
     "PULSE_SAWR_ENABLED": "0",
