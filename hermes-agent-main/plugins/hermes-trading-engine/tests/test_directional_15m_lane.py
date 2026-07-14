@@ -127,3 +127,32 @@ def test_lane_learner_persistence_roundtrip():
     rep = learner2.report()
     assert rep["enabled"] is True
     assert "policy" in rep
+
+
+def test_sweet_band_bounded_to_favorites_on_load():
+    """Imported/stranded sweet band (0.65-0.85) must be re-bounded so 15m
+    markets at 0.52-0.60 stay tradeable (rare-trade root-cause regression)."""
+    learner = Lane15mStrategyLearner(
+        Lane15mLearnerConfig(abs_sweet_min=0.52, abs_sweet_max=0.78, sweet_min_span=0.08),
+        Lane15mPolicy(),
+    )
+    # Simulate an imported prior that stranded the band high.
+    learner.load_state({"policy": {"sweet_min": 0.65, "sweet_max": 0.85}})
+    assert learner.policy.sweet_min <= 0.60
+    assert learner.policy.sweet_max <= 0.78
+    assert learner.policy.sweet_max >= learner.policy.sweet_min + 0.08
+
+
+def test_sweet_band_bounded_after_rebalance():
+    learner = Lane15mStrategyLearner(
+        Lane15mLearnerConfig(min_samples=8, cooldown_settlements=2, side_min_n=4,
+                             abs_sweet_min=0.52, abs_sweet_max=0.78),
+        Lane15mPolicy(side_mode="both", sweet_min=0.52, sweet_max=0.78),
+    )
+    # Feed high-price winners so _pick_sweet would jump to p_70_plus (0.65,0.85).
+    for i in range(10):
+        learner.record_settled(won=True, pnl_usd=3.0, side="up", entry_price=0.75,
+                               asset="btc", sso=300, ttc_s=400, now=1000.0 + i)
+    learner.maybe_adjust()
+    assert learner.policy.sweet_min <= 0.60
+    assert learner.policy.sweet_max <= 0.78

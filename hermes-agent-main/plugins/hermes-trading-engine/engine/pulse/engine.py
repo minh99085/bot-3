@@ -1610,15 +1610,23 @@ class PulseEngine:
         # 15m directional lane strategy learner (separate from hourly GateAutoTuner).
         from engine.pulse.lane_15m_learner import (
             Lane15mLearnerConfig, Lane15mPolicy, Lane15mStrategyLearner)
+        _fav_floor = float(os.getenv("PULSE_MIN_ENTRY_PRICE", "0.52") or 0.52)
+        _sweet_min_env = float(os.getenv("PULSE_TIER_SWEET_MIN", "0.52") or 0.52)
+        _sweet_max_env = float(os.getenv("PULSE_TIER_SWEET_MAX", "0.78") or 0.78)
+        _abs_sweet_min = max(_fav_floor, _sweet_min_env)
         self.lane_15m_learner = Lane15mStrategyLearner(
             Lane15mLearnerConfig(
                 enabled=bool(getattr(self.cfg, "lane_15m_learn_enabled", True)),
                 target_wr=float(getattr(self.cfg, "lane_15m_target_wr", 0.60)),
                 kill_wr=float(getattr(self.cfg, "lane_15m_kill_wr", 0.45)),
                 min_samples=int(getattr(self.cfg, "lane_15m_min_samples", 10)),
+                abs_sweet_min=_abs_sweet_min,
+                abs_sweet_max=_sweet_max_env,
             ),
-            policy=Lane15mPolicy(),
+            policy=Lane15mPolicy(sweet_min=_abs_sweet_min, sweet_max=_sweet_max_env),
         )
+        # Bound any freshly-constructed policy to the favorites band up front.
+        self.lane_15m_learner._bound_sweet()
         # Shared 15m↔1h cross-horizon learner (restrict/size only; no new Loop Engineering lane).
         from engine.pulse.cross_horizon_learner import (
             CrossHorizonConfig, CrossHorizonLearner, CrossHorizonPolicy)
@@ -2247,8 +2255,14 @@ class PulseEngine:
         sweet_min = float(getattr(self.lane_15m_learner.policy, "sweet_min", 0) or 0)
         if sweet_min < floor:
             self.lane_15m_learner.policy.sweet_min = floor
-        logger.info("loaded lane_15m offline prior policy from %s (floor=%.2f)",
-                    prior_path.name, floor)
+        # Re-bound the imported sweet band to the favorites band so it cannot
+        # strand the 15m lane above where markets trade (rare-trade root cause).
+        self.lane_15m_learner._bound_sweet()
+        logger.info(
+            "loaded lane_15m offline prior policy from %s (floor=%.2f, sweet=[%.2f,%.2f])",
+            prior_path.name, floor,
+            self.lane_15m_learner.policy.sweet_min,
+            self.lane_15m_learner.policy.sweet_max)
 
     def _load_state(self) -> None:
         """Restore the paper ledger + calibration from disk so P&L survives restarts."""

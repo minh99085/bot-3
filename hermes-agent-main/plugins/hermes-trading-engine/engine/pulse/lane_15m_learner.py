@@ -79,6 +79,13 @@ class Lane15mLearnerConfig:
     rich_fills_per_hour: float = 8.0
     cooldown_settlements: int = 4
     side_min_n: int = 6
+    # Hard bounds on the learned sweet band so the learner optimizes WITHIN the
+    # operator/favorites band and never strands above where 15m markets trade.
+    # sweet_min must stay <= abs_sweet_min + sweet_min_span so 0.52–0.60 asks
+    # remain tradeable; sweet_max is capped at the favorites ceiling.
+    abs_sweet_min: float = 0.52
+    abs_sweet_max: float = 0.78
+    sweet_min_span: float = 0.08  # sweet_min ceiling = abs_sweet_min + this
 
 
 class Lane15mStrategyLearner:
@@ -264,6 +271,20 @@ class Lane15mStrategyLearner:
             return mapping[best]
         return self.policy.prefer_ttc_min, self.policy.prefer_ttc_max
 
+    def _bound_sweet(self) -> None:
+        """Keep the learned sweet band inside the operator/favorites band.
+
+        Prevents the learner from stranding the lane above where 15m markets
+        trade (root cause of near-zero fills): sweet_min is capped so 0.52–0.60
+        asks stay tradeable, sweet_max never exceeds the favorites ceiling.
+        """
+        lo_floor = float(self.cfg.abs_sweet_min)
+        hi_ceiling = float(self.cfg.abs_sweet_max)
+        sweet_min_ceiling = min(hi_ceiling - 0.08, lo_floor + float(self.cfg.sweet_min_span))
+        self.policy.sweet_min = _clamp(self.policy.sweet_min, lo_floor, sweet_min_ceiling)
+        self.policy.sweet_max = _clamp(
+            self.policy.sweet_max, self.policy.sweet_min + 0.08, hi_ceiling)
+
     def _pick_sweet(self, roll: dict) -> tuple:
         by = roll.get("by_price") or {}
         if not by:
@@ -385,8 +406,7 @@ class Lane15mStrategyLearner:
             self.policy.sweet_max = _clamp(
                 0.7 * self.policy.sweet_max + 0.3 * sweet_hi, 0.50, 0.90)
 
-        if self.policy.sweet_max < self.policy.sweet_min + 0.08:
-            self.policy.sweet_max = self.policy.sweet_min + 0.08
+        self._bound_sweet()
 
         after = {
             "side_mode": self.policy.side_mode,
@@ -538,6 +558,9 @@ class Lane15mStrategyLearner:
         for k, v in pol.items():
             if hasattr(self.policy, k):
                 setattr(self.policy, k, v)
+        # Re-bound any persisted/imported sweet band that drifted above where
+        # 15m markets trade (else the tier engine overlay starves all fills).
+        self._bound_sweet()
         self._recent = deque(list(data.get("recent") or []),
                              maxlen=max(16, int(self.cfg.lookback_n)))
         self._since_adjust = int(data.get("since_adjust") or 0)
