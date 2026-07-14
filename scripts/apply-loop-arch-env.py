@@ -310,7 +310,10 @@ UPDATES = {
     "PULSE_GATE_AUTO_TUNE_RICH_FPH": "3.0",
     "PULSE_GATE_AUTO_TUNE_COOLDOWN": "6",
     # DOWN overconfidence filter (ask_down - fair_p_up); blocks FULL_REPORT loser cluster.
-    "PULSE_DOWN_MAX_ASK_FAIR_GAP": "0.12",
+    # 0.12 blocked positive-edge DOWN trades whenever the model was even mildly
+    # bearish (fair_p_up<~0.44), starving fills. 0.25 keeps only extreme
+    # overconfident-favorite DOWN buys blocked.
+    "PULSE_DOWN_MAX_ASK_FAIR_GAP": "0.25",
     # Quant-only tier fallback when TradingView MTF is absent (sparse alerts / cold start).
     "PULSE_TIER_QUANT_ONLY_WHEN_NO_TV": "1",
     "PULSE_TIER_QUANT_ONLY_MIN_EDGE": "0.02",
