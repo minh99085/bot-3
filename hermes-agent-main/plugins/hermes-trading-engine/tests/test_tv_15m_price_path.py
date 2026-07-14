@@ -11,8 +11,11 @@ from engine.pulse.tv_15m_price_path import (
     build_price_path,
     dual_horizon_price_path,
     filter_bar_close_15m,
+    filter_rsi_div_price_path,
     hourly_chart_lean_entry_ok,
     price_path_trend,
+    resolve_price_path_from_intake,
+    rsi_div_symbol_candidates,
     size_mult_for_lean,
     trade_lean_from_path,
     tv_15m_price_path_snapshot,
@@ -238,3 +241,39 @@ def test_hourly_chart_lean_gate_blocks_early_and_opposed():
         side="down", lean={"short_n": 3, "trade_lean": "down"},
         seconds_since_open=1200.0, min_short_n=6, min_sso_s=900.0)
     assert ok4 is False and reason4 == "hourly_chart_lean_cold"
+
+
+def test_rsi_div_price_path_fallback_and_1h_symbol_alias():
+    """Bot-3: empty bar-close FIFO → learn pattern from RSI-div history."""
+    now = NOW
+    rows = []
+    for i in range(10):
+        rows.append({
+            "signal_kind": "rsi_divergence",
+            "direction": "UP",
+            "signal_level": "REGULAR_BULL_DIV",
+            "price": 100.0 + i,
+            "close": 100.0 + i,
+            "received_at": now - (10 - i) * 300.0,
+            "bar_time": now - (10 - i) * 300.0,
+        })
+    assert len(filter_rsi_div_price_path(rows)) == 10
+    dual = dual_horizon_price_path(rows, regime_n=20, short_n=8)
+    assert dual["path_source"] == "rsi_div"
+    assert dual["trade_lean"] == "up"
+    lean = trade_lean_from_path(dual)
+    assert lean["short_pattern"] is not None
+
+    class _I:
+        def alert_history_for_symbol(self, sym):
+            return []
+
+        def rsi_div_history_for_symbol(self, sym):
+            return rows if sym in ("ETHUSD", "BTCUSD") else []
+
+    # 1h lane asks for ETHUSDT → alias to ETHUSD RSI-div FIFO
+    assert "ETHUSD" in rsi_div_symbol_candidates("ETHUSDT")
+    sym, alerts, src = resolve_price_path_from_intake(_I(), "ETHUSDT")
+    assert src == "rsi_div"
+    assert sym == "ETHUSD"
+    assert len(alerts) == 10

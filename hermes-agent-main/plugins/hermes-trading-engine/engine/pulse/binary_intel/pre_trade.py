@@ -97,13 +97,22 @@ def run_pre_trade_intel(
          ("explore" if explore else "wait"))
     )
 
+    pp = tv.get("price_pattern") or {}
+    trade_lean = str(pp.get("trade_lean") or "").lower() or None
+    alignment = str(pp.get("alignment") or "none")
+    short_pattern = pp.get("short_pattern")
+    side_l = str(proposed_side or "").lower()
+    pattern_aligned = None
+    if trade_lean in ("up", "down") and side_l in ("up", "down"):
+        pattern_aligned = (trade_lean == side_l)
+
     grok_brief = {
         "role": "pre_trade_binary_intel",
         "task": (
             "Analyze this Polymarket binary setup BEFORE entry. Use displacement_z, "
-            "theta, market entropy, RSI information gain, and convergence edge. "
-            "Decide if side is supported; never invent prices. Output conviction 0–1 "
-            "and confirm/fade vs 5m RSI lean."
+            "theta, market entropy, RSI information gain, TV price-pattern indication, "
+            "and convergence edge. Decide if side is supported; never invent prices. "
+            "Output conviction 0–1 and confirm/fade vs 5m RSI lean + chart pattern."
         ),
         "lane": tv.get("lane"),
         "asset": tv.get("asset"),
@@ -119,6 +128,10 @@ def run_pre_trade_intel(
             "rsi_lean": rsi_lean,
             "rsi_decision": (tv.get("decision") or {}).get("decision"),
             "cross_asset": (tv.get("cross_asset") or {}).get("status"),
+            "tv_short_pattern": short_pattern,
+            "tv_trade_lean": trade_lean,
+            "tv_pattern_alignment": alignment,
+            "tv_path_source": pp.get("path_source"),
             "convergence_edge": (math_snap.get("convergence") or {}).get("weighted_edge"),
             "kelly_f_adj": (math_snap.get("kelly") or {}).get("f_adj"),
         },
@@ -128,7 +141,7 @@ def run_pre_trade_intel(
     return {
         "enabled": True,
         "observe_only": True,
-        "script": "binary_intel.pre_trade/v1",
+        "script": "binary_intel.pre_trade/v2",
         "math": math_snap,
         "tv_universal": tv,
         "intelligence_score": round(intel, 4),
@@ -149,5 +162,11 @@ def run_pre_trade_intel(
                 (False if (tv.get("decision") or {}).get("decision") == "fade" else None)
             ),
             "tv_cross_asset_rsi": (tv.get("cross_asset") or {}).get("status"),
+            "tv_price_short_pattern": short_pattern,
+            "tv_price_regime_pattern": pp.get("regime_pattern"),
+            "tv_price_trade_lean": trade_lean,
+            "tv_price_alignment": alignment,
+            "tv_price_path_source": pp.get("path_source"),
+            "tv_price_pattern_aligned": pattern_aligned,
         },
     }

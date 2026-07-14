@@ -401,6 +401,20 @@ class Lane15mStrategyLearner:
             "probe_enabled": self.policy.probe_enabled,
             "harvest_edge_min": round(self.policy.harvest_edge_min, 4),
         }
+        # Surface TV short-pattern buckets so loop engineering can see which
+        # price patterns are helping / hurting (learned via binary_intel too).
+        by_pat = roll.get("by_short_pattern") or {}
+        best_pat = worst_pat = None
+        best_lb, worst_lb = -1.0, 2.0
+        for name, st in by_pat.items():
+            if int(st.get("n") or 0) < 4:
+                continue
+            lb = float(st.get("wilson_lb") or 0.0)
+            if lb > best_lb:
+                best_lb, best_pat = lb, name
+            if lb < worst_lb:
+                worst_lb, worst_pat = lb, name
+
         adj = {
             "ts": time.time(),
             "action": action,
@@ -412,6 +426,9 @@ class Lane15mStrategyLearner:
                 "by_side": roll.get("by_side"),
                 "by_ttc": roll.get("by_ttc"),
                 "by_price": roll.get("by_price"),
+                "by_short_pattern": by_pat,
+                "best_short_pattern": best_pat,
+                "worst_short_pattern": worst_pat,
                 "target_wr": self.cfg.target_wr,
                 "kill_wr": self.cfg.kill_wr,
             },

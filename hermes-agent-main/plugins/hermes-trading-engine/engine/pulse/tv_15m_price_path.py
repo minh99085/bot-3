@@ -1,13 +1,14 @@
-"""TV bar-close price-path — dual-horizon chart (5m primary, 15m fallback).
+"""TV price-path — dual-horizon chart from signal history.
 
-4-chart setup: BTC/ETH × BarClose5m (+ separate RSI overlay FIFO).
-Bot stores last ``regime_n`` bar-close alerts/symbol (default 50).
-Trading lean uses last ``short_n`` (default 8 ≈ 40m of 5m bars).
+Primary source: bar-close FIFO (5m preferred, 15m fallback).
+Bot-3 fallback: RSI-divergence history rows that carry price+direction
+(INDEX 5m alerts) so ALL lanes can learn price-pattern indication without
+bar-close webhooks.
 
   * regime (50)  — structure / context for Grok narrative
   * short  (6–12) — short-term trend for entry lean + size bias
 
-RSI divergence is NEVER mixed into this path — see ``tv_rsi_overlay``.
+RSI overlay lean remains separate (``tv_rsi_overlay`` / ``tv_universal``).
 Settlement truth remains Chainlink.
 """
 
@@ -60,6 +61,37 @@ def filter_bar_close(alerts: list, *, prefer_bar_close: bool = True) -> list:
     return bar5 or bar15 or tf5 or tf15 or []
 
 
+def filter_rsi_div_price_path(alerts: list) -> list:
+    """RSI-divergence rows with direction + price — Bot-3 price-pattern source."""
+    out = []
+    for a in (alerts or []):
+        if not isinstance(a, dict):
+            continue
+        kind = str(a.get("signal_kind") or "").strip().lower()
+        level = str(a.get("signal_level") or "").strip().upper()
+        if kind != "rsi_divergence" and "DIV" not in level:
+            continue
+        direction = str(a.get("direction") or "").strip().upper()
+        if direction not in ("UP", "DOWN"):
+            continue
+        px = a.get("close") if a.get("close") is not None else a.get("price")
+        try:
+            if px is None or float(px) <= 0:
+                continue
+        except (TypeError, ValueError):
+            continue
+        out.append(a)
+    return out
+
+
+def filter_price_path_alerts(alerts: list, *, prefer_bar_close: bool = True) -> list:
+    """Bar-close when present; else RSI-div rows that carry price+direction."""
+    bars = filter_bar_close(alerts, prefer_bar_close=prefer_bar_close)
+    if bars:
+        return bars
+    return filter_rsi_div_price_path(alerts)
+
+
 def filter_bar_close_15m(alerts: list, *, prefer_bar_close: bool = True) -> list:
     """Back-compat alias — prefers 5m bar-close when present."""
     return filter_bar_close(alerts, prefer_bar_close=prefer_bar_close)
@@ -67,6 +99,25 @@ def filter_bar_close_15m(alerts: list, *, prefer_bar_close: bool = True) -> list
 
 def filter_bar_close_5m(alerts: list, *, prefer_bar_close: bool = True) -> list:
     return filter_bar_close(alerts, prefer_bar_close=prefer_bar_close)
+
+
+def rsi_div_symbol_candidates(symbol: Optional[str], *, strict_lane: bool = True) -> list[str]:
+    """Candidates for RSI-div FIFO lookup (INDEX *USD always included for Bot-3)."""
+    cands = list(path_symbol_candidates(symbol, strict_lane=strict_lane))
+    out: list[str] = []
+    for s in cands:
+        if s not in out:
+            out.append(s)
+        u = s.upper()
+        if u.endswith("USDT"):
+            alt = u[:-4] + "USD"  # BTCUSDT → BTCUSD, ETHUSDT → ETHUSD
+            if alt not in out:
+                out.append(alt)
+        elif u.endswith("USD") and not u.endswith("USDT"):
+            alt = u[:-3] + "USDT"  # BTCUSD → BTCUSDT
+            if alt not in out:
+                out.append(alt)
+    return out or ["BTCUSD"]
 
 
 def path_symbol_candidates(symbol: Optional[str], *, strict_lane: bool = True) -> list[str]:
@@ -142,6 +193,34 @@ def resolve_bar_close_from_intake(intake, symbol: Optional[str],
         except Exception:  # noqa: BLE001
             by[cand] = []
     return resolve_bar_close_history(by, symbol, strict_lane=strict_lane)
+
+
+def resolve_price_path_from_intake(
+    intake,
+    symbol: Optional[str],
+    *,
+    strict_lane: bool = True,
+    allow_rsi_div_fallback: bool = True,
+) -> tuple[str, list, str]:
+    """Resolve price-path alerts: bar-close first, else RSI-div history.
+
+    Returns ``(resolved_symbol, alerts, source)`` where source is
+    ``bar_close`` | ``rsi_div`` | ``empty``.
+    """
+    sym, bars = resolve_bar_close_from_intake(intake, symbol, strict_lane=strict_lane)
+    if bars:
+        return sym, bars, "bar_close"
+    if not allow_rsi_div_fallback or intake is None:
+        return sym, [], "empty"
+    for cand in rsi_div_symbol_candidates(symbol, strict_lane=strict_lane):
+        try:
+            rows = list(intake.rsi_div_history_for_symbol(cand) or [])
+        except Exception:  # noqa: BLE001
+            rows = []
+        filtered = filter_rsi_div_price_path(rows)
+        if filtered:
+            return cand, filtered, "rsi_div"
+    return sym, [], "empty"
 
 
 def compact_path_for_plot(dual: Optional[dict], *, max_short: int = 8,
@@ -257,12 +336,14 @@ def _trend_block(path: list, *, max_points: int, role: str) -> dict:
 
 def price_path_trend(alerts: list, *, max_points: int = 50) -> dict:
     """Single-horizon trend (legacy helper). Prefer :func:`dual_horizon_price_path`."""
-    filtered = filter_bar_close(alerts)
+    filtered = filter_price_path_alerts(alerts)
     path = build_price_path(filtered, max_points=max_points)
     out = _trend_block(path, max_points=max_points, role="single")
+    src = "bar_close" if filter_bar_close(alerts) else ("rsi_div" if filtered else "empty")
+    out["path_source"] = src
     out["note"] = (
-        "Last %d TV 15m bar-close alerts as OHLC path — Grok/bot learn price "
-        "movement trend; FIFO drops oldest when full. Observe-only." % int(max_points))
+        "Last %d TV price-path alerts (bar-close or RSI-div fallback) — Grok/bot "
+        "learn price movement trend; FIFO drops oldest when full." % int(max_points))
     return out
 
 
@@ -271,19 +352,28 @@ def dual_horizon_price_path(
     *,
     regime_n: int = DEFAULT_REGIME_N,
     short_n: int = DEFAULT_SHORT_N,
+    path_source: Optional[str] = None,
 ) -> dict:
     """Regime (50) + short-term (6–8) paths from the same FIFO.
 
     Returns alignment between horizons so the bot can trade short-term lean when
     it agrees with regime, or stay cautious when they diverge.
+
+    Accepts bar-close rows, or RSI-div rows with price+direction (Bot-3).
     """
     regime_n = max(1, int(regime_n or DEFAULT_REGIME_N))
     short_n = max(MIN_SHORT_N, min(int(short_n or DEFAULT_SHORT_N), regime_n))
-    filtered = filter_bar_close(alerts)
+    bars = filter_bar_close(alerts)
+    filtered = bars if bars else filter_rsi_div_price_path(alerts)
+    if path_source is None:
+        path_source = "bar_close" if bars else ("rsi_div" if filtered else "empty")
     regime_path = build_price_path(filtered, max_points=regime_n)
     short_path = build_price_path(filtered, max_points=short_n)
     regime = _trend_block(regime_path, max_points=regime_n, role="regime")
     short = _trend_block(short_path, max_points=short_n, role="short_term")
+    if path_source == "rsi_div":
+        regime["source"] = "tv_rsi_div_price_path"
+        short["source"] = "tv_rsi_div_price_path"
 
     r_lean = regime.get("lean")
     s_lean = short.get("lean")
@@ -309,7 +399,8 @@ def dual_horizon_price_path(
         confidence = "none"
 
     return {
-        "source": "tv_bar_close_dual",
+        "source": ("tv_rsi_div_dual" if path_source == "rsi_div" else "tv_bar_close_dual"),
+        "path_source": path_source,
         "observe_only": True,
         "regime_n": regime_n,
         "short_n": short_n,
@@ -328,9 +419,9 @@ def dual_horizon_price_path(
         "trade_lean": trade_lean,
         "confidence": confidence,
         "note": (
-            "Dual-horizon OHLC from bar-close FIFO (5m preferred): "
-            "regime=last %d; short_term=last %d. RSI never mixed in."
-            % (regime_n, short_n)
+            "Dual-horizon OHLC from TV signal history (%s): "
+            "regime=last %d; short_term=last %d. Overlay RSI lean stays separate."
+            % (path_source, regime_n, short_n)
         ),
     }
 

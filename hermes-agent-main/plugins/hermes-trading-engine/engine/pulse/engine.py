@@ -536,6 +536,10 @@ class PulseConfig:
     binary_intel_exploration_rate: float = 0.05
     binary_intel_min_size_scale: float = 0.40
     binary_intel_kelly_fraction: float = 0.25
+    # TV price-pattern learning from signal history (all lanes; RSI-div fallback).
+    tv_price_pattern_enabled: bool = True
+    tv_price_pattern_min_samples: int = 8
+    tv_price_pattern_rsi_div_fallback: bool = True
     # SAWR — Self-Adjusting Win-Rate meta-controller (Fill-Quality Pareto + Beta affinity).
     sawr_enabled: bool = True
     sawr_lookback_n: int = 40
@@ -1214,6 +1218,14 @@ class PulseConfig:
             binary_intel_exploration_rate=_envf("PULSE_BINARY_INTEL_EXPLORATION_RATE", 0.05),
             binary_intel_min_size_scale=_envf("PULSE_BINARY_INTEL_MIN_SIZE_SCALE", 0.40),
             binary_intel_kelly_fraction=_envf("PULSE_BINARY_INTEL_KELLY_FRACTION", 0.25),
+            tv_price_pattern_enabled=str(
+                os.getenv("PULSE_TV_PRICE_PATTERN_ENABLED", "1")).strip().lower()
+            in ("1", "true", "yes", "on"),
+            tv_price_pattern_min_samples=int(
+                _envf("PULSE_TV_PRICE_PATTERN_MIN_SAMPLES", 8)),
+            tv_price_pattern_rsi_div_fallback=str(
+                os.getenv("PULSE_TV_PRICE_PATTERN_SOURCE", "rsi_div_fallback")).strip().lower()
+            in ("1", "true", "yes", "on", "rsi_div_fallback", "fallback"),
             sawr_enabled=str(os.getenv("PULSE_SAWR_ENABLED", "1")).strip().lower()
             in ("1", "true", "yes", "on"),
             sawr_lookback_n=int(_envf("PULSE_SAWR_LOOKBACK_N", 40)),
@@ -1632,6 +1644,9 @@ class PulseEngine:
             min_intel_score=float(getattr(self.cfg, "binary_intel_min_score", 0.28) or 0.28),
             exploration_rate=float(getattr(self.cfg, "binary_intel_exploration_rate", 0.05) or 0.05),
             min_size_scale=float(getattr(self.cfg, "binary_intel_min_size_scale", 0.40) or 0.40),
+            price_pattern_enabled=bool(getattr(self.cfg, "tv_price_pattern_enabled", True)),
+            price_pattern_min_samples=int(
+                getattr(self.cfg, "tv_price_pattern_min_samples", 8) or 8),
         )
         # SAWR — invented Self-Adjusting Win-Rate meta-controller (Pareto + Beta affinity).
         from engine.pulse.sawr_controller import SawrConfig, SawrController
@@ -3954,6 +3969,25 @@ class PulseEngine:
                     pos.research["tv_rsi_overlay_aligned"] = tags.get("tv_rsi_overlay_aligned")
                 if tags.get("binary_intel_rsi_lean") and not pos.research.get("tv_rsi_overlay_lean"):
                     pos.research["tv_rsi_overlay_lean"] = tags.get("binary_intel_rsi_lean")
+                # TV price-pattern tags (all lanes) for post-trade pattern learner
+                for _k in (
+                    "tv_price_short_pattern", "tv_price_regime_pattern",
+                    "tv_price_trade_lean", "tv_price_alignment",
+                    "tv_price_path_source", "tv_price_pattern_aligned",
+                    "tv_pattern_key", "tv_pattern_size_mult",
+                ):
+                    if tags.get(_k) is not None:
+                        pos.research[_k] = tags.get(_k)
+                if _bi.get("tv_pattern_key") and not pos.research.get("tv_pattern_key"):
+                    pos.research["tv_pattern_key"] = _bi.get("tv_pattern_key")
+                # Back-fill lane short_pattern tags when chart-lean path was empty
+                if tags.get("tv_price_short_pattern"):
+                    if not pos.research.get("tv_15m_short_pattern"):
+                        pos.research["tv_15m_short_pattern"] = tags.get("tv_price_short_pattern")
+                    if not pos.research.get("tv_1h_short_pattern"):
+                        ws_tag = int(pos.research.get("window_seconds") or 0)
+                        if ws_tag >= 3600:
+                            pos.research["tv_1h_short_pattern"] = tags.get("tv_price_short_pattern")
             if getattr(dr, "cross_horizon", None):
                 pos.research["cross_horizon"] = dr.cross_horizon
                 pos.research["cross_horizon_decision"] = (dr.cross_horizon or {}).get("decision")
@@ -6381,7 +6415,7 @@ class PulseEngine:
         return "15m" in slug or label.endswith("_15m")
 
     def _tv_15m_chart_lean_for_window(self, w) -> dict:
-        """Dual-horizon OHLC lean from bar-close FIFO (lane-routed INDEX *USD on 15m)."""
+        """Dual-horizon OHLC lean from TV history (bar-close or RSI-div fallback)."""
         empty = {"trade_lean": None, "alignment": "none", "confidence": "none",
                  "short_n": 0, "regime_n": 0}
         if self.tradingview is None:
@@ -6391,25 +6425,29 @@ class PulseEngine:
         try:
             from engine.pulse.tradingview import tv_symbol_for_window
             from engine.pulse.tv_15m_price_path import (
-                compact_path_for_plot, dual_horizon_price_path, resolve_bar_close_from_intake,
+                compact_path_for_plot, dual_horizon_price_path, resolve_price_path_from_intake,
                 trade_lean_from_path)
             requested = tv_symbol_for_window(w) or self.cfg.tradingview_feature_symbol
-            sym, alerts = resolve_bar_close_from_intake(self.tradingview, requested)
+            allow_fb = bool(getattr(self.cfg, "tv_price_pattern_rsi_div_fallback", True))
+            sym, alerts, path_src = resolve_price_path_from_intake(
+                self.tradingview, requested, allow_rsi_div_fallback=allow_fb)
             regime_n = max(1, int(self.cfg.tradingview_alert_history_per_symbol or 50))
             short_n = max(6, min(int(getattr(self.cfg, "tv_15m_short_path_n", 8) or 8), regime_n))
-            dual = dual_horizon_price_path(alerts, regime_n=regime_n, short_n=short_n)
+            dual = dual_horizon_price_path(
+                alerts, regime_n=regime_n, short_n=short_n, path_source=path_src)
             lean = trade_lean_from_path(dual)
             lean["enabled"] = True
             lean["symbol"] = sym
             lean["requested_symbol"] = requested
             lean["path_tf"] = "5m"
+            lean["path_source"] = path_src
             lean["price_pattern"] = compact_path_for_plot(dual)
             return lean
         except Exception:  # noqa: BLE001
             return empty
 
     def _tv_hourly_chart_lean_for_window(self, w) -> dict:
-        """1h dual-horizon lean: short=last 12 × 5m bar-close (~1h), regime=last 50."""
+        """1h dual-horizon lean from TV history (bar-close or RSI-div fallback)."""
         empty = {"trade_lean": None, "alignment": "none", "confidence": "none",
                  "short_n": 0, "regime_n": 0}
         if self.tradingview is None:
@@ -6419,19 +6457,23 @@ class PulseEngine:
         try:
             from engine.pulse.tradingview import tv_symbol_for_window
             from engine.pulse.tv_15m_price_path import (
-                compact_path_for_plot, dual_horizon_price_path, resolve_bar_close_from_intake,
+                compact_path_for_plot, dual_horizon_price_path, resolve_price_path_from_intake,
                 trade_lean_from_path)
             requested = tv_symbol_for_window(w) or self.cfg.tradingview_feature_symbol
-            sym, alerts = resolve_bar_close_from_intake(self.tradingview, requested)
+            allow_fb = bool(getattr(self.cfg, "tv_price_pattern_rsi_div_fallback", True))
+            sym, alerts, path_src = resolve_price_path_from_intake(
+                self.tradingview, requested, allow_rsi_div_fallback=allow_fb)
             regime_n = max(1, int(self.cfg.tradingview_alert_history_per_symbol or 50))
             short_n = max(6, min(int(getattr(self.cfg, "tv_1h_short_path_n", 12) or 12), regime_n))
-            dual = dual_horizon_price_path(alerts, regime_n=regime_n, short_n=short_n)
+            dual = dual_horizon_price_path(
+                alerts, regime_n=regime_n, short_n=short_n, path_source=path_src)
             lean = trade_lean_from_path(dual)
             lean["enabled"] = True
             lean["symbol"] = sym
             lean["requested_symbol"] = requested
             lean["lane"] = "1h"
             lean["path_tf"] = "5m"
+            lean["path_source"] = path_src
             lean["price_pattern"] = compact_path_for_plot(dual)
             return lean
         except Exception:  # noqa: BLE001
@@ -7266,6 +7308,18 @@ class PulseEngine:
                 pos.research["tv_rsi_overlay_aligned"] = tags.get("tv_rsi_overlay_aligned")
             if tags.get("binary_intel_rsi_lean") and not pos.research.get("tv_rsi_overlay_lean"):
                 pos.research["tv_rsi_overlay_lean"] = tags.get("binary_intel_rsi_lean")
+            for _k in (
+                "tv_price_short_pattern", "tv_price_regime_pattern",
+                "tv_price_trade_lean", "tv_price_alignment",
+                "tv_price_path_source", "tv_price_pattern_aligned",
+                "tv_pattern_key", "tv_pattern_size_mult",
+            ):
+                if tags.get(_k) is not None:
+                    pos.research[_k] = tags.get(_k)
+            if _bi_osmani.get("tv_pattern_key") and not pos.research.get("tv_pattern_key"):
+                pos.research["tv_pattern_key"] = _bi_osmani.get("tv_pattern_key")
+            if tags.get("tv_price_short_pattern") and not pos.research.get("tv_1h_short_pattern"):
+                pos.research["tv_1h_short_pattern"] = tags.get("tv_price_short_pattern")
         if _pe_osmani:
             pos.research["p_exec"] = _pe_osmani.get("p_exec")
             pos.research["p_blend"] = _pe_osmani.get("p_blend")

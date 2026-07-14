@@ -97,11 +97,35 @@ def test_cross_asset_agreement():
 
 
 class _FakeIntake:
-    def __init__(self, rows_by_sym):
+    def __init__(self, rows_by_sym, *, bar_close_by_sym=None):
         self._rows = rows_by_sym
+        self._bars = bar_close_by_sym or {}
 
     def rsi_div_history_for_symbol(self, sym):
         return list(self._rows.get(sym) or [])
+
+    def alert_history_for_symbol(self, sym):
+        return list(self._bars.get(sym) or [])
+
+
+def _rsi_div_path_rows(now: float, *, n: int = 10, direction: str = "UP", start_px: float = 100.0):
+    """Chronological RSI-div rows with price — enough for short-path pattern."""
+    rows = []
+    for i in range(n):
+        px = start_px + (i * 2.0 if direction == "UP" else -i * 2.0)
+        rows.append({
+            "signal_kind": "rsi_divergence",
+            "direction": direction,
+            "signal_level": "REGULAR_BULL_DIV" if direction == "UP" else "REGULAR_BEAR_DIV",
+            "divergence_kind": "regular_bullish" if direction == "UP" else "regular_bearish",
+            "strength": 0.75,
+            "received_at": now - (n - i) * 300.0,
+            "bar_time": now - (n - i) * 300.0,
+            "price": px,
+            "close": px,
+            "rsi": 32.0 if direction == "UP" else 68.0,
+        })
+    return rows
 
 
 def test_universal_tv_all_lanes():
@@ -115,8 +139,15 @@ def test_universal_tv_all_lanes():
         "received_at": now - 60,
         "bar_time": now - 60,
         "rsi": 32.0,
+        "price": 64000.0,
+        "close": 64000.0,
     }
-    intake = _FakeIntake({"BTCUSD": [row], "ETHUSD": [{**row, "direction": "UP"}]})
+    path_btc = _rsi_div_path_rows(now, n=10, direction="UP", start_px=64000.0)
+    path_eth = _rsi_div_path_rows(now, n=10, direction="UP", start_px=3200.0)
+    intake = _FakeIntake({
+        "BTCUSD": path_btc,
+        "ETHUSD": path_eth,
+    })
 
     class W:
         window_seconds = 900
@@ -129,6 +160,9 @@ def test_universal_tv_all_lanes():
     assert snap["decision"]["decision"] == "confirm"
     assert snap["size_mult"] >= 1.0
     assert snap["cross_asset"]["status"] == "agree"
+    assert snap["price_pattern"]["path_source"] == "rsi_div"
+    assert snap["price_pattern"]["short_pattern"] is not None
+    assert snap["price_pattern"]["trade_lean"] == "up"
 
     class W1h:
         window_seconds = 3600
@@ -138,19 +172,14 @@ def test_universal_tv_all_lanes():
     snap1h = universal_tv_snapshot(intake, window=W1h(), now=now, proposed_side="up")
     assert snap1h["lane"] == "1h"
     assert snap1h["asset"] == "eth"
+    # 1h lane requests ETHUSDT but RSI-div fallback resolves INDEX ETHUSD
+    assert snap1h["price_pattern"]["path_source"] == "rsi_div"
+    assert snap1h["price_pattern"]["trade_lean"] == "up"
 
 
 def test_pre_trade_intel_script():
     now = 1_000_000.0
-    row = {
-        "signal_kind": "rsi_divergence",
-        "direction": "UP",
-        "signal_level": "REGULAR_BULL_DIV",
-        "divergence_kind": "regular_bullish",
-        "strength": 0.8,
-        "received_at": now - 30,
-    }
-    intake = _FakeIntake({"BTCUSD": [row]})
+    intake = _FakeIntake({"BTCUSD": _rsi_div_path_rows(now, n=10, direction="UP")})
 
     class W:
         window_seconds = 900
@@ -178,6 +207,9 @@ def test_pre_trade_intel_script():
     assert out["size_mult"] > 0
     assert out["grok_brief"]["role"] == "pre_trade_binary_intel"
     assert out["research_tags"]["tv_rsi_overlay_aligned"] is True
+    assert out["research_tags"]["tv_price_short_pattern"] is not None
+    assert out["research_tags"]["tv_price_path_source"] == "rsi_div"
+    assert out["research_tags"]["tv_price_pattern_aligned"] is True
 
 
 def test_post_trade_learner_rsi_and_lessons():
@@ -206,15 +238,7 @@ def test_post_trade_learner_rsi_and_lessons():
 def test_controller_roundtrip():
     ctrl = BinaryIntelController(enabled=True, grok_compute_enabled=True, exploration_rate=0.0)
     now = 1_000_000.0
-    row = {
-        "signal_kind": "rsi_divergence",
-        "direction": "DOWN",
-        "signal_level": "REGULAR_BEAR_DIV",
-        "divergence_kind": "regular_bearish",
-        "strength": 0.7,
-        "received_at": now - 10,
-    }
-    intake = _FakeIntake({"ETHUSD": [row]})
+    intake = _FakeIntake({"ETHUSD": _rsi_div_path_rows(now, n=12, direction="DOWN", start_px=3200.0)})
 
     class W:
         window_seconds = 3600
@@ -239,17 +263,46 @@ def test_controller_roundtrip():
     assert pre is not None
     assert pre["tv_universal"]["lane"] == "1h"
     assert ctrl.size_mult(pre) > 0
+    assert pre.get("tv_pattern_key")
+    assert pre["research_tags"]["tv_price_path_source"] == "rsi_div"
     post = ctrl.record_settled(
         won=True, pnl_usd=1.5, side="down", asset="eth", lane="1h",
         research=pre["research_tags"] | {
             "binary_intel_score": pre["composite_score"],
             "binary_intel_intelligence": pre["intelligence_score"],
+            "tv_pattern_key": pre.get("tv_pattern_key"),
         },
         now=now + 50,
     )
     assert post is not None
     assert post["grok_autopsy"]["protocol"].startswith("binary_intel_post")
+    assert post.get("pattern_row") is not None
     state = ctrl.to_state()
+    assert "pattern_learner" in state
     ctrl2 = BinaryIntelController(enabled=True)
     ctrl2.load_state(state)
     assert ctrl2.learner.report()["n"] >= 1
+    assert ctrl2.pattern_learner.report()["n_cells"] >= 1
+
+
+def test_tv_pattern_learner_pre_post_loop():
+    from engine.pulse.binary_intel.tv_pattern_learner import TvPricePatternLearner
+
+    learner = TvPricePatternLearner(enabled=True, min_samples=6)
+    key = "15m|btc|uptrend_bias|aligned"
+    # Cold-start heuristic
+    assert learner.effective_size_mult(
+        key=key, side="up", trade_lean="up", alignment="aligned") == 1.10
+    assert learner.effective_size_mult(
+        key=key, side="up", trade_lean="down", alignment="aligned") == 0.50
+    # Mature good cell → boost
+    for i in range(8):
+        learner.record_settled(won=True, pnl_usd=1.0, key=key, now=1_000_000.0 + i)
+    assert learner.size_mult(key) == learner.boost_mult
+    # Mature bad cell → haircut
+    bad = "15m|btc|choppy|divergent"
+    for i in range(8):
+        learner.record_settled(won=False, pnl_usd=-1.0, key=bad, now=1_000_100.0 + i)
+    assert learner.size_mult(bad) == learner.haircut_mult
+    lessons = learner.lessons_for_book()
+    assert any(k.startswith("tv_pattern:") for _, k, _ in lessons)
