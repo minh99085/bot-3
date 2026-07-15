@@ -28,6 +28,12 @@ python -m hermes.hermes_loop overnight     # cadence + risk monitor
 pytest -q
 ```
 
+### Git workflow
+
+- **Always commit and push directly to `main`.** Do not create feature branches.
+- Do not open PRs from separate branches unless the user explicitly asks.
+- After changes: `git add`, `git commit`, `git push -u origin main`.
+
 ### Architecture pointers
 
 - Living skills: `knowledge/SKILL.md`, `ALPHA_RESEARCH_SKILL.md`
