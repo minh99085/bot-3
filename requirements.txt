@@ -21,3 +21,5 @@ streamlit>=1.32.0
 # Optional LLM / agent backends (verifier prefers a stronger model)
 # openai>=1.30.0
 # anthropic>=0.28.0
+matplotlib>=3.8.0
+seaborn>=0.13.0

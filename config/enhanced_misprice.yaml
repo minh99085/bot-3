@@ -42,3 +42,17 @@ synthetic_n_markets: 8000
 synthetic_seed: 42
 brier_noise_calibrated: 0.05
 market_noise: 0.16
+
+# Rich synthetic universe
+synthetic_n_min: 5000
+synthetic_n_max: 20000
+decision_fracs: [0.30, 0.60, 0.85]
+days_to_res_choices: [3.0, 14.0, 45.0, 120.0]
+days_to_res_weights: [0.25, 0.35, 0.25, 0.15]
+block_size: 8
+block_corr: 0.72
+extreme_mass: 0.55
+categories: [crypto, elections, sports, economics]
+
+monte_carlo_runs: 100
+tune_trials: 40

@@ -9,6 +9,33 @@ Targets: consistent 80%+ WR · DD &lt; 15% (guard at 8%) · PF &gt; 1.4 · EV af
 
 ---
 
+## Quick Start — Validate 80% Win Rate
+
+**Run this first** (proves the enhanced math on a fresh synthetic universe):
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+export PYTHONPATH=.
+
+python -m backtest run --synthetic --n_markets 8000 --seed 42 --plots
+```
+
+You should see **Win rate ≥ 80%**, **Max drawdown ≤ 15%**, and `TARGET` yes.  
+Plots + `report.txt` land in `artifacts/backtest_runs/`.
+
+Next checks:
+
+```bash
+python -m backtest compare --n_markets 8000          # naive vs enhanced lift
+python -m backtest monte-carlo --n_runs 50 --plots   # consistency across seeds
+python -m backtest tune --trials 20                  # find robust thresholds
+```
+
+Plain-English walkthrough of every metric and plot: **[BACKTEST_GUIDE.md](BACKTEST_GUIDE.md)**.
+
+---
+
 ## Enhanced misprice stack (Kelly + Beta + risk budget)
 
 Wraps Option D CEX↔Polymarket mispricing with exact math in:
@@ -27,10 +54,11 @@ Wraps Option D CEX↔Polymarket mispricing with exact math in:
 
 ```bash
 export PYTHONPATH=.
-python -m backtest                 # synthetic + auto-tighten
-python -m backtest --no-auto-tighten
-python -m backtest --historical    # Gamma API / cache
-pytest tests/test_kelly.py tests/test_bayesian_conviction.py tests/test_enhanced_misprice.py -q
+python -m backtest run --synthetic --n_markets 8000 --seed 42 --plots
+python -m backtest monte-carlo --n_runs 100 --n_markets 4000 --plots
+python -m backtest compare --n_markets 8000
+python -m backtest tune --trials 30
+pytest tests/test_kelly.py tests/test_bayesian_conviction.py tests/test_enhanced_misprice.py tests/test_backtest_suite.py -q
 ```
 
 ### Standalone enhanced paper loop

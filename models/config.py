@@ -63,6 +63,27 @@ class EnhancedMispriceConfig(BaseModel):
     brier_noise_calibrated: float = 0.05
     market_noise: float = 0.16
 
+    # Rich synthetic generator (production backtest suite)
+    synthetic_n_min: int = 5000
+    synthetic_n_max: int = 20000
+    decision_fracs: list[float] = Field(default_factory=lambda: [0.30, 0.60, 0.85])
+    days_to_res_choices: list[float] = Field(
+        default_factory=lambda: [3.0, 14.0, 45.0, 120.0]
+    )
+    days_to_res_weights: list[float] = Field(
+        default_factory=lambda: [0.25, 0.35, 0.25, 0.15]
+    )
+    block_size: int = 8  # correlated markets per thematic block
+    block_corr: float = Field(0.72, ge=0.0, le=0.95)
+    extreme_mass: float = Field(0.55, ge=0.1, le=0.9)
+    categories: list[str] = Field(
+        default_factory=lambda: ["crypto", "elections", "sports", "economics"]
+    )
+
+    # Monte Carlo / tuning defaults
+    monte_carlo_runs: int = 100
+    tune_trials: int = 40
+
     @field_validator("extreme_q_low")
     @classmethod
     def _low_lt_high(cls, v: float, info) -> float:  # noqa: ANN001

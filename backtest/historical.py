@@ -1,11 +1,14 @@
-"""Historical / cached Polymarket loader (Gamma API) for backtests.
+"""Historical / CSV loader for backtests.
 
-Uses httpx + on-disk JSON cache under data/cache/. Falls back gracefully
-when offline — synthetic generator remains the primary ≥80% WR demo.
+Supports:
+  - Gamma API / cache (best-effort)
+  - CSV stub: market_id, decision_time, p, q, resolution_outcome [, true_q, category, ...]
+  - Example synthetic historical CSV writer for demos
 """
 
 from __future__ import annotations
 
+import csv
 import json
 import logging
 from datetime import datetime, timezone
@@ -14,16 +17,16 @@ from typing import Any, Optional
 
 import httpx
 
-from models.market import MarketSnapshot
+from models.market import DecisionPoint, MarketSnapshot
 
 logger = logging.getLogger(__name__)
 
 GAMMA_MARKETS = "https://gamma-api.polymarket.com/markets"
 CACHE_DIR = Path("data/cache")
+EXAMPLE_CSV = Path("data/backtest/example_historical.csv")
 
 
 def _parse_prices(raw: Any) -> tuple[float, float]:
-    """Gamma sometimes returns outcomePrices as JSON string."""
     if raw is None:
         return 0.5, 0.5
     if isinstance(raw, str):
@@ -52,14 +55,12 @@ def fetch_gamma_markets(
     timeout: float = 20.0,
     use_cache: bool = True,
 ) -> list[dict[str, Any]]:
-    """Pull markets from Gamma; cache to disk."""
     path = _cache_path(tag)
     if use_cache and path.is_file():
         try:
             return json.loads(path.read_text())
         except json.JSONDecodeError:
             pass
-
     params = {"limit": limit, "closed": str(closed).lower(), "active": "false"}
     try:
         with httpx.Client(timeout=timeout) as client:
@@ -70,49 +71,32 @@ def fetch_gamma_markets(
                 data = data.get("markets") or data.get("data") or []
             path.write_text(json.dumps(data[: limit * 2]))
             return list(data)
-    except Exception as exc:  # noqa: BLE001 — offline-friendly
+    except Exception as exc:  # noqa: BLE001
         logger.warning("Gamma fetch failed (%s); using cache/empty", exc)
         if path.is_file():
             return json.loads(path.read_text())
         return []
 
 
-def gamma_to_snapshots(
-    rows: list[dict[str, Any]],
-    *,
-    category: str = "crypto",
-) -> list[MarketSnapshot]:
-    """Map Gamma rows → MarketSnapshot. q defaults to resolved outcome (oracle).
-
-    For resolved markets we set q near the outcome with small noise so the
-    historical path exercises the pipeline; live paper uses CEX/model q.
-    """
+def gamma_to_snapshots(rows: list[dict[str, Any]], *, category: str = "crypto") -> list[MarketSnapshot]:
     out: list[MarketSnapshot] = []
     for i, row in enumerate(rows):
-        yes_p, no_p = _parse_prices(row.get("outcomePrices"))
-        # Prefer last traded mid if present
+        yes_p, _ = _parse_prices(row.get("outcomePrices"))
         try:
             mid = float(row.get("lastTradePrice") or yes_p)
         except (TypeError, ValueError):
             mid = yes_p
-
-        resolved = row.get("umaResolutionStatus") or row.get("resolved")
-        # Best-effort: if closed and price near 0/1, infer outcome
         resolved_yes: Optional[bool] = None
         if mid >= 0.95:
             resolved_yes = True
         elif mid <= 0.05:
             resolved_yes = False
-
-        # Model q: if we know outcome, use slightly shrunk true label;
-        # else fall back to mid (no edge → filter rejects).
         if resolved_yes is True:
             q = 0.88
         elif resolved_yes is False:
             q = 0.12
         else:
             q = float(mid)
-
         slug = str(row.get("slug") or row.get("conditionId") or f"hist_{i}")
         out.append(
             MarketSnapshot(
@@ -128,17 +112,130 @@ def gamma_to_snapshots(
                 seconds_to_resolution=0.0,
                 true_q=1.0 if resolved_yes else (0.0 if resolved_yes is False else None),
                 resolved_yes=resolved_yes,
-                meta={"source": "gamma", "resolved_flag": resolved},
+                meta={"source": "gamma"},
                 as_of=datetime.now(timezone.utc),
             )
         )
     return out
 
 
-def load_historical(
-    *,
-    limit: int = 200,
-    use_cache: bool = True,
-) -> list[MarketSnapshot]:
+def load_historical(*, limit: int = 200, use_cache: bool = True) -> list[MarketSnapshot]:
     rows = fetch_gamma_markets(limit=limit, closed=True, use_cache=use_cache)
     return [m for m in gamma_to_snapshots(rows) if m.resolved_yes is not None]
+
+
+def write_example_historical_csv(path: Path = EXAMPLE_CSV, n: int = 200, seed: int = 7) -> Path:
+    """Write a demo CSV matching the historical stub schema."""
+    import numpy as np
+
+    rng = np.random.default_rng(seed)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="") as f:
+        w = csv.DictWriter(
+            f,
+            fieldnames=[
+                "market_id",
+                "decision_time",
+                "p",
+                "q",
+                "resolution_outcome",
+                "true_q",
+                "category",
+                "days_to_resolution",
+                "liquidity_usd",
+                "volume_24h",
+            ],
+        )
+        w.writeheader()
+        for i in range(n):
+            true_q = float(rng.beta(2, 8) if rng.random() < 0.5 else rng.beta(8, 2))
+            q = float(np.clip(true_q + rng.normal(0, 0.05), 0.02, 0.98))
+            p = float(np.clip(true_q + rng.normal(0, 0.12), 0.02, 0.98))
+            outcome = int(rng.random() < true_q)
+            w.writerow(
+                {
+                    "market_id": f"hist_{i:04d}",
+                    "decision_time": float(i),
+                    "p": p,
+                    "q": q,
+                    "resolution_outcome": outcome,
+                    "true_q": true_q,
+                    "category": "crypto",
+                    "days_to_resolution": float(rng.choice([3, 14, 45])),
+                    "liquidity_usd": float(rng.lognormal(8.5, 0.8)),
+                    "volume_24h": float(rng.lognormal(9.0, 0.8)),
+                }
+            )
+    logger.info("Wrote example historical CSV → %s", path)
+    return path
+
+
+def load_decisions_from_csv(path: Path | str) -> list[DecisionPoint]:
+    """CSV columns: market_id, decision_time, p, q, resolution_outcome [, true_q, ...]."""
+    path = Path(path)
+    if not path.is_file():
+        raise FileNotFoundError(path)
+    out: list[DecisionPoint] = []
+    with path.open() as f:
+        reader = csv.DictReader(f)
+        for i, row in enumerate(reader):
+            outcome = int(float(row["resolution_outcome"]))
+            true_q = float(row["true_q"]) if row.get("true_q") not in (None, "") else (
+                0.85 if outcome else 0.15
+            )
+            t = float(row.get("decision_time") or i)
+            dtr = float(row.get("days_to_resolution") or 14)
+            mid = str(row["market_id"])
+            out.append(
+                DecisionPoint(
+                    market_id=mid,
+                    decision_id=f"{mid}_csv{i}",
+                    decision_time=t,
+                    lifetime_frac=0.6,
+                    category=str(row.get("category") or "crypto"),
+                    days_to_resolution=dtr,
+                    p=float(row["p"]),
+                    q=float(row["q"]),
+                    liquidity_usd=float(row.get("liquidity_usd") or 5000),
+                    volume_24h=float(row.get("volume_24h") or 8000),
+                    true_q=true_q,
+                    resolved_yes=bool(outcome),
+                    resolution_time=t + dtr,
+                    meta={"source": "csv"},
+                )
+            )
+    return out
+
+
+def load_historical_decisions(
+    csv_path: Optional[Path | str] = None,
+) -> list[DecisionPoint]:
+    """Prefer CSV; else map Gamma snapshots → single decision points."""
+    if csv_path:
+        return load_decisions_from_csv(csv_path)
+    if EXAMPLE_CSV.is_file():
+        return load_decisions_from_csv(EXAMPLE_CSV)
+    snaps = load_historical(limit=200)
+    decisions: list[DecisionPoint] = []
+    for i, m in enumerate(snaps):
+        if m.resolved_yes is None:
+            continue
+        decisions.append(
+            DecisionPoint(
+                market_id=m.market_id,
+                decision_id=f"{m.market_id}_g0",
+                decision_time=float(i),
+                lifetime_frac=0.6,
+                category=m.category,
+                days_to_resolution=14.0,
+                p=m.p,
+                q=m.q,
+                liquidity_usd=m.liquidity_usd,
+                volume_24h=m.volume_24h,
+                true_q=float(m.true_q if m.true_q is not None else m.q),
+                resolved_yes=bool(m.resolved_yes),
+                resolution_time=float(i) + 14.0,
+                meta={"source": "gamma"},
+            )
+        )
+    return decisions

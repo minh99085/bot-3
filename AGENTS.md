@@ -25,6 +25,10 @@
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 export PYTHONPATH=. HERMES_PAPER_ONLY=1
+
+# Validate 80%+ WR first
+python -m backtest run --synthetic --n_markets 8000 --seed 42 --plots
+
 python -m hermes.hermes_loop overnight
 streamlit run dashboard.py --server.baseUrlPath=dashboard
 pytest -q
