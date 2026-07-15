@@ -119,7 +119,7 @@ docker compose -f /opt/financial-freedom-bot/docker-compose.yml logs -f
 
 ## Dashboard contents
 
-Auto-refresh ~8s. Shows:
+Auto-refresh every 5 minutes. Shows:
 
 - Equity curve from **$2000** + total PnL  
 - Open positions / exposure  
