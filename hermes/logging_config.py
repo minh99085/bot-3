@@ -57,14 +57,17 @@ def setup_logging(service: str = "bot") -> Path:
     sh.setFormatter(fmt)
     root.addHandler(sh)
 
-    fh = RotatingFileHandler(
-        log_path,
-        maxBytes=int(os.environ.get("HERMES_LOG_MAX_BYTES", 10_000_000)),
-        backupCount=int(os.environ.get("HERMES_LOG_BACKUP_COUNT", 5)),
-        encoding="utf-8",
-    )
-    fh.setFormatter(fmt)
-    root.addHandler(fh)
+    try:
+        fh = RotatingFileHandler(
+            log_path,
+            maxBytes=int(os.environ.get("HERMES_LOG_MAX_BYTES", 10_000_000)),
+            backupCount=int(os.environ.get("HERMES_LOG_BACKUP_COUNT", 5)),
+            encoding="utf-8",
+        )
+        fh.setFormatter(fmt)
+        root.addHandler(fh)
+    except OSError as exc:
+        logging.getLogger("hermes").warning("file logging disabled (%s): %s", log_path, exc)
 
     root._hermes_configured = True  # type: ignore[attr-defined]
     logging.getLogger("hermes").info(

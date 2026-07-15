@@ -14,6 +14,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
       curl \
       ca-certificates \
+      gosu \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
@@ -25,6 +26,7 @@ COPY knowledge/ knowledge/
 COPY dashboard.py .
 COPY .streamlit/ .streamlit/
 COPY scripts/docker_entrypoint_bot.sh scripts/docker_entrypoint_dashboard.sh scripts/
+COPY scripts/docker_entrypoint_wrapper.sh scripts/
 COPY scripts/healthcheck_bot.sh scripts/
 
 RUN chmod +x scripts/*.sh \
@@ -32,7 +34,7 @@ RUN chmod +x scripts/*.sh \
     && useradd --create-home --uid 10001 hermes \
     && chown -R hermes:hermes /app
 
-USER hermes
+ENTRYPOINT ["scripts/docker_entrypoint_wrapper.sh"]
 
 EXPOSE 8501 8080
 

@@ -79,6 +79,7 @@ grep -q '^HERMES_LIVE=' .env || echo 'HERMES_LIVE=0' >> .env
 grep -q '^HERMES_CAPITAL=' .env || echo 'HERMES_CAPITAL=2000' >> .env
 
 mkdir -p data/paper data/live data/handoff logs knowledge
+chown -R 10001:10001 logs data knowledge 2>/dev/null || true
 touch data/paper/.gitkeep logs/.gitkeep
 
 if ! command -v docker >/dev/null 2>&1; then
