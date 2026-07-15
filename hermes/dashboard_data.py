@@ -143,6 +143,14 @@ def substrategy_cards() -> list[dict[str, Any]]:
     return cards
 
 
+def recent_lessons(limit: int = 8) -> list[str]:
+    text = read_lessons_md()
+    rules = []
+    for m in __import__("re").finditer(r"\*\*Rule\*\*:\s*(.+)", text):
+        rules.append(m.group(1).strip())
+    return rules[-limit:][::-1]
+
+
 def scoped_market_cards() -> list[dict[str, Any]]:
     """Performance cards for the two allowed BTC up/down series only."""
     from hermes.market_scope import SERIES_5M, SERIES_15M, preferred_slugs
