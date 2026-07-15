@@ -1,6 +1,11 @@
 """Models package — config + market schemas."""
 
-from models.config import EnhancedMispriceConfig, load_enhanced_config
+from models.config import (
+    MODE_PRESETS,
+    EnhancedMispriceConfig,
+    apply_mode_preset,
+    load_enhanced_config,
+)
 from models.market import (
     ClosedTrade,
     DecisionPoint,
@@ -12,7 +17,9 @@ from models.market import (
 )
 
 __all__ = [
+    "MODE_PRESETS",
     "EnhancedMispriceConfig",
+    "apply_mode_preset",
     "load_enhanced_config",
     "MarketSnapshot",
     "TradeOpportunity",

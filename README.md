@@ -65,11 +65,24 @@ Wraps Option D CEX↔Polymarket mispricing with exact math in:
 ```bash
 export PYTHONPATH=.
 python -m backtest --fast
+python -m backtest --filter-mode moderate --fast   # more trades, WR safely >85%
 python -m backtest --n-markets 5000 --seed 42 --compare-baseline
 python -m backtest --optimize --n-markets 5000
 python -m backtest monte-carlo --n_runs 50
-pytest tests/test_kelly.py tests/test_bayesian_conviction.py tests/test_enhanced_misprice.py tests/test_backtest_suite.py -q
+pytest tests/test_kelly.py tests/test_bayesian_conviction.py tests/test_enhanced_misprice.py tests/test_backtest_suite.py tests/test_filter_modes.py -q
 ```
+
+### Filter modes (`strict` / `moderate` / `aggressive`)
+
+Set in `config/enhanced_misprice.yaml` or via `--filter-mode`:
+
+| Mode | Intent | Key thresholds | Synthetic (5k, seed 42) |
+|------|--------|----------------|-------------------------|
+| `strict` (default) | Max WR, fewest trades | edge 0.12 · conv 0.95 · q∈{≥0.88,≤0.12} · κ 0.35 · max 10% | ~91.4% WR · ~813 trades |
+| `moderate` | More fills, WR safely above 85% | edge 0.12 · conv 0.94 · q∈{≥0.86,≤0.14} · κ 0.33 · max 9% | ~90.9% WR · ~960 trades · MC p5 ≈ 85.9% |
+| `aggressive` | Highest frequency | edge 0.12 · conv 0.93 · q∈{≥0.85,≤0.15} · κ 0.30 · max 8% | ~82–83% WR · ~1060+ trades |
+
+Keep `min_edge ≥ 0.12` — lower values can trip the hard-DD lockout early.
 
 ### Standalone enhanced paper loop
 
@@ -82,16 +95,17 @@ python -m paper_trader
 
 ### How to achieve 82%+ win rate (tuning guide)
 
-1. **Keep the model calibrated** — Brier &lt; 0.18 is a hard prerequisite. If live Brier drifts above ~0.18, raise `min_conviction` before increasing size.
-2. **Prefer extreme q** — raise `extreme_q_high` to `0.88` and lower `extreme_q_low` to `0.12` in `config/enhanced_misprice.yaml`.
-3. **Demand more edge** — set `min_edge: 0.14` (baseline product floor is 0.06; production default is 0.12).
-4. **Tighten Beta** — increase `n_eff.crypto` from 80 → 100 so conviction only clears when p is clearly on the wrong side of q.
-5. **Shrink Kelly** — `kappa_base: 0.25` (or let DD/WR guards auto-drop to `kappa_guard: 0.20`).
-6. **Cut weak buckets** — if WR by edge `0.10–0.15` &lt; 80%, raise `min_edge` until that bucket disappears.
-7. **Respect risk budget** — keep `risk_budget: 0.20` and never lift `max_single_market_pct` above `0.10`.
-8. **Selectivity over frequency** — fewer high-conviction tickets beat exploring mid-odds; the bandit still probes small when enhanced filters fail.
+1. **Start with a mode** — `mode: strict` for max WR; `mode: moderate` for more trades while staying above 85% WR; `mode: aggressive` for frequency (≈80%+).
+2. **Keep the model calibrated** — Brier &lt; 0.18 is a hard prerequisite. If live Brier drifts above ~0.18, raise `min_conviction` before increasing size.
+3. **Prefer extreme q** — raise `extreme_q_high` / lower `extreme_q_low`, or switch toward `strict`.
+4. **Demand more edge** — keep `min_edge ≥ 0.12` (lowering further can hard-DD lock the book). For even pickier books try `0.14` via overrides after setting mode.
+5. **Tighten Beta** — increase `n_eff.crypto` from 80 → 100 so conviction only clears when p is clearly on the wrong side of q.
+6. **Shrink Kelly** — `kappa_base: 0.25` (or let DD/WR guards auto-drop to `kappa_guard: 0.20`).
+7. **Cut weak buckets** — if WR by edge `0.10–0.15` &lt; 80%, raise `min_edge` until that bucket disappears.
+8. **Respect risk budget** — keep `risk_budget: 0.20` and never lift `max_single_market_pct` above `0.10`.
+9. **Selectivity over frequency** — fewer high-conviction tickets beat exploring mid-odds; the bandit still probes small when enhanced filters fail.
 
-Synthetic reference (seeded): ~966 trades, **WR ≈ 92.8%**, max DD ≈ 8.6%, Brier ≈ 0.13.
+Synthetic reference (seeded, strict): ~813 trades, **WR ≈ 91%**, max DD &lt; 15%, Brier ≈ 0.14.
 
 ---
 

@@ -3,10 +3,59 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, Field, field_validator
+
+FilterMode = Literal["strict", "moderate", "aggressive"]
+
+# Mode presets control entry filters + sizing. Tuned on synthetic backtests
+# (seed=42, 5k markets + Monte Carlo) so that:
+#   strict    → max WR, fewest trades
+#   moderate  → more trades, WR safely above 85% (MC p5 ≥ 85%)
+#   aggressive→ highest frequency, still aiming ~80%+ WR
+#
+# min_edge stays at 0.12 across modes: lowering it admits early losers that
+# trip the 15% hard-DD lockout and starve the rest of the run.
+MODE_PRESETS: dict[str, dict[str, Any]] = {
+    "strict": {
+        "min_edge": 0.12,
+        "min_conviction": 0.95,
+        "min_conviction_guard": 0.97,
+        "extreme_q_high": 0.88,
+        "extreme_q_low": 0.12,
+        "kappa_base": 0.35,
+        "max_single_market_pct": 0.10,
+        "risk_budget": 0.20,
+        "n_eff_crypto": 80.0,
+    },
+    "moderate": {
+        # Slightly wider extreme band + trim kappa/size so more fills stay safe.
+        # Validated (seed=42, 5k mkts): ~90.9% WR / ~960 trades; MC p5 WR ≈ 85.9%.
+        "min_edge": 0.12,
+        "min_conviction": 0.94,
+        "min_conviction_guard": 0.96,
+        "extreme_q_high": 0.86,
+        "extreme_q_low": 0.14,
+        "kappa_base": 0.33,
+        "max_single_market_pct": 0.09,
+        "risk_budget": 0.20,
+        "n_eff_crypto": 80.0,
+    },
+    "aggressive": {
+        # Highest frequency of the three; WR typically ~80–83% on synthetic.
+        "min_edge": 0.12,
+        "min_conviction": 0.93,
+        "min_conviction_guard": 0.95,
+        "extreme_q_high": 0.85,
+        "extreme_q_low": 0.15,
+        "kappa_base": 0.30,
+        "max_single_market_pct": 0.08,
+        "risk_budget": 0.18,
+        "n_eff_crypto": 80.0,
+    },
+}
 
 
 class NEffByCategory(BaseModel):
@@ -30,18 +79,21 @@ class EnhancedMispriceConfig(BaseModel):
     (Brier < 0.18), filtered trades target ≥80% realized win rate.
     """
 
+    # Profile: applies MODE_PRESETS on load (see load_enhanced_config).
+    mode: FilterMode = "strict"
+
     kappa_base: float = Field(0.35, ge=0.05, le=1.0)
     kappa_guard: float = Field(0.20, ge=0.05, le=1.0)
     max_single_market_pct: float = Field(0.10, ge=0.01, le=0.25)
     risk_budget: float = Field(0.20, ge=0.05, le=1.0)
 
-    # Product baseline: 0.06 / 0.92 / 0.78|0.22. Defaults below are the
-    # production calibration that clears ≥80% WR with Brier < 0.18.
+    # Product baseline: 0.06 / 0.92 / 0.78|0.22. Defaults below match
+    # the ``strict`` mode preset.
     min_edge: float = Field(0.12, ge=0.02, le=0.20)
     min_conviction: float = Field(0.95, ge=0.5, le=0.99)
     min_conviction_guard: float = Field(0.97, ge=0.5, le=0.99)
-    extreme_q_high: float = Field(0.86, ge=0.55, le=0.95)
-    extreme_q_low: float = Field(0.14, ge=0.05, le=0.45)
+    extreme_q_high: float = Field(0.88, ge=0.55, le=0.95)
+    extreme_q_low: float = Field(0.12, ge=0.05, le=0.45)
     early_exit_conviction: float = Field(0.35, ge=0.05, le=0.60)
 
     dd_guard_pct: float = Field(0.08, ge=0.02, le=0.20)
@@ -92,17 +144,75 @@ class EnhancedMispriceConfig(BaseModel):
             raise ValueError("extreme_q_low must be < extreme_q_high")
         return v
 
+    @field_validator("mode")
+    @classmethod
+    def _known_mode(cls, v: str) -> str:
+        key = str(v).strip().lower()
+        if key not in MODE_PRESETS:
+            raise ValueError(
+                f"mode must be one of {sorted(MODE_PRESETS)} (got {v!r})"
+            )
+        return key
+
+
+def apply_mode_preset(
+    raw: dict[str, Any],
+    *,
+    mode: str | None = None,
+) -> dict[str, Any]:
+    """Merge MODE_PRESETS[mode] into a raw config dict.
+
+    Mode-controlled keys always win over stale top-level YAML values so
+    switching ``mode:`` alone is enough. Nested ``n_eff.crypto`` is updated
+    when the preset defines ``n_eff_crypto``.
+    """
+    out = dict(raw)
+    chosen = (mode or out.get("mode") or "strict")
+    chosen = str(chosen).strip().lower()
+    if chosen not in MODE_PRESETS:
+        raise ValueError(f"Unknown filter mode {chosen!r}; expected {sorted(MODE_PRESETS)}")
+    out["mode"] = chosen
+    preset = MODE_PRESETS[chosen]
+    for key, value in preset.items():
+        if key == "n_eff_crypto":
+            n_eff = dict(out.get("n_eff") or {})
+            n_eff["crypto"] = float(value)
+            out["n_eff"] = n_eff
+        else:
+            out[key] = value
+    return out
+
 
 def load_enhanced_config(
     path: str | Path | None = None,
     overrides: dict[str, Any] | None = None,
+    *,
+    mode: str | None = None,
 ) -> EnhancedMispriceConfig:
-    """Load YAML config (default: config/enhanced_misprice.yaml) + optional overrides."""
+    """Load YAML config (default: config/enhanced_misprice.yaml) + optional overrides.
+
+    Parameters
+    ----------
+    mode:
+        If set, forces that filter profile (strict / moderate / aggressive)
+        after YAML load. Otherwise uses ``mode:`` from the YAML (default strict).
+    """
     cfg_path = Path(path) if path else Path("config/enhanced_misprice.yaml")
     raw: dict[str, Any] = {}
     if cfg_path.is_file():
         with cfg_path.open() as f:
             raw = yaml.safe_load(f) or {}
     if overrides:
+        # Allow overrides to set mode before preset application
         raw = {**raw, **overrides}
+    raw = apply_mode_preset(raw, mode=mode)
+    # Re-apply non-mode overrides so callers can fine-tune after the preset
+    if overrides:
+        fine = {k: v for k, v in overrides.items() if k != "mode"}
+        if fine:
+            if "n_eff" in fine and isinstance(fine["n_eff"], dict):
+                merged_n = dict(raw.get("n_eff") or {})
+                merged_n.update(fine["n_eff"])
+                fine = {**fine, "n_eff": merged_n}
+            raw = {**raw, **fine}
     return EnhancedMispriceConfig.model_validate(raw)

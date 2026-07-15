@@ -136,9 +136,11 @@ class PortfolioRiskManager:
                 False,
                 f"risk_units={projected:.6f}>{self.cfg.risk_budget}",
             )
-        if opp.size_usd > self.cfg.max_single_market_pct * self.state.bankroll + 1e-9:
+        # 1e-6 USD tolerance avoids rejecting fills that land exactly on the cap
+        # after float rounding (e.g. 0.09 * 1820 ≈ 163.8).
+        if opp.size_usd > self.cfg.max_single_market_pct * self.state.bankroll + 1e-6:
             return False, "size_above_single_market_cap"
-        if opp.size_usd > self.state.bankroll:
+        if opp.size_usd > self.state.bankroll + 1e-9:
             return False, "insufficient_cash"
         return True, "ok"
 
@@ -150,20 +152,22 @@ class PortfolioRiskManager:
         # Work on a copy of open risk so we can simulate fills
         used = self.state.open_risk_units()
         cash = self.state.bankroll
+        equity = cash + sum(p.size_usd for p in self.state.open_positions)
         for opp in sorted(opportunities, key=lambda o: o.conviction_score, reverse=True):
             if not opp.passes_hard_filter or opp.size_usd <= 0:
                 continue
-            if used + opp.risk_unit > self.cfg.risk_budget:
+            if used + opp.risk_unit > self.cfg.risk_budget + 1e-12:
                 continue
-            if opp.size_usd > cash:
+            if opp.size_usd > cash + 1e-9:
                 continue
-            if opp.size_usd > self.cfg.max_single_market_pct * (
-                cash + sum(p.size_usd for p in self.state.open_positions)
-            ):
+            if opp.size_usd > self.cfg.max_single_market_pct * equity + 1e-6:
                 continue
             chosen.append(opp)
             used += opp.risk_unit
             cash -= opp.size_usd
+            equity = cash + sum(p.size_usd for p in self.state.open_positions) + sum(
+                c.size_usd for c in chosen
+            )
         return chosen
 
     def should_early_exit(

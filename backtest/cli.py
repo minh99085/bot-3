@@ -60,6 +60,7 @@ def _params_snapshot(cfg: EnhancedMispriceConfig, n_markets: int, seed: int) -> 
     return {
         "n_markets": n_markets,
         "seed": seed,
+        "mode": cfg.mode,
         "min_edge": cfg.min_edge,
         "min_conviction": cfg.min_conviction,
         "kappa_base": cfg.kappa_base,
@@ -118,7 +119,8 @@ def print_metrics_table(console: Console, m) -> None:
 def run_pipeline(args: argparse.Namespace, argv: list[str]) -> int:
     console = _console(getattr(args, "no_rich", False))
     command = _cmd_string(argv)
-    cfg = load_enhanced_config(args.config)
+    filter_mode = getattr(args, "filter_mode", None)
+    cfg = load_enhanced_config(args.config, mode=filter_mode)
 
     # --- resolve n_markets / plots / mc from --fast ---
     seed = int(args.seed if args.seed is not None else cfg.synthetic_seed)
@@ -134,7 +136,8 @@ def run_pipeline(args: argparse.Namespace, argv: list[str]) -> int:
         console.print(
             Panel(
                 "[bold]⚡ Fast demo mode[/]\n"
-                f"n_markets={n_markets} · seed={seed} · light Monte Carlo ({mc_runs} runs)\n"
+                f"filter_mode={cfg.mode} · n_markets={n_markets} · seed={seed} · "
+                f"light Monte Carlo ({mc_runs} runs)\n"
                 "Target: finish quickly and show whether ≥80% WR holds.",
                 border_style="yellow",
             )
@@ -399,6 +402,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="synthetic = fake realistic markets (recommended); historical = CSV/Gamma",
     )
     p.add_argument(
+        "--filter-mode",
+        choices=["strict", "moderate", "aggressive"],
+        default=None,
+        help=(
+            "Entry-filter profile from config MODE_PRESETS "
+            "(default: mode: in enhanced_misprice.yaml). "
+            "moderate = more trades with WR safely above 85%%."
+        ),
+    )
+    p.add_argument(
         "--n-markets",
         "--n_markets",
         dest="n_markets",
@@ -460,6 +473,11 @@ def build_parser() -> argparse.ArgumentParser:
         sp.add_argument("--n_runs", type=int, default=None)
         sp.add_argument("--trials", type=int, default=None)
         sp.add_argument("--config", default="config/enhanced_misprice.yaml")
+        sp.add_argument(
+            "--filter-mode",
+            choices=["strict", "moderate", "aggressive"],
+            default=None,
+        )
         sp.add_argument("--fast", action="store_true")
         sp.add_argument("--no-rich", action="store_true")
         sp.add_argument("--csv", type=str, default=None)
@@ -472,7 +490,7 @@ def build_parser() -> argparse.ArgumentParser:
 def _legacy_dispatch(args: argparse.Namespace, argv: list[str]) -> int:
     """Keep old subcommands working."""
     console = _console(getattr(args, "no_rich", False))
-    cfg = load_enhanced_config(args.config)
+    cfg = load_enhanced_config(args.config, mode=getattr(args, "filter_mode", None))
     if args.legacy_cmd == "monte-carlo":
         n_runs = args.n_runs or (10 if args.fast else cfg.monte_carlo_runs)
         n_m = args.n_markets or (2000 if args.fast else 4000)
