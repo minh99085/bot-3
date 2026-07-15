@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 # Bankroll-aware sizing caps ($2000 starting paper)
 DEFAULT_BANKROLL = 2000.0
-MAX_SIZE_PCT = 0.03  # 3% of bankroll per ticket
+MAX_SIZE_PCT = 0.03  # 3% of bankroll per ticket (slow markets)
 MIN_SIZE_PCT = 0.005  # 0.5% floor when trading
 MIN_TICKET_USD = 10.0
 MIN_LIVE_EV = 0.06
@@ -47,6 +47,56 @@ MIN_SLEEVE_WR = 0.55
 MAX_CONCENTRATION = 0.40
 FEE_BPS = 100.0
 SLIPPAGE_BPS_FLOOR = 40.0
+
+
+def _fast_btc_scope(signal: Signal) -> bool:
+    from hermes.market_scope import is_allowed_series, is_allowed_slug, scope_enabled
+
+    if not scope_enabled():
+        return False
+    if is_allowed_slug(signal.slug):
+        return True
+    return is_allowed_series(signal.market_series)
+
+
+def _sizing_ladder(stats: dict, live_ev: float, lessons: str) -> tuple[float, float, str]:
+    """Cold-start small → scale only when WR/EV lessons prove out.
+
+    Returns (max_size_pct, min_live_ev, note).
+    """
+    from hermes.market_scope import (
+        COLD_START_SIZE_PCT,
+        MAX_SIZE_PCT_FAST,
+        MIN_LIVE_EV_FAST,
+        MIN_SIZE_PCT_FAST,
+    )
+
+    n = int(stats.get("n") or 0)
+    wr = float(stats.get("wr") or 0.0)
+    ev = float(stats.get("ev") or 0.0)
+    lower = lessons.lower()
+
+    # Lesson-driven aggression
+    aggressive = "aggressive:" in lower or "size_up:" in lower or "boost size" in lower
+    conservative = "conservative:" in lower or "size_down:" in lower or "cut size" in lower
+
+    if n < 5:
+        return COLD_START_SIZE_PCT, MIN_LIVE_EV_FAST, "cold_start_0.5%"
+    if n < 15 or wr < 0.60 or ev < 0.02:
+        cap = MIN_SIZE_PCT_FAST * 1.5  # ~0.75%
+        if conservative:
+            cap = MIN_SIZE_PCT_FAST
+        return cap, MIN_LIVE_EV_FAST, f"early_n={n}_wr={wr:.0%}"
+    if wr >= 0.75 and ev >= 0.04 and live_ev >= 0.05:
+        cap = MAX_SIZE_PCT_FAST
+        if aggressive:
+            cap = min(0.025, MAX_SIZE_PCT_FAST * 1.25)
+        if conservative:
+            cap = MAX_SIZE_PCT_FAST * 0.6
+        return cap, 0.035, f"proven_wr={wr:.0%}_ev={ev:.3f}"
+    if wr >= 0.65 and ev >= 0.02:
+        return 0.012, MIN_LIVE_EV_FAST, f"building_wr={wr:.0%}"
+    return MIN_SIZE_PCT_FAST, MIN_LIVE_EV_FAST + 0.01, f"cautious_wr={wr:.0%}"
 
 
 def _bankroll(state: Optional[dict] = None) -> float:
@@ -65,7 +115,12 @@ def _sleeve_stats(substrategy_id: str, paper: bool = True) -> dict:
         r
         for r in rows
         if (r.get("event") == "settlement" or r.get("won") is not None)
-        and (r.get("substrategy_id") == substrategy_id or substrategy_id in str(r.get("applies_to", "")))
+        and (
+            r.get("substrategy_id") == substrategy_id
+            or substrategy_id in str(r.get("applies_to", ""))
+            or str(r.get("market_series", "")) == substrategy_id
+            or str(r.get("substrategy_id", "")).startswith(substrategy_id + "|")
+        )
     ]
     if not settles:
         # Soft match on mode|regime fragment
@@ -166,12 +221,46 @@ def analyze_signal(
     lessons = lessons if lessons is not None else read_lessons_md()
     sid = signal.substrategy_id
     stats = _sleeve_stats(sid, paper=paper)
+    # Also pull series-level stats for fast BTC (across windows)
+    series_stats = _sleeve_stats(signal.market_series, paper=paper) if signal.market_series else stats
+    if series_stats["n"] > stats["n"]:
+        # Prefer series experience on rotating windows
+        merged = {
+            "n": series_stats["n"],
+            "wr": series_stats["wr"],
+            "ev": series_stats["ev"],
+            "currently_losing": series_stats["currently_losing"] or stats["currently_losing"],
+        }
+    else:
+        merged = stats
+
     lesson_hits = _lessons_for_sleeve(sid, lessons)
+    # Also match series-level lessons
+    if signal.market_series:
+        for extra in _lessons_for_sleeve(signal.market_series, lessons):
+            if extra not in lesson_hits:
+                lesson_hits.append(extra)
+
     live_ev, slip_bps, ev_note = _recalc_live_ev(signal)
+    fast = _fast_btc_scope(signal)
 
     reasons: list[str] = []
     skip = False
     size_pct = 0.0
+
+    if fast:
+        from hermes.market_scope import MIN_ORACLE_ALIGN, is_allowed_slug
+
+        if not is_allowed_slug(signal.slug) and signal.market_series not in (
+            "btc_updown_5m",
+            "btc_updown_15m",
+        ):
+            skip = True
+            reasons.append(f"out_of_scope_slug={signal.slug}")
+        max_pct, min_ev, ladder_note = _sizing_ladder(merged, live_ev, lessons)
+        reasons.append(f"fast_ladder:{ladder_note}")
+    else:
+        max_pct, min_ev = MAX_SIZE_PCT, MIN_LIVE_EV
 
     # Binding lesson cuts
     for rule in lesson_hits:
@@ -179,24 +268,32 @@ def analyze_signal(
         if rl.startswith("cut:") or "weight cap=0" in rl or "model_broken" in rl:
             skip = True
             reasons.append(f"lesson_CUT: {rule[:120]}")
-        if "avoid:" in rl.replace(" ", "")[:40] and sid.split("|")[1] in rl:
-            if "until" in rl or "gated" in rl:
+        if "avoid:" in rl.replace(" ", "")[:40] and (
+            sid.split("|")[1] in rl or signal.market_series in rl
+        ):
+            if "until" in rl or "gated" in rl or "skip" in rl:
                 skip = True
                 reasons.append(f"lesson_AVOID: {rule[:120]}")
+        if "skip:" in rl and (signal.timeframe in rl or signal.market_series in rl):
+            skip = True
+            reasons.append(f"lesson_SKIP: {rule[:120]}")
 
     if sid in proposal.cut_list:
         skip = True
         reasons.append("allocation_policy: sleeve on CUT list")
 
-    if live_ev < MIN_LIVE_EV:
+    if live_ev < min_ev:
         skip = True
-        reasons.append(f"live_ev={live_ev:.4f}<{MIN_LIVE_EV} ({ev_note})")
+        reasons.append(f"live_ev={live_ev:.4f}<{min_ev} ({ev_note})")
 
-    if stats["n"] >= 10 and stats["wr"] < MIN_SLEEVE_WR:
+    wr_floor = 0.50 if fast else MIN_SLEEVE_WR
+    n_floor = 8 if fast else 10
+    if merged["n"] >= n_floor and merged["wr"] < wr_floor:
         skip = True
-        reasons.append(f"sleeve_wr={stats['wr']:.2%} n={stats['n']} below {MIN_SLEEVE_WR:.0%}")
+        reasons.append(f"sleeve_wr={merged['wr']:.2%} n={merged['n']} below {wr_floor:.0%}")
 
-    if signal.oracle_alignment < 0.45 and signal.timeframe in ("5m", "15m"):
+    align_floor = 0.55 if fast else 0.45
+    if signal.oracle_alignment < align_floor and signal.timeframe in ("5m", "15m"):
         skip = True
         reasons.append(f"oracle_alignment={signal.oracle_alignment:.2f} too low for HF")
 
@@ -207,62 +304,76 @@ def analyze_signal(
         reasons.append("REDUCE cap applied (≤8% sleeve weight)")
 
     div_before = proposal.diversification_ratio
-    # Approximate post-trade concentration if we add this sleeve weight
     weights = dict(proposal.weights)
-    weights[sid] = max(weights.get(sid, 0.0), w)
+    weights[sid] = max(weights.get(sid, 0.0), w if w > 0 else 0.5)
     total = sum(weights.values()) or 1.0
     norm = {k: v / total for k, v in weights.items()}
     hhi_after = sum(v * v for v in norm.values())
     div_after = div_before * (1.0 - 0.15 * max(0.0, hhi_after - proposal.concentration_hhi))
 
-    if hhi_after > MAX_CONCENTRATION and w > 0.12:
+    # With only 2 allowed markets, HHI≈0.5–1.0 is expected — do not block
+    max_hhi = 0.85 if fast else MAX_CONCENTRATION
+    if (not fast) and hhi_after > max_hhi and w > 0.12:
         skip = True
-        reasons.append(f"concentration_hhi={hhi_after:.3f}>{MAX_CONCENTRATION}")
+        reasons.append(f"concentration_hhi={hhi_after:.3f}>{max_hhi}")
 
     if not skip:
-        # Edge-weighted size within sleeve budget share of bankroll
         edge_scale = min(1.5, max(0.4, live_ev / 0.08))
         conf = default_confidence(sid, signal)
         conf_scale = 0.5 + 0.5 * conf.internal_confidence
-        if stats["currently_losing"]:
+        if merged["currently_losing"]:
             conf_scale *= 0.5
             reasons.append("currently_losing → half size")
         if sid in proposal.reduce_list:
             conf_scale *= 0.5
-        raw_pct = w * MAX_SIZE_PCT / max(MAX_SIZE_PCT, 0.25) * edge_scale * conf_scale
-        # Map sleeve weight to bankroll %: full sleeve at MAX_SINGLE ~ 3%
-        size_pct = min(MAX_SIZE_PCT, max(MIN_SIZE_PCT, w * 0.12 * edge_scale * conf_scale))
-        # Prefer HRP weight * bankroll * gross room factor
-        size_pct = min(MAX_SIZE_PCT, max(0.0, proposal.weights.get(sid, w) * 0.15 * edge_scale * conf_scale))
-        if size_pct < MIN_SIZE_PCT:
-            size_pct = 0.0
-            skip = True
-            reasons.append("size_below_min_pct → skip")
+
+        if fast:
+            # Ladder sets hard cap; edge/conf only scale within it
+            size_pct = max_pct * edge_scale * conf_scale
+            size_pct = min(max_pct, max(MIN_SIZE_PCT if not fast else max_pct * 0.5, size_pct))
+            # Cold start: force exact small size
+            if merged["n"] < 5:
+                size_pct = max_pct
         else:
+            size_pct = min(
+                MAX_SIZE_PCT,
+                max(0.0, proposal.weights.get(sid, w) * 0.15 * edge_scale * conf_scale),
+            )
+            if size_pct < MIN_SIZE_PCT:
+                size_pct = 0.0
+                skip = True
+                reasons.append("size_below_min_pct → skip")
+
+        if not skip:
             reasons.append(
-                f"size_pct={size_pct:.2%} from w={w:.3f} edge_scale={edge_scale:.2f} "
+                f"size_pct={size_pct:.2%} max={max_pct:.2%} edge_scale={edge_scale:.2f} "
                 f"conf_scale={conf_scale:.2f} ({ev_note})"
             )
-        _ = raw_pct  # kept for debug clarity in reasons if needed
 
     size_usd = round(bankroll * size_pct, 2) if not skip else 0.0
     if not skip and size_usd < MIN_TICKET_USD:
-        skip = True
-        size_pct = 0.0
-        size_usd = 0.0
-        reasons.append(f"ticket ${bankroll * size_pct:.2f}<${MIN_TICKET_USD} → skip")
+        # Round up to min ticket if within 20% of floor for cold-start
+        if fast and bankroll * max_pct >= MIN_TICKET_USD * 0.8:
+            size_usd = MIN_TICKET_USD
+            size_pct = size_usd / bankroll
+            reasons.append("bumped_to_min_ticket_$10")
+        else:
+            skip = True
+            size_pct = 0.0
+            size_usd = 0.0
+            reasons.append(f"ticket below ${MIN_TICKET_USD} → skip")
 
     analysis = PreTradeAnalysis(
         signal_id=signal.signal_id,
         substrategy_id=sid,
         bankroll_usd=bankroll,
-        recommended_size_pct=round(size_pct * 100, 3) if not skip else 0.0,  # store as percent points
+        recommended_size_pct=round(size_pct * 100, 3) if not skip else 0.0,
         recommended_size_usd=size_usd,
         skip=skip,
         live_ev=round(live_ev, 5),
-        sleeve_wr=round(stats["wr"], 4),
-        sleeve_ev=round(stats["ev"], 5),
-        sleeve_n=int(stats["n"]),
+        sleeve_wr=round(merged["wr"], 4),
+        sleeve_ev=round(merged["ev"], 5),
+        sleeve_n=int(merged["n"]),
         portfolio_div_before=round(div_before, 4),
         portfolio_div_after=round(div_after, 4),
         concentration_after=round(hhi_after, 4),

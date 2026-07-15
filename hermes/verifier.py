@@ -283,6 +283,21 @@ def verify_signal(
     checks: list[CheckResult] = []
     rejections: list[str] = []
 
+    # Scope gate — BTC 5m/15m Up/Down only
+    from hermes.market_scope import is_allowed_series, is_allowed_slug, scope_enabled
+
+    if scope_enabled():
+        scoped_ok = is_allowed_slug(signal.slug) or is_allowed_series(signal.market_series)
+        checks.append(
+            CheckResult(
+                name="market_scope",
+                passed=scoped_ok,
+                detail=f"slug={signal.slug} series={signal.market_series}",
+            )
+        )
+        if not scoped_ok:
+            rejections.append(f"out_of_scope:{signal.slug or signal.market_series}")
+
     # 0. Circuit / pause — coerce string flags carefully ("clear" must not trip)
     paused = bool(state.get("loop_paused") or state.get("pause_loop"))
     cb_raw = state.get("circuit_breaker", "clear")

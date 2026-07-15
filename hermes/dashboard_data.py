@@ -143,11 +143,75 @@ def substrategy_cards() -> list[dict[str, Any]]:
     return cards
 
 
-def recent_lessons(limit: int = 8) -> list[str]:
+def scoped_market_cards() -> list[dict[str, Any]]:
+    """Performance cards for the two allowed BTC up/down series only."""
+    from hermes.market_scope import SERIES_5M, SERIES_15M, preferred_slugs
+
+    settles = load_settlements()
+    pretrades = load_pretrade()
+    cards = []
+    for series, label in (
+        (SERIES_15M, "BTC Up/Down 15m"),
+        (SERIES_5M, "BTC Up/Down 5m"),
+    ):
+        rows = [
+            s
+            for s in settles
+            if str(s.get("market_series", "")).startswith(series)
+            or series in str(s.get("substrategy_id", ""))
+            or (series.endswith("15m") and "15m" in str(s.get("slug", "")))
+            or (series.endswith("5m") and "5m" in str(s.get("slug", "")) and "15m" not in str(s.get("slug", "")))
+        ]
+        pts = [
+            p
+            for p in pretrades
+            if series in str(p.get("substrategy_id", ""))
+        ]
+        wins = sum(1 for r in rows if r.get("won") or float(r.get("pnl_usd", 0)) > 0)
+        pnls = [float(r.get("pnl_usd", 0)) for r in rows]
+        last_pt = pts[-1] if pts else {}
+        pref = [s for s in preferred_slugs() if ("15m" in s) == series.endswith("15m")]
+        cards.append(
+            {
+                "series": series,
+                "label": label,
+                "preferred_slug": pref[0] if pref else "",
+                "n": len(rows),
+                "wr": (wins / len(rows)) if rows else None,
+                "pnl": sum(pnls) if pnls else 0.0,
+                "current_size_pct": last_pt.get("recommended_size_pct"),
+                "current_size_usd": last_pt.get("recommended_size_usd"),
+                "last_skip": last_pt.get("skip"),
+                "last_reasons": last_pt.get("reasons") or [],
+                "last_live_ev": last_pt.get("live_ev"),
+            }
+        )
+    return cards
+
+
+def recent_lessons_scoped(limit: int = 8) -> list[str]:
+    """Lessons that mention the BTC up/down series."""
     text = read_lessons_md()
     rules = []
-    for m in __import__("re").finditer(r"\*\*Rule\*\*:\s*(.+)", text):
-        rules.append(m.group(1).strip())
+    for m in __import__("re").finditer(
+        r"### \[.*?\][\s\S]*?\*\*Rule\*\*:\s*(.+)", text
+    ):
+        rule = m.group(1).strip()
+        block = m.group(0).lower()
+        if any(
+            k in block or k in rule.lower()
+            for k in (
+                "btc_updown",
+                "btc-updown",
+                "5m",
+                "15m",
+                "aggressive:",
+                "conservative:",
+                "size_up",
+                "size_down",
+            )
+        ):
+            rules.append(rule)
     return rules[-limit:][::-1]
 
 

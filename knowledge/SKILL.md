@@ -60,6 +60,8 @@ Paper mode is default. Live trading is opt-in only after paper evidence clears t
 16. **We never skip pre-trade analysis** — size is % of bankroll (max 3%) or 0% skip; verifier rejects `pretrade_skip`.
 17. **We never expose Streamlit :8501 publicly** — Nginx serves `http://<IP>/dashboard` only.
 18. **Hermes Paper deployments keep `HERMES_PAPER_ONLY=1`** — no live orders on the VPS stack.
+19. **We only scan/trade BTC Up/Down 5m + 15m** (`btc-updown-5m-*`, `btc-updown-15m-*`). All other markets are out of scope.
+20. **We start small on fast markets** — 0.5% bankroll cold-start; scale only when lessons show WR/EV improving.
 
 ## Circuit Breakers
 

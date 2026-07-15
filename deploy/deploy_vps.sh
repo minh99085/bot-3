@@ -77,6 +77,9 @@ sed -i 's/^HERMES_LIVE=.*/HERMES_LIVE=0/' .env || true
 grep -q '^HERMES_PAPER_ONLY=' .env || echo 'HERMES_PAPER_ONLY=1' >> .env
 grep -q '^HERMES_LIVE=' .env || echo 'HERMES_LIVE=0' >> .env
 grep -q '^HERMES_CAPITAL=' .env || echo 'HERMES_CAPITAL=2000' >> .env
+grep -q '^HERMES_SCOPE_BTC_UPDOWN_ONLY=' .env || echo 'HERMES_SCOPE_BTC_UPDOWN_ONLY=1' >> .env
+grep -q '^HERMES_BTC_UPDOWN_SLUGS=' .env || echo 'HERMES_BTC_UPDOWN_SLUGS=btc-updown-15m-1784113200,btc-updown-5m-1784113500' >> .env
+sed -i 's/^HERMES_SCOPE_BTC_UPDOWN_ONLY=.*/HERMES_SCOPE_BTC_UPDOWN_ONLY=1/' .env || true
 
 mkdir -p data/paper data/live data/handoff logs knowledge
 chown -R 10001:10001 logs data knowledge 2>/dev/null || true

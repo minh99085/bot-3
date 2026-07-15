@@ -44,13 +44,97 @@ def _stamp() -> str:
 
 
 def lesson_from_settlement(stl: Settlement) -> Lesson:
+    from hermes.market_scope import ALLOWED_SERIES, is_allowed_series
+
     sid = stl.substrategy_id or make_substrategy_id(
         stl.market_series or "misc",
         stl.entry_mode,
         stl.regime,
         stl.hourly_bucket,
+        getattr(stl, "timeframe", None) or "1h",
     )
-    if stl.won:
+    series = stl.market_series or sid.split("|")[0]
+    hour = stl.hourly_bucket
+    mode = stl.entry_mode.value
+    tf = getattr(stl, "timeframe", None) or (
+        "5m" if "5m" in sid else "15m" if "15m" in sid else "1h"
+    )
+    fast = is_allowed_series(series) or series in ALLOWED_SERIES
+
+    # Series-level rolling hint from recent ledger
+    series_note = ""
+    size_advice = "SIZE: hold cold-start 0.5% until n≥5 with WR≥60%."
+    try:
+        from hermes.state_io import ledger_path, read_jsonl
+
+        rows = [
+            r
+            for r in read_jsonl(ledger_path(paper=stl.paper))
+            if (r.get("event") == "settlement" or r.get("won") is not None)
+            and (
+                str(r.get("market_series", "")) == series
+                or str(r.get("substrategy_id", "")).startswith(series + "|")
+            )
+        ]
+        if rows:
+            wins = sum(1 for r in rows if r.get("won") or float(r.get("pnl_usd", 0)) > 0)
+            wr = wins / len(rows)
+            pnls = [float(r.get("pnl_usd", 0)) for r in rows]
+            by_hour: dict[int, list[bool]] = {}
+            by_mode: dict[str, list[bool]] = {}
+            for r in rows:
+                h = int(r.get("hourly_bucket") or 0)
+                m = str(r.get("entry_mode") or mode)
+                won = bool(r.get("won") or float(r.get("pnl_usd", 0)) > 0)
+                by_hour.setdefault(h, []).append(won)
+                by_mode.setdefault(m, []).append(won)
+            hour_wr = (
+                sum(by_hour.get(hour, [])) / len(by_hour[hour]) if by_hour.get(hour) else wr
+            )
+            mode_wr = (
+                sum(by_mode.get(mode, [])) / len(by_mode[mode]) if by_mode.get(mode) else wr
+            )
+            series_note = (
+                f" series_n={len(rows)} series_WR={wr:.0%} "
+                f"mode_WR={mode_wr:.0%} hour{hour}_WR={hour_wr:.0%} "
+                f"pnl_sum=${sum(pnls):+.2f}."
+            )
+            if wr >= 0.75 and len(rows) >= 10:
+                size_advice = (
+                    "AGGRESSIVE: size_up toward 2% bankroll — positive EV + WR≥75%."
+                )
+            elif wr >= 0.65 and len(rows) >= 5:
+                size_advice = "SIZE: scale to ~1.2% bankroll while EV stays positive."
+            elif wr < 0.55 and len(rows) >= 8:
+                size_advice = (
+                    "CONSERVATIVE: size_down to 0.5% or SKIP until hour/mode WR recovers."
+                )
+            elif not stl.won:
+                size_advice = (
+                    "CONSERVATIVE: after loss keep ≤0.5%; skip same hour if hour_WR<50%."
+                )
+    except Exception:  # noqa: BLE001
+        pass
+
+    if fast:
+        if stl.won:
+            rule = (
+                f"EXPLOIT:`{series}` {tf} {mode}/h{hour} WIN pnl=${stl.pnl_usd:.2f}. "
+                f"{size_advice}{series_note} "
+                f"Keep Chainlink alignment gate; do not loosen live_EV floor."
+            )
+            severity = "low"
+            promote = "ALPHA_RESEARCH_SKILL"
+        else:
+            rule = (
+                f"AVOID:{mode} on `{series}` at hour={hour} ({tf}) after loss "
+                f"pnl=${stl.pnl_usd:.2f} until bucket WR>65%. "
+                f"{size_advice}{series_note} "
+                f"If series WR<55% over ≥8 trades → SKIP:{series} until recovery."
+            )
+            severity = "high"
+            promote = "ALPHA_RESEARCH_SKILL"
+    elif stl.won:
         rule = (
             f"EXPLOIT continues: sleeve `{sid}` produced a win "
             f"(pnl=${stl.pnl_usd:.2f}). Keep sizing rules; do not loosen EV gate. "
@@ -73,16 +157,24 @@ def lesson_from_settlement(stl: Settlement) -> Lesson:
         severity=severity,
         rule=rule,
         evidence=(
-            f"signal={stl.signal_id} market={stl.market_id} won={stl.won} "
-            f"sleeve={sid} mode={stl.entry_mode.value} regime={stl.regime.value}"
+            f"signal={stl.signal_id} market={stl.market_id} slug={getattr(stl, 'slug', '')} "
+            f"won={stl.won} sleeve={sid} series={series} mode={mode} "
+            f"regime={stl.regime.value} hour={hour} tf={tf}"
         ),
         applies_to=[
-            sid,
-            stl.entry_mode.value,
-            stl.regime.value,
-            f"h{stl.hourly_bucket}",
-            stl.confidence_tier.value,
-            "allocation",
+            x
+            for x in [
+                sid,
+                series,
+                mode,
+                stl.regime.value,
+                f"h{hour}",
+                tf,
+                stl.confidence_tier.value,
+                "allocation",
+                series if series in ("btc_updown_5m", "btc_updown_15m") else "",
+            ]
+            if x
         ],
         promote_to=promote,
     )

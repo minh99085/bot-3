@@ -144,8 +144,89 @@ class PolymarketClient:
             raise RuntimeError("no markets returned from Polymarket Gamma")
         return out
 
+    def get_market_by_slug(self, slug: str) -> Optional[MarketCandidate]:
+        """Fetch a single market by exact slug (Gamma)."""
+        url = f"{GAMMA_HOST}/markets"
+        with httpx.Client(timeout=self.timeout, headers=self._headers()) as client:
+            resp = client.get(url, params={"slug": slug})
+            resp.raise_for_status()
+            data = resp.json()
+        rows = data if isinstance(data, list) else [data] if data else []
+        if not rows:
+            return None
+        hour = datetime.now(timezone.utc).hour
+        try:
+            return self._to_candidate(rows[0], hour)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("slug %s parse failed: %s", slug, exc)
+            return None
+
+    def list_scoped_btc_updown_markets(self) -> list[MarketCandidate]:
+        """ONLY BTC 5m + 15m Up/Down — one active window per series.
+
+        Follows preferred seed slugs when still active, else rolls to the
+        current UTC window. Ignores every other Polymarket event.
+        """
+        from hermes.market_scope import (
+            SERIES_5M,
+            SERIES_15M,
+            all_discovery_slugs,
+            parse_slug,
+            scope_enabled,
+        )
+
+        if not scope_enabled():
+            return self.list_crypto_updown_markets(limit=40)
+
+        by_series: dict[str, MarketCandidate] = {}
+        for slug in all_discovery_slugs():
+            sm = parse_slug(slug)
+            if not sm:
+                continue
+            if sm.series in by_series:
+                continue  # already have a live window for this series
+            try:
+                c = self.get_market_by_slug(slug)
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("fetch %s failed: %s", slug, exc)
+                continue
+            if c is None:
+                continue
+            # Skip resolved / extreme prices (window over or locked)
+            if c.yes_price <= 0.01 or c.yes_price >= 0.99:
+                continue
+            c.timeframe = sm.timeframe
+            c.raw = {
+                **(c.raw or {}),
+                "timeframe": sm.timeframe,
+                "asset": "BTC",
+                "scoped_series": sm.series,
+                "scoped_slug": sm.slug,
+            }
+            if "BTC" not in c.tags:
+                c.tags = list(c.tags) + ["BTC", f"tf:{sm.timeframe}", "scoped"]
+            by_series[sm.series] = c
+            if len(by_series) >= 2:
+                break
+
+        # Stable order: 15m then 5m
+        ordered: list[MarketCandidate] = []
+        for series in (SERIES_15M, SERIES_5M):
+            if series in by_series:
+                ordered.append(by_series[series])
+        logger.info(
+            "scoped discovery: %d markets %s",
+            len(ordered),
+            [c.slug for c in ordered],
+        )
+        return ordered
+
     def list_crypto_updown_markets(self, limit: int = 40) -> list[MarketCandidate]:
-        """Prefer BTC/ETH up-down / 5m / 15m markets when present in Gamma."""
+        """Scoped mode: BTC 5m/15m only. Legacy mode: BTC/ETH up-down preference."""
+        from hermes.market_scope import scope_enabled
+
+        if scope_enabled():
+            return self.list_scoped_btc_updown_markets()
         all_m = self.list_candidate_markets(limit=max(limit * 3, 80))
         scored: list[tuple[int, MarketCandidate]] = []
         for c in all_m:
@@ -204,6 +285,9 @@ class PolymarketClient:
                 "timeframe": timeframe,
                 "yes_token_id": tokens[0] if tokens else None,
                 "no_token_id": tokens[1] if len(tokens) > 1 else None,
+                "endDate": row.get("endDate") or row.get("end_date"),
+                "active": row.get("active"),
+                "closed": row.get("closed"),
             },
         )
 

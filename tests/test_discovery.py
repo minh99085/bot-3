@@ -22,10 +22,11 @@ def test_regime_detection():
 def test_synthetic_discovery_filters():
     buckets = load_edge_buckets_from_alpha()
     raw = _synthetic_candidates()
-    assert len(raw) >= 3
+    assert len(raw) == 2  # only BTC 5m + 15m scoped windows
+    assert all(c.slug.startswith("btc-updown-") for c in raw)
     filtered = filter_candidates(raw, buckets, min_score=0.2)
-    assert len(filtered) >= 1
-    assert score_candidate(filtered[0], buckets) >= 0.2
+    assert len(filtered) == 2
+    assert score_candidate(filtered[0], buckets) >= 0.0
 
 
 def test_down_bias_dynamic():

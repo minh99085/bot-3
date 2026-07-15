@@ -151,27 +151,36 @@ def filter_candidates(
     raw: list[MarketCandidate],
     buckets: list[EdgeBucket],
     *,
-    min_score: float = 0.35,
+    min_score: float = 0.20,
     limit: int = 25,
 ) -> list[MarketCandidate]:
+    from hermes.market_scope import is_allowed_slug, scope_enabled
+
     scored: list[tuple[float, MarketCandidate]] = []
     for c in raw:
-        if c.liquidity < MIN_LIQUIDITY_USD:
+        if scope_enabled() and not is_allowed_slug(c.slug):
             continue
-        if c.spread_bps > MAX_SPREAD_BPS:
+        min_liq = 500.0 if scope_enabled() else MIN_LIQUIDITY_USD
+        max_spread = 600.0 if scope_enabled() else MAX_SPREAD_BPS
+        min_vol = 100.0 if scope_enabled() else MIN_VOLUME_24H
+        if c.liquidity < min_liq:
             continue
-        if c.volume_24h < MIN_VOLUME_24H:
+        if c.spread_bps > max_spread:
+            continue
+        if c.volume_24h < min_vol and not scope_enabled():
             continue
         s = score_candidate(c, buckets)
-        if s >= min_score:
-            scored.append((s, c))
+        if scope_enabled() or s >= min_score:
+            scored.append((max(s, 0.5) if scope_enabled() else s, c))
     scored.sort(key=lambda x: x[0], reverse=True)
     return [c for _, c in scored[:limit]]
 
 
 def discover_from_connector(limit: int = 50) -> list[MarketCandidate]:
-    """Pull markets from Polymarket (prefer crypto up/down) + enrich via Chainlink."""
+    """Pull ONLY scoped BTC 5m/15m Up/Down markets + Chainlink enrich."""
     import os
+
+    from hermes.market_scope import is_allowed_slug, scope_enabled
 
     if os.environ.get("HERMES_FORCE_SYNTHETIC", "0") == "1":
         return _synthetic_candidates()
@@ -180,126 +189,69 @@ def discover_from_connector(limit: int = 50) -> list[MarketCandidate]:
         from connectors.polymarket import PolymarketClient
 
         client = PolymarketClient()
-        try:
-            raw = client.list_crypto_updown_markets(limit=limit)
-        except Exception:
+        raw = client.list_scoped_btc_updown_markets()
+        if not raw and not scope_enabled():
             raw = client.list_candidate_markets(limit=limit)
         hybrid = HybridDataService(polymarket=client)
-        return [hybrid.apply_to_candidate(c) for c in raw]
+        enriched = [hybrid.apply_to_candidate(c) for c in raw]
+        if scope_enabled():
+            enriched = [c for c in enriched if is_allowed_slug(c.slug)]
+        return enriched
     except Exception as exc:  # noqa: BLE001
-        logger.warning("polymarket/hybrid unavailable (%s); using synthetic set", exc)
+        logger.warning("polymarket/hybrid unavailable (%s); using synthetic scoped set", exc)
         return _synthetic_candidates()
 
 
 def _synthetic_candidates() -> list[MarketCandidate]:
-    """Deterministic paper candidates: BTC/ETH 5m/15m + EXPLOIT-aligned macros."""
-    hour = 14
-    samples = [
-        (
-            "mkt_btc_5m",
-            "btc-updown-5m",
-            "Bitcoin Up or Down - 5 Minutes",
-            0.48,
-            0.52,
-            45000,
-            20000,
-            60,
-            "5m",
-            "BTC",
-        ),
-        (
-            "mkt_eth_15m",
-            "eth-updown-15m",
-            "Ethereum Up or Down - 15 Minutes",
-            0.46,
-            0.54,
-            28000,
-            15000,
-            70,
-            "15m",
-            "ETH",
-        ),
-        (
-            "mkt_btc_100k",
-            "will-btc-hit-100k",
-            "Will BTC hit $100k this month?",
-            0.42,
-            0.58,
-            12000,
-            8000,
-            80,
-            "1h",
-            "BTC",
-        ),
-        (
-            "mkt_fed_cut",
-            "fed-rate-cut-july",
-            "Will the Fed cut rates in July?",
-            0.31,
-            0.69,
-            25000,
-            15000,
-            60,
-            "1h",
-            None,
-        ),
-        (
-            "mkt_eth_etf",
-            "eth-etf-inflows",
-            "Will ETH ETF see net inflows this week?",
-            0.55,
-            0.45,
-            9000,
-            6000,
-            90,
-            "1h",
-            "ETH",
-        ),
-    ]
-    out: list[MarketCandidate] = []
-    # Optional live Chainlink enrichment even for synthetics
-    oracle_map: dict[str, object] = {}
+    """Paper fallback: ONLY the two scoped BTC up/down windows."""
+    from hermes.market_scope import PREFERRED_SLUGS, parse_slug
+
+    hour = datetime.now(timezone.utc).hour
+    oracle_price = None
+    oracle_src = None
     try:
         from connectors.chainlink import ChainlinkClient
 
-        cl = ChainlinkClient()
-        for a in ("BTC", "ETH"):
-            px = cl.get_price(a)
-            oracle_map[a] = px.price_usd
-            oracle_map[f"{a}_src"] = px.source
+        px = ChainlinkClient().get_price("BTC")
+        oracle_price = px.price_usd
+        oracle_src = px.source
     except Exception:  # noqa: BLE001
         pass
 
-    for mid, slug, q, yes, no, vol, liq, spread, tf, asset in samples:
-        regime = Regime.MEAN_REVERT
-        raw = {
-            "timeframe": tf,
-            "asset": asset,
-            "oracle_alignment": 0.75 if asset else 0.55,
-            "oracle_return_proxy": -0.001 if asset else 0.0,
-            "oracle_price": oracle_map.get(asset) if asset else None,
-            "oracle_source": oracle_map.get(f"{asset}_src") if asset else None,
-            "oracle_stale": False,
-            "synthetic": True,
-        }
-        tags = ["synthetic", "paper", f"tf:{tf}"]
-        if asset:
-            tags.append(asset.lower())
+    out: list[MarketCandidate] = []
+    for slug in PREFERRED_SLUGS:
+        sm = parse_slug(slug)
+        if not sm:
+            continue
+        yes, no = (0.48, 0.52) if sm.timeframe == "5m" else (0.49, 0.51)
         out.append(
             MarketCandidate(
-                market_id=mid,
+                market_id=f"mkt_{sm.series}",
                 slug=slug,
-                question=q,
+                question=f"Bitcoin Up or Down - {sm.timeframe}",
                 yes_price=yes,
                 no_price=no,
-                volume_24h=vol,
-                liquidity=liq,
-                spread_bps=spread,
-                regime=regime,
+                volume_24h=50_000,
+                liquidity=20_000,
+                spread_bps=40.0,
+                regime=Regime.MEAN_REVERT,
                 hourly_bucket=hour,
-                timeframe=tf,
-                tags=tags,
-                raw=raw,
+                timeframe=sm.timeframe,
+                tags=["synthetic", "paper", "BTC", f"tf:{sm.timeframe}", "scoped"],
+                raw={
+                    "timeframe": sm.timeframe,
+                    "asset": "BTC",
+                    "scoped_series": sm.series,
+                    "scoped_slug": slug,
+                    "oracle_alignment": 0.8,
+                    "oracle_return_proxy": -0.0005,
+                    "oracle_price": oracle_price,
+                    "oracle_source": oracle_src,
+                    "oracle_stale": False,
+                    "synthetic": True,
+                    "yes_token_id": None,
+                    "no_token_id": None,
+                },
             )
         )
     return out

@@ -327,6 +327,8 @@ class Settlement(BaseModel):
     confidence_tier: ConfidenceTier
     market_series: str = "unknown"
     substrategy_id: str = ""
+    slug: str = ""
+    timeframe: str = "1h"
     settled_at: datetime = Field(default_factory=utc_now)
     paper: bool = True
     notes: str = ""

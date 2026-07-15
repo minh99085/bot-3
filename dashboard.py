@@ -35,8 +35,9 @@ from hermes.dashboard_data import (
     oracle_alignment_snapshot,
     portfolio_metrics,
     recent_lessons,
+    recent_lessons_scoped,
     recent_trade_table,
-    substrategy_cards,
+    scoped_market_cards,
     total_pnl,
 )
 
@@ -97,10 +98,10 @@ equity_now = curve[-1]["equity"] if curve else bankroll
 pm = portfolio_metrics()
 oracle = oracle_alignment_snapshot()
 
-st.title("Hermes v2 · Paper Trading Desk")
+st.title("Hermes v2 · BTC Up/Down Paper Desk")
 st.caption(
-    f"Starting bankroll **${bankroll:,.0f}** USDC · Mode `{state.get('mode', 'paper')}` · "
-    f"Auto-refresh 5 min · Loop Engineering + Ruuj allocation + Chainlink ground-truth"
+    f"Starting bankroll **${bankroll:,.0f}** USDC · **ONLY** BTC 5m + 15m Up/Down · "
+    f"Mode `{state.get('mode', 'paper')}` · Auto-refresh 5 min · Chainlink + CLOB"
 )
 
 # ── Top metrics ─────────────────────────────────────────────────────────────
@@ -115,6 +116,33 @@ c5.metric(
     str(state.get("pause_loop", False)),
 )
 
+st.subheader("Scoped markets — BTC Up/Down only")
+scoped = scoped_market_cards()
+sc1, sc2 = st.columns(2)
+for i, card in enumerate(scoped):
+    col = sc1 if i == 0 else sc2
+    with col:
+        wr = f"{card['wr']:.0%}" if card["wr"] is not None else "—"
+        size = card.get("current_size_usd")
+        size_s = f"${size:.2f}" if size is not None else "—"
+        skip = card.get("last_skip")
+        st.markdown(
+            f"""<div class="block-card">
+            <div class="tag">{card['label']}</div>
+            <div style="margin-top:0.4rem;font-size:0.8rem;opacity:0.75">{card.get('preferred_slug') or card['series']}</div>
+            <div style="margin-top:0.6rem;font-family:JetBrains Mono,monospace">
+            WR <b>{wr}</b> · trades <b>{card['n']}</b> · PnL <b>${card['pnl']:+.2f}</b><br/>
+            last size <b>{size_s}</b>
+            {" · <span style='color:#fbbf24'>SKIP</span>" if skip else " · sized"}
+            · EV {card.get('last_live_ev') if card.get('last_live_ev') is not None else '—'}
+            </div>
+            <div style="margin-top:0.5rem;font-size:0.8rem;opacity:0.8">
+            {'; '.join((card.get('last_reasons') or [])[:2]) or 'awaiting first pretrade'}
+            </div>
+            </div>""",
+            unsafe_allow_html=True,
+        )
+
 left, right = st.columns([1.6, 1])
 
 with left:
@@ -123,21 +151,21 @@ with left:
         df_eq = pd.DataFrame(curve)
         st.line_chart(df_eq.set_index(df_eq.index)["equity"], height=280)
     else:
-        st.info("No settlements yet — equity sits at starting bankroll. Run `python -m hermes.hermes_loop demo`.")
+        st.info("No settlements yet — equity at $2000. Bot scans BTC 5m/15m only.")
 
-    st.subheader("Recent trades")
+    st.subheader("Recent trades (scoped)")
     trades = recent_trade_table(40)
     if trades:
         st.dataframe(pd.DataFrame(trades), use_container_width=True, height=320)
     else:
-        st.write("_No trades in ledger yet._")
+        st.write("_No paper fills yet — verifier/sizing may be skipping._")
 
 with right:
-    st.subheader("Chainlink ↔ Polymarket")
+    st.subheader("Chainlink BTC")
     st.markdown('<div class="block-card">', unsafe_allow_html=True)
     if oracle.get("btc"):
         st.markdown(
-            f"**BTC** `${oracle['btc']:,.2f}` · **ETH** `${oracle.get('eth') or 0:,.2f}`  \n"
+            f"**BTC** `${oracle['btc']:,.2f}`  \n"
             f"<span class='tag'>{oracle.get('source')}</span>  "
             f"avg align `{oracle.get('avg_alignment', 0):.2f}`",
             unsafe_allow_html=True,
@@ -146,39 +174,17 @@ with right:
         st.write("Oracle unavailable:", oracle.get("error", "—"))
     st.markdown("</div>", unsafe_allow_html=True)
 
-    st.subheader("Portfolio")
+    st.subheader("Open / portfolio")
     st.markdown(
-        f"- Active sleeves: **{pm['substrategies_active']}**  \n"
+        f"- Open positions: **{len(load_positions_open())}**  \n"
         f"- CUT / REDUCE: **{pm['cut']}** / **{pm['reduce']}**  \n"
-        f"- Method: `{pm['method']}`  \n"
-        f"- Open positions: **{len(load_positions_open())}**"
+        f"- Method: `{pm['method']}`"
     )
-    if pm.get("top_weights"):
-        st.bar_chart(pd.Series(pm["top_weights"], name="weight"))
 
-    st.subheader("Latest lessons")
-    for rule in recent_lessons(6):
-        st.markdown(f"- {rule[:180]}")
-
-st.subheader("Sub-strategy performance")
-cards = substrategy_cards()
-if cards:
-    cols = st.columns(min(3, len(cards)))
-    for i, card in enumerate(cards[:9]):
-        with cols[i % len(cols)]:
-            trend = "↑" if card["trend"] == "up" else "↓"
-            st.markdown(
-                f"""<div class="block-card">
-                <div class="tag">{card['substrategy_id'][:48]}</div>
-                <div style="margin-top:0.6rem;font-family:JetBrains Mono,monospace">
-                WR <b>{card['wr']:.0%}</b> · EV <b>{card['ev']:+.3f}</b> · n={card['n']}<br/>
-                weight <b>{card['weight']:.1%}</b> · recent {trend} {card['recent_wr']:.0%}<br/>
-                PnL <b>${card['pnl']:+.2f}</b>
-                </div></div>""",
-                unsafe_allow_html=True,
-            )
-else:
-    st.write("_No settled sub-strategy history yet._")
+    st.subheader("Latest lessons (BTC fast markets)")
+    lessons = recent_lessons_scoped(8) or recent_lessons(6)
+    for rule in lessons:
+        st.markdown(f"- {rule[:200]}")
 
 st.subheader("Pre-trade sizing decisions")
 pt = load_pretrade()[-25:][::-1]
@@ -201,7 +207,7 @@ else:
     st.write("_No pre-trade decisions logged yet._")
 
 st.caption(
+    f"Scope: btc-updown-5m-* + btc-updown-15m-* only · "
     f"Last turn: `{state.get('last_turn', 'none')}` · "
-    f"{state.get('last_turn_summary', '')} · "
-    f"Updated continuously from knowledge/ + data/paper/"
+    f"{state.get('last_turn_summary', '')}"
 )

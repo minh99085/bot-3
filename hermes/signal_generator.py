@@ -351,6 +351,11 @@ def signal_generator_tick(
 
     signals: list[Signal] = []
     for c in candidates:
+        from hermes.market_scope import is_allowed_slug, scope_enabled
+
+        if scope_enabled() and not is_allowed_slug(c.slug):
+            logger.info("signal skip out-of-scope slug=%s", c.slug)
+            continue
         sig = generate_signal(c, alpha_text=alpha, buckets=buckets, state=state, paper=paper)
         if sig is not None:
             signals.append(annotate_signal(sig))

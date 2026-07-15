@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from hermes.models import (
     ConfidenceTier,
     Direction,
@@ -12,6 +14,12 @@ from hermes.models import (
     VerifierDecision,
 )
 from hermes.verifier import verify_signal
+
+
+@pytest.fixture(autouse=True)
+def _disable_btc_scope(monkeypatch):
+    """Most verifier fixtures use non-BTC-updown markets; opt out of hard scope."""
+    monkeypatch.setenv("HERMES_SCOPE_BTC_UPDOWN_ONLY", "0")
 
 
 def _signal(**overrides) -> Signal:
@@ -64,6 +72,18 @@ def test_verifier_passes_clean_signal():
     assert report.decision == VerifierDecision.PASS
     assert report.sized_usd > 0
     assert all(c.passed for c in report.checks)
+
+
+def test_verifier_rejects_out_of_scope(monkeypatch):
+    monkeypatch.setenv("HERMES_SCOPE_BTC_UPDOWN_ONLY", "1")
+    report = verify_signal(
+        _signal(),
+        buckets=[_good_bucket()],
+        state={"capital_usd": 2000, "max_drawdown_pct": 0.0, "open_exposure_usd": 0},
+        lessons="",
+    )
+    assert report.decision == VerifierDecision.REJECT
+    assert any("out_of_scope" in r for r in report.rejection_reasons)
 
 
 def test_verifier_rejects_low_ev():

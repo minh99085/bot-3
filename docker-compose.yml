@@ -20,6 +20,8 @@ services:
       HERMES_LOG_DIR: /app/logs
       HERMES_HEALTH_PORT: "8080"
       HERMES_FORCE_SYNTHETIC: "${HERMES_FORCE_SYNTHETIC:-0}"
+      HERMES_SCOPE_BTC_UPDOWN_ONLY: "${HERMES_SCOPE_BTC_UPDOWN_ONLY:-1}"
+      HERMES_BTC_UPDOWN_SLUGS: "${HERMES_BTC_UPDOWN_SLUGS:-btc-updown-15m-1784113200,btc-updown-5m-1784113500}"
     volumes:
       - ./knowledge:/app/knowledge
       - ./data:/app/data

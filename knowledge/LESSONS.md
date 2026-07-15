@@ -101,6 +101,22 @@
 - **Promote to**: ALPHA_RESEARCH_SKILL
 - **Retired**: false
 
+### [2026-07-15] `les_seed_btc_updown_only` — CRITICAL (scope)
+
+- **Rule**: REQUIRE:trade ONLY `btc-updown-5m-*` and `btc-updown-15m-*`. Ignore every other Polymarket market. Preferred seeds: btc-updown-15m-1784113200, btc-updown-5m-1784113500 (roll to current window when expired).
+- **Evidence**: User mandate — specialize for fast-resolve BTC direction.
+- **Applies to**: discovery, signal, pretrade, verifier, allocation, btc_updown_5m, btc_updown_15m
+- **Promote to**: SKILL
+- **Retired**: false
+
+### [2026-07-15] `les_seed_fast_sizing_ladder` — HIGH (allocation)
+
+- **Rule**: CONSERVATIVE: cold-start size 0.5% of bankroll on BTC 5m/15m. AGGRESSIVE:size_up only when series n≥10 and WR≥75% with positive EV. After losses SIZE_DOWN or SKIP same hour until hour WR recovers.
+- **Evidence**: Fast markets need focused learning before size scale.
+- **Applies to**: pretrade, btc_updown_5m, btc_updown_15m, allocation
+- **Promote to**: ALPHA_RESEARCH_SKILL
+- **Retired**: false
+
 ## Active Lessons
 
 <!-- lessons_engine appends new dated lessons below -->

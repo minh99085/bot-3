@@ -69,11 +69,11 @@ _None — paper book empty at boot ($2000 USDC)._
 
 ## Goals in Flight
 
-- Grow $2000 paper bankroll with verifier-pass + pretrade-sized trades toward 80%+ WR.
-- Maintain diversification ratio ≥ 1.2 and HHI ≤ 0.35 in steady state.
+- Specialize on **BTC Up/Down 5m + 15m only** (preferred: `btc-updown-5m-1784113500`, `btc-updown-15m-1784113200`).
+- Grow $2000 paper bankroll via verifier-pass + lessons-driven sizing toward 80%+ WR on these two series.
+- Cold-start size 0.5% bankroll; scale only when lessons show positive EV + rising WR.
 
 ## Notes
 
-Starting paper bankroll: **$2000 USDC**. Pre-trade sizing outputs % of bankroll (or 0% skip).
-Allocation: Ledoit-Wolf → HRP/edge-RP → Black-Litterman → cut/reduce → pretrade.
-Dashboard: `streamlit run dashboard.py`
+**Market scope lock:** ONLY `btc-updown-5m-*` and `btc-updown-15m-*`. All other Polymarket events ignored.
+Starting paper bankroll: **$2000 USDC**. Dashboard: http://&lt;IP&gt;/dashboard
