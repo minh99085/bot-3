@@ -1,85 +1,203 @@
-# Financial Freedom Bot — Hermes v2
+# Hermes v2 Paper
 
-Autonomous Polymarket paper bot (BTC/ETH up-down, incl. 5m/15m) with **$2000 starting bankroll**, Loop Engineering cadence, Ruuj portfolio construction, Chainlink ground-truth, and a live Streamlit desk.
+24/7 **paper-only** Polymarket trading stack ($2000 starting bankroll) with Loop Engineering, pre-trade sizing, Chainlink ground-truth, and a Streamlit desk behind Nginx.
 
-**Targets:** consistent 80%+ WR · DD &lt; 8% · PF &gt; 1.4 · EV after CLOB fees/slippage.
+**Dashboard URL:** `http://<VPS_IP>/dashboard`  
+Streamlit is **not** exposed on port 8501 publicly — only Nginx `:80` is.
+
+Targets: consistent 80%+ WR · DD &lt; 8% · PF &gt; 1.4 · EV after CLOB fees/slippage.
 
 ---
 
-## Quick start
+## Architecture
+
+| Service | Role |
+|---------|------|
+| `bot` | Overnight paper loop (Discovery → Handoff/pretrade → Verifier → fill) |
+| `dashboard` | Streamlit UI (`baseUrlPath=/dashboard`) |
+| `nginx` | Reverse proxy → clean `/dashboard` URL |
+
+```
+Browser ──HTTP :80──► nginx ──/dashboard/*──► dashboard:8501
+                              (8501 not published)
+Bot writes knowledge/ + data/paper/  ◄── shared volumes ──►  Dashboard reads
+```
+
+Paper lock: `HERMES_PAPER_ONLY=1` (default). Live orders are refused in broker/executor/CLI.
+
+---
+
+## Quick start (Docker — local)
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+
+# Desk
+open http://localhost/dashboard
+# or
+curl -fsS http://localhost/healthz
+
+# Logs
+docker compose logs -f bot
+```
+
+Stop: `docker compose down`
+
+---
+
+## Quick start (Python — no Docker)
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-export PYTHONPATH=.
-
-# Bot (paper)
-python -m hermes.hermes_loop demo
+export PYTHONPATH=. HERMES_PAPER_ONLY=1 HERMES_LIVE=0
 python -m hermes.hermes_loop overnight
-
-# Dashboard (separate terminal) — $2000 desk
-streamlit run dashboard.py
+# other terminal:
+streamlit run dashboard.py --server.baseUrlPath=dashboard
 ```
 
 ---
 
-## How pre-trade sizing drives 80%+ WR
+## VPS deploy (exact steps)
 
-Handoff is not “pick a notional.” After signals are generated:
+**Host:** `207.246.96.45` (or your IP) · **Path:** `/opt/financial-freedom-bot`
 
-1. **Portfolio weights** — Ledoit-Wolf cov → HRP / edge-RP → Black-Litterman views → cut/reduce caps  
-2. **Pre-trade analysis** (`hermes/pretrade.py`) for each signal:
-   - Sleeve WR / EV from the ledger  
-   - Binding rules from `LESSONS.md`  
-   - Live EV from **orderbook slip + Chainlink alignment**  
-   - Portfolio impact (diversification / HHI)  
-   - Output **% of $2000 bankroll** (max 3%) or **0% skip**  
-3. **Verifier** approves **signal quality and proposed size** (rejects `pretrade_skip`)  
-4. Decisions are logged to `data/paper/pretrade_decisions.jsonl` → visible on the dashboard  
+### Option A — one-shot deploy script
 
-Skipping toxic or low-EV tickets is how the loop protects win rate while lessons compound overnight.
+From your laptop / cloud agent (SSH key at `~/.ssh/bot3_cloud_agent`):
 
+```bash
+./deploy/deploy_vps.sh
 ```
-Discovery → Signals → HRP/BL allocation → Pre-trade size% → Verifier → Paper fill
-                                              ↓
-                                    LESSONS + ledger → dashboard
+
+This rsyncs the repo, installs Docker if needed, opens **UFW 80 + SSH only** (not 8501), installs the systemd unit, and starts the stack.
+
+### Option B — manual on the VPS
+
+```bash
+# 1) Clone / sync code
+mkdir -p /opt/financial-freedom-bot && cd /opt/financial-freedom-bot
+# (rsync or git pull)
+
+# 2) Env
+cp .env.example .env
+# edit if needed — keep HERMES_PAPER_ONLY=1 and HERMES_LIVE=0
+mkdir -p data/paper data/handoff logs
+
+# 3) Firewall (critical: do NOT expose 8501)
+ufw allow OpenSSH
+ufw allow 80/tcp
+ufw --force enable
+
+# 4) Start via systemd (auto-restart on boot / failure)
+cp deploy/hermes-paper.service /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now hermes-paper.service
+
+# 5) Verify
+docker compose ps
+curl -fsS http://127.0.0.1/healthz
+curl -fsS http://127.0.0.1/dashboard/_stcore/health
+```
+
+### Access
+
+| URL | Purpose |
+|-----|---------|
+| `http://<VPS_IP>/dashboard` | Paper trading desk |
+| `http://<VPS_IP>/healthz` | Nginx liveness |
+
+Containers restart with `restart: unless-stopped`. systemd brings the compose stack back after reboot.
+
+```bash
+journalctl -u hermes-paper -f
+docker compose -f /opt/financial-freedom-bot/docker-compose.yml logs -f
 ```
 
 ---
 
-## Dashboard
+## Dashboard contents
 
-`dashboard.py` auto-refreshes every 8s and shows:
+Auto-refresh ~8s. Shows:
 
-- Equity curve + total PnL from $2000  
+- Equity curve from **$2000** + total PnL  
 - Open positions / exposure  
-- Recent trades table  
-- Sub-strategy cards (WR, EV, weight, trend)  
+- Recent trades + reasons  
+- Sub-strategy WR / EV / allocation weight / trend  
 - Portfolio metrics (div ratio, HHI, CUT/REDUCE)  
-- Latest lessons  
+- Latest lessons from `LESSONS.md`  
 - Chainlink prices + alignment  
 - Pre-trade sizing decisions  
 
 ---
 
-## Architecture (5×6)
+## Pre-trade sizing + self-learning (how 80%+ WR is defended)
+
+Handoff is portfolio-aware, not fixed notional:
+
+1. **Allocation** — Ledoit-Wolf → HRP / edge-RP → Black-Litterman → cut/reduce  
+2. **Pre-trade** (`hermes/pretrade.py`) per signal:
+   - Sleeve stats from the ledger  
+   - Binding rules from `LESSONS.md`  
+   - Live EV from **CLOB book + Chainlink alignment**  
+   - Portfolio impact (diversification / concentration)  
+   - Output **% of $2000 bankroll** (max 3%) or **0% skip**  
+3. **Verifier** must approve **signal quality and size** (rejects `pretrade_skip`)  
+4. Decisions → `data/paper/pretrade_decisions.jsonl` → dashboard  
+5. Settlements / rejects → `lessons_engine` → `LESSONS.md` → next turn sizing  
+
+```
+Discovery → Signals → HRP/BL → Pre-trade size% → Verifier → Paper fill (CLOB sim)
+                                              ↓
+                                   LESSONS + STATE + ledger → /dashboard
+```
+
+---
+
+## Config (environment)
+
+See `.env.example`. Important knobs:
+
+| Var | Default | Meaning |
+|-----|---------|---------|
+| `HERMES_PAPER_ONLY` | `1` | Hard paper lock |
+| `HERMES_CAPITAL` | `2000` | Starting bankroll USD |
+| `HERMES_INTERVAL` | `300` | Seconds between turns |
+| `HERMES_HTTP_PORT` | `80` | Host port for nginx |
+| `CHAINLINK_API_KEY` | — | Optional Data Streams |
+
+Structured logs: `logs/hermes-bot.log`, `logs/heartbeat.json`.
+
+---
+
+## Loop Engineering (5×6)
 
 | Move | Module |
 |------|--------|
 | Discovery | `discovery.py` + hybrid Chainlink/CLOB |
-| Handoff | `portfolio.py` + **`pretrade.py`** + worktrees |
+| Handoff | `portfolio.py` + `pretrade.py` |
 | Verification | `verifier.py` (signal + size + oracle) |
 | Persistence | `STATE.md` / `LESSONS.md` / ledgers |
-| Scheduling | `@loop` / `@goal` in `hermes_loop.py` |
+| Scheduling | `@loop` overnight in `hermes_loop.py` |
 
-Connectors: `polymarket.py` (`py-clob-client-v2`), `chainlink.py`, `hybrid_data.py`, `broker.py`.
+Connectors: `py-clob-client-v2`, Chainlink feeds/streams, paper broker.
 
 ---
 
-## Paper → live
+## Health checks
 
-1. Paper evidence: WR ≥ 80%, PF &gt; 1.4, DD &lt; 8%  
-2. `CHAINLINK_API_KEY/SECRET` (optional; AggregatorV3 fallback works)  
-3. `POLYMARKET_PK` + STATE `Live Enabled` + `HERMES_LIVE=1`  
+- **Bot:** HTTP `:8080/health` + `logs/heartbeat.json` (Docker healthcheck)  
+- **Dashboard:** `GET /dashboard/_stcore/health`  
+- **Nginx:** `GET /healthz`  
 
-Git: push **directly to `main`** (no feature branches).
+---
+
+## Tests
+
+```bash
+pip install -r requirements.txt pytest
+PYTHONPATH=. pytest -q
+```
+
+Git workflow: push directly to `main` (no feature branches unless asked).

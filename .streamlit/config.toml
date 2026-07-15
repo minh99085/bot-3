@@ -1,0 +1,23 @@
+[server]
+# Serve under /dashboard so nginx can reverse-proxy cleanly
+baseUrlPath = "dashboard"
+address = "0.0.0.0"
+port = 8501
+headless = true
+enableCORS = false
+enableXsrfProtection = true
+maxUploadSize = 5
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+base = "dark"
+primaryColor = "#38bdf8"
+backgroundColor = "#0b1220"
+secondaryBackgroundColor = "#132033"
+textColor = "#e8eef7"
+font = "sans serif"
+
+[logger]
+level = "info"

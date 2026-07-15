@@ -7,6 +7,7 @@
 
 - **Mode**: paper
 - **Live Enabled**: false
+- **Paper Only Lock**: true
 - **Starting Bankroll USD**: 2000
 - **Capital USD**: 2000
 - **Open Exposure USD**: 0

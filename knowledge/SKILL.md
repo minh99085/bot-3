@@ -58,6 +58,8 @@ Paper mode is default. Live trading is opt-in only after paper evidence clears t
 14. **We never trust a single CEX tick for BTC/ETH HF** — Chainlink is ground-truth; CLOB is the book.
 15. **We never PASS 5m/15m crypto when oracle is stale or misaligned** with Polymarket YES pricing.
 16. **We never skip pre-trade analysis** — size is % of bankroll (max 3%) or 0% skip; verifier rejects `pretrade_skip`.
+17. **We never expose Streamlit :8501 publicly** — Nginx serves `http://<IP>/dashboard` only.
+18. **Hermes Paper deployments keep `HERMES_PAPER_ONLY=1`** — no live orders on the VPS stack.
 
 ## Circuit Breakers
 

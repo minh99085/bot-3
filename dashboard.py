@@ -1,8 +1,9 @@
 """Hermes v2 Streamlit dashboard — $2000 paper bankroll observability.
 
-Run alongside the bot:
-  streamlit run dashboard.py
+Run locally:
+  streamlit run dashboard.py --server.baseUrlPath=dashboard
 
+Production (Docker): nginx proxies http://<VPS_IP>/dashboard → this app.
 Auto-refreshes every 8 seconds. Reads STATE.md, LESSONS.md, and paper ledgers.
 """
 
@@ -14,6 +15,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+try:
+    from hermes.logging_config import setup_logging
+
+    setup_logging("dashboard")
+except Exception:
+    pass
 
 import pandas as pd
 import streamlit as st

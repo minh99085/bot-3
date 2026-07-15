@@ -33,6 +33,9 @@ logger = logging.getLogger(__name__)
 
 
 def _paper_mode(state: dict) -> bool:
+    # Hermes Paper: hard lock — never live
+    if os.environ.get("HERMES_PAPER_ONLY", "1").strip().lower() in ("1", "true", "yes", "on"):
+        return True
     if os.environ.get("HERMES_LIVE", "0") == "1" and state.get("live_enabled"):
         return False
     return True

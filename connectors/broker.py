@@ -18,6 +18,15 @@ logger = logging.getLogger(__name__)
 
 class BrokerClient:
     def __init__(self, paper: bool = True):
+        paper_only = os.environ.get("HERMES_PAPER_ONLY", "1").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+        if paper_only:
+            paper = True
+            os.environ["HERMES_LIVE"] = "0"
         self.paper = paper
         if not paper and os.environ.get("HERMES_LIVE") != "1":
             raise RuntimeError("Refusing live broker without HERMES_LIVE=1")
@@ -25,6 +34,14 @@ class BrokerClient:
     def execute(self, intent: OrderIntent, *, token_id: Optional[str] = None, asset: Optional[str] = None) -> Fill:
         if self.paper or intent.paper:
             return self._paper_fill(intent, token_id=token_id, asset=asset)
+        paper_only = os.environ.get("HERMES_PAPER_ONLY", "1").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+        if paper_only:
+            raise RuntimeError("Live fills disabled in Hermes Paper (HERMES_PAPER_ONLY=1)")
         return self._live_fill(intent, token_id=token_id)
 
     def _paper_fill(

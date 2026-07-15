@@ -20,7 +20,9 @@ from typing import Optional
 from hermes.decorators import get_checkers, get_goals, get_loops, goal, loop, run_loop_forever
 from hermes.discovery import discovery_tick
 from hermes.executor import executor_tick
+from hermes.health import start_health_server, write_heartbeat
 from hermes.lessons_engine import lessons_engine_tick
+from hermes.logging_config import enforce_paper_only, is_paper_only, setup_logging
 from hermes.models import LoopTurnResult, Settlement, VerifierDecision, new_id
 from hermes.portfolio import allocation_handoff
 from hermes.pretrade import run_pretrade_sizing
@@ -38,11 +40,6 @@ from hermes.state_io import (
 from hermes.verifier import verifier_tick
 from hermes.worktrees import ensure_worktree
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
-    datefmt="%H:%M:%S",
-)
 logger = logging.getLogger("hermes.loop")
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -72,6 +69,10 @@ def high_conviction_session(paper: bool = True) -> LoopTurnResult:
 @loop(interval="5m", name="hermes_main")
 def run_one_turn(paper: bool = True, turn_id: Optional[str] = None) -> LoopTurnResult:
     """One full turn of the Financial Freedom Bot loop."""
+    enforce_paper_only()
+    if is_paper_only():
+        paper = True
+
     ensure_dirs()
     ensure_worktree("research")
     ensure_worktree("signal")
@@ -79,6 +80,7 @@ def run_one_turn(paper: bool = True, turn_id: Optional[str] = None) -> LoopTurnR
 
     tid = turn_id or new_id("trn_")
     result = LoopTurnResult(turn_id=tid, started_at=datetime.now(timezone.utc))
+    write_heartbeat(last_turn=tid, summary="turn_start")
 
     state = parse_state_fields(read_state_md())
     if state.get("pause_loop") or state.get("loop_paused"):
@@ -87,6 +89,7 @@ def run_one_turn(paper: bool = True, turn_id: Optional[str] = None) -> LoopTurnR
         result.finished_at = datetime.now(timezone.utc)
         result.summary = f"PAUSED: {result.pause_reason}"
         logger.warning(result.summary)
+        write_heartbeat(last_turn=tid, summary=result.summary)
         return result
 
     # Pre-flight risk snapshot (non-blocking read; dedicated loop also runs)
@@ -157,6 +160,12 @@ def run_one_turn(paper: bool = True, turn_id: Optional[str] = None) -> LoopTurnR
     )
     append_jsonl(ledger_path(paper=paper).parent / "turns.jsonl", result)
     write_handoff("turn_result", [result], tid)
+    write_heartbeat(
+        last_turn=tid,
+        summary=result.summary,
+        signals_passed=result.signals_passed,
+        orders_sent=result.orders_sent,
+    )
     logger.info(result.summary)
     return result
 
@@ -200,12 +209,22 @@ def simulate_settlement_for_demo(paper: bool = True) -> list[Settlement]:
 
 async def run_overnight(paper: bool = True, main_interval: float = 300.0) -> None:
     """Schedule main loop + risk monitor until cancelled."""
+    enforce_paper_only()
+    if is_paper_only():
+        paper = True
+    setup_logging("bot")
     ensure_dirs()
+    start_health_server()
+    write_heartbeat(summary="overnight_start")
     stop = asyncio.Event()
 
     async def main_cadence() -> None:
         while not stop.is_set():
-            await asyncio.to_thread(run_one_turn, paper)
+            try:
+                await asyncio.to_thread(run_one_turn, paper)
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("main turn failed: %s", exc)
+                write_heartbeat(summary=f"turn_error:{exc}")
             try:
                 await asyncio.wait_for(stop.wait(), timeout=main_interval)
             except asyncio.TimeoutError:
@@ -213,15 +232,20 @@ async def run_overnight(paper: bool = True, main_interval: float = 300.0) -> Non
 
     async def risk_cadence() -> None:
         while not stop.is_set():
-            await asyncio.to_thread(risk_monitor_tick, paper)
+            try:
+                await asyncio.to_thread(risk_monitor_tick, paper)
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("risk tick failed: %s", exc)
+            write_heartbeat(summary="risk_ok")
             try:
                 await asyncio.wait_for(stop.wait(), timeout=30.0)
             except asyncio.TimeoutError:
                 continue
 
     logger.info(
-        "Hermes overnight start paper=%s loops=%s checkers=%s goals=%s",
+        "Hermes overnight start paper=%s paper_only=%s loops=%s checkers=%s goals=%s",
         paper,
+        is_paper_only(),
         list(get_loops()),
         list(get_checkers()),
         list(get_goals()),
@@ -234,8 +258,11 @@ async def run_overnight(paper: bool = True, main_interval: float = 300.0) -> Non
 
 
 def main(argv: Optional[list[str]] = None) -> int:
+    enforce_paper_only()
+    setup_logging("bot")
+
     parser = argparse.ArgumentParser(
-        description="Financial Freedom Bot — Hermes v2 loop orchestrator"
+        description="Financial Freedom Bot — Hermes v2 Paper loop orchestrator"
     )
     parser.add_argument(
         "command",
@@ -245,7 +272,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument(
         "--live",
         action="store_true",
-        help="Enable live trading (also requires HERMES_LIVE=1 and STATE live_enabled)",
+        help="Blocked when HERMES_PAPER_ONLY=1 (default). Live requires paper-only off + HERMES_LIVE=1.",
     )
     parser.add_argument(
         "--interval",
@@ -254,18 +281,26 @@ def main(argv: Optional[list[str]] = None) -> int:
         help="Main loop interval seconds for overnight mode (default 300)",
     )
     args = parser.parse_args(argv)
-    paper = not args.live
+
+    if args.live and is_paper_only():
+        logger.error("Refusing --live: HERMES_PAPER_ONLY=1 (Hermes Paper deployment)")
+        return 2
+
+    paper = True if is_paper_only() else (not args.live)
 
     if args.command == "status":
         print("loops:", get_loops())
         print("checkers:", get_checkers())
         print("goals:", get_goals())
+        print("paper_only:", is_paper_only())
         return 0
     if args.command == "once":
+        start_health_server()
         result = run_one_turn(paper=paper)
         print(result.summary)
         return 0
     if args.command == "goal":
+        start_health_server()
         result = high_conviction_session(paper=paper)
         print(result.summary)
         return 0
@@ -273,6 +308,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         import os
 
         os.environ["HERMES_FORCE_SYNTHETIC"] = "1"
+        start_health_server()
         result = run_one_turn(paper=True)
         simulate_settlement_for_demo(paper=True)
         print(result.summary)
