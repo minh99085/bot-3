@@ -162,15 +162,18 @@ class PolymarketClient:
             return None
 
     def list_scoped_btc_updown_markets(self) -> list[MarketCandidate]:
-        """ONLY BTC 5m + 15m Up/Down — one active window per series.
+        """Scoped discovery — respects MARKET_FILTER (BTC/ETH/SOL lanes).
 
-        Follows preferred seed slugs when still active, else rolls to the
-        current UTC window. Ignores every other Polymarket event.
+        Kept name for backward compatibility; prefer ``list_scoped_updown_markets``.
         """
+        return self.list_scoped_updown_markets()
+
+    def list_scoped_updown_markets(self) -> list[MarketCandidate]:
+        """Active windows for the instance MARKET_FILTER (one per series)."""
         from hermes.market_scope import (
-            SERIES_5M,
-            SERIES_15M,
+            active_filter_keys,
             all_discovery_slugs,
+            filter_specs,
             parse_slug,
             scope_enabled,
         )
@@ -178,13 +181,14 @@ class PolymarketClient:
         if not scope_enabled():
             return self.list_crypto_updown_markets(limit=40)
 
+        specs = filter_specs()
         by_series: dict[str, MarketCandidate] = {}
         for slug in all_discovery_slugs():
             sm = parse_slug(slug)
             if not sm:
                 continue
             if sm.series in by_series:
-                continue  # already have a live window for this series
+                continue
             try:
                 c = self.get_market_by_slug(slug)
             except Exception as exc:  # noqa: BLE001
@@ -192,41 +196,47 @@ class PolymarketClient:
                 continue
             if c is None:
                 continue
-            # Skip resolved / extreme prices (window over or locked)
             if c.yes_price <= 0.01 or c.yes_price >= 0.99:
                 continue
+            asset_u = sm.asset.upper()
             c.timeframe = sm.timeframe
             c.raw = {
                 **(c.raw or {}),
                 "timeframe": sm.timeframe,
-                "asset": "BTC",
+                "asset": asset_u,
                 "scoped_series": sm.series,
                 "scoped_slug": sm.slug,
+                "market_filter": sm.filter_key,
             }
-            if "BTC" not in c.tags:
-                c.tags = list(c.tags) + ["BTC", f"tf:{sm.timeframe}", "scoped"]
+            tags = list(c.tags)
+            for t in (asset_u, f"tf:{sm.timeframe}", "scoped", sm.filter_key):
+                if t and t not in tags:
+                    tags.append(t)
+            c.tags = tags
             by_series[sm.series] = c
-            if len(by_series) >= 2:
-                break
 
-        # Stable order: 15m then 5m
+        # Stable order following active filter keys
         ordered: list[MarketCandidate] = []
-        for series in (SERIES_15M, SERIES_5M):
-            if series in by_series:
-                ordered.append(by_series[series])
+        for key in active_filter_keys():
+            spec = specs.get(key)
+            if not spec:
+                continue
+            if spec.series in by_series:
+                ordered.append(by_series[spec.series])
         logger.info(
-            "scoped discovery: %d markets %s",
+            "scoped discovery: %d markets %s (filters=%s)",
             len(ordered),
             [c.slug for c in ordered],
+            active_filter_keys(),
         )
         return ordered
 
     def list_crypto_updown_markets(self, limit: int = 40) -> list[MarketCandidate]:
-        """Scoped mode: BTC 5m/15m only. Legacy mode: BTC/ETH up-down preference."""
+        """Scoped mode: MARKET_FILTER lanes. Legacy mode: BTC/ETH preference."""
         from hermes.market_scope import scope_enabled
 
         if scope_enabled():
-            return self.list_scoped_btc_updown_markets()
+            return self.list_scoped_updown_markets()
         all_m = self.list_candidate_markets(limit=max(limit * 3, 80))
         scored: list[tuple[int, MarketCandidate]] = []
         for c in all_m:
@@ -235,6 +245,8 @@ class PolymarketClient:
             if "btc" in blob or "bitcoin" in blob:
                 score += 3
             if "eth" in blob or "ethereum" in blob:
+                score += 3
+            if "sol" in blob or "solana" in blob:
                 score += 3
             if any(x in blob for x in ("updown", "up or down", "up-down", "5m", "15m")):
                 score += 2

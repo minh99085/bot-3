@@ -21,7 +21,7 @@ from hermes.models import (
 
 
 def infer_market_series(market_id: str, slug: str = "", question: str = "") -> str:
-    """Map Polymarket BTC/ETH up-down (incl. 5m/15m) into series labels."""
+    """Map Polymarket BTC/ETH/SOL up-down (incl. 5m/15m) into series labels."""
     blob = f"{market_id} {slug} {question}".lower()
     tf = "5m" if re.search(r"\b5\s*m\b|5min|5m-", blob) else (
         "15m" if re.search(r"\b15\s*m\b|15min|15m-", blob) else ""
@@ -34,6 +34,10 @@ def infer_market_series(market_id: str, slug: str = "", question: str = "") -> s
         if tf or re.search(r"up.?down|hourly", blob):
             return f"eth_updown_{tf}" if tf else "eth_updown"
         return "eth"
+    if re.search(r"\bsol\b|solana", blob):
+        if tf or re.search(r"up.?down|hourly", blob):
+            return f"sol_updown_{tf}" if tf else "sol_updown"
+        return "sol"
     if "fed" in blob or "rate" in blob:
         return "macro_rates"
     if "election" in blob or "vote" in blob:
@@ -42,6 +46,8 @@ def infer_market_series(market_id: str, slug: str = "", question: str = "") -> s
         return "btc_updown"
     if market_id.startswith("mkt_eth") or "eth" in market_id:
         return "eth_updown"
+    if market_id.startswith("mkt_sol") or "sol" in market_id:
+        return "sol_updown"
     if market_id.startswith("mkt_fed"):
         return "macro_rates"
     return "misc"

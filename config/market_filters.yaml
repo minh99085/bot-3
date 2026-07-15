@@ -1,0 +1,69 @@
+# Canonical fast-crypto Up/Down windows Hermes watches.
+# Each dedicated instance sets MARKET_FILTER to one of the `filters` keys.
+# The rotator instance uses MARKET_FILTER=rotator and may trade any of them
+# (exactly one highest-conviction ticket per turn).
+
+version: 1
+
+# Shared slug shape: {asset}-updown-{timeframe}-{unix_window_start}
+# Examples:
+#   btc-updown-5m-1784113500
+#   eth-updown-5m-1784113500
+#   sol-updown-5m-1784113500
+#   btc-updown-15m-1784113200
+slug_pattern: "^(btc|eth|sol)-updown-(5m|15m)-(\\d+)$"
+
+filters:
+  btc5:
+    label: "BTC 5-minute Up/Down"
+    asset: btc
+    timeframe: 5m
+    series: btc_updown_5m
+    slug_prefix: btc-updown-5m-
+    cex_symbol: BTCUSDT
+    oracle_asset: BTC
+    instance: hermes-btc5
+
+  btc15:
+    label: "BTC 15-minute Up/Down"
+    asset: btc
+    timeframe: 15m
+    series: btc_updown_15m
+    slug_prefix: btc-updown-15m-
+    cex_symbol: BTCUSDT
+    oracle_asset: BTC
+    instance: hermes-btc15
+
+  eth5:
+    label: "ETH 5-minute Up/Down"
+    asset: eth
+    timeframe: 5m
+    series: eth_updown_5m
+    slug_prefix: eth-updown-5m-
+    cex_symbol: ETHUSDT
+    oracle_asset: ETH
+    instance: hermes-eth5
+
+  sol5:
+    label: "SOL 5-minute Up/Down"
+    asset: sol
+    timeframe: 5m
+    series: sol_updown_5m
+    slug_prefix: sol-updown-5m-
+    cex_symbol: SOLUSDT
+    oracle_asset: SOL
+    instance: hermes-sol5
+
+rotator:
+  label: "Highest-conviction across all four lanes"
+  market_filter: rotator
+  scans: [btc5, btc15, eth5, sol5]
+  max_trades_per_turn: 1
+  instance: hermes-rotator
+
+# Preferred seed windows (used when still active; discovery also rolls UTC windows)
+preferred_slugs:
+  - btc-updown-15m-1784113200
+  - btc-updown-5m-1784113500
+  - eth-updown-5m-1784113500
+  - sol-updown-5m-1784113500

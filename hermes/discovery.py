@@ -177,10 +177,10 @@ def filter_candidates(
 
 
 def discover_from_connector(limit: int = 50) -> list[MarketCandidate]:
-    """Pull ONLY scoped BTC 5m/15m Up/Down markets + Chainlink enrich."""
+    """Pull ONLY markets matching this instance's MARKET_FILTER + Chainlink enrich."""
     import os
 
-    from hermes.market_scope import is_allowed_slug, scope_enabled
+    from hermes.market_scope import is_allowed_slug, market_filter, scope_enabled
 
     if os.environ.get("HERMES_FORCE_SYNTHETIC", "0") == "1":
         return _synthetic_candidates()
@@ -189,13 +189,18 @@ def discover_from_connector(limit: int = 50) -> list[MarketCandidate]:
         from connectors.polymarket import PolymarketClient
 
         client = PolymarketClient()
-        raw = client.list_scoped_btc_updown_markets()
+        raw = client.list_scoped_updown_markets()
         if not raw and not scope_enabled():
             raw = client.list_candidate_markets(limit=limit)
         hybrid = HybridDataService(polymarket=client)
         enriched = [hybrid.apply_to_candidate(c) for c in raw]
         if scope_enabled():
             enriched = [c for c in enriched if is_allowed_slug(c.slug)]
+        logger.info(
+            "discovery connector: %d markets (MARKET_FILTER=%s)",
+            len(enriched),
+            market_filter(),
+        )
         return enriched
     except Exception as exc:  # noqa: BLE001
         logger.warning("polymarket/hybrid unavailable (%s); using synthetic scoped set", exc)
@@ -203,32 +208,45 @@ def discover_from_connector(limit: int = 50) -> list[MarketCandidate]:
 
 
 def _synthetic_candidates() -> list[MarketCandidate]:
-    """Paper fallback: ONLY the two scoped BTC up/down windows."""
-    from hermes.market_scope import PREFERRED_SLUGS, parse_slug
+    """Paper fallback: synthetic windows for the active MARKET_FILTER lanes."""
+    from hermes.market_scope import (
+        active_filter_keys,
+        all_discovery_slugs,
+        filter_specs,
+        parse_slug,
+    )
 
     hour = datetime.now(timezone.utc).hour
-    oracle_price = None
-    oracle_src = None
-    try:
-        from connectors.chainlink import ChainlinkClient
-
-        px = ChainlinkClient().get_price("BTC")
-        oracle_price = px.price_usd
-        oracle_src = px.source
-    except Exception:  # noqa: BLE001
-        pass
-
+    specs = filter_specs()
     out: list[MarketCandidate] = []
-    for slug in PREFERRED_SLUGS:
+    seen_series: set[str] = set()
+
+    for slug in all_discovery_slugs():
         sm = parse_slug(slug)
-        if not sm:
+        if not sm or sm.series in seen_series:
             continue
+        seen_series.add(sm.series)
+        spec = specs.get(sm.filter_key)
+        asset_u = sm.asset.upper()
+        oracle_price = None
+        oracle_src = None
+        try:
+            from connectors.chainlink import ChainlinkClient
+
+            px = ChainlinkClient().get_price(spec.oracle_asset if spec else asset_u)
+            oracle_price = px.price_usd
+            oracle_src = px.source
+        except Exception:  # noqa: BLE001
+            pass
         yes, no = (0.48, 0.52) if sm.timeframe == "5m" else (0.49, 0.51)
+        name = {"btc": "Bitcoin", "eth": "Ethereum", "sol": "Solana"}.get(
+            sm.asset, asset_u
+        )
         out.append(
             MarketCandidate(
                 market_id=f"mkt_{sm.series}",
                 slug=slug,
-                question=f"Bitcoin Up or Down - {sm.timeframe}",
+                question=f"{name} Up or Down - {sm.timeframe}",
                 yes_price=yes,
                 no_price=no,
                 volume_24h=50_000,
@@ -237,12 +255,20 @@ def _synthetic_candidates() -> list[MarketCandidate]:
                 regime=Regime.MEAN_REVERT,
                 hourly_bucket=hour,
                 timeframe=sm.timeframe,
-                tags=["synthetic", "paper", "BTC", f"tf:{sm.timeframe}", "scoped"],
+                tags=[
+                    "synthetic",
+                    "paper",
+                    asset_u,
+                    f"tf:{sm.timeframe}",
+                    "scoped",
+                    sm.filter_key,
+                ],
                 raw={
                     "timeframe": sm.timeframe,
-                    "asset": "BTC",
+                    "asset": asset_u,
                     "scoped_series": sm.series,
                     "scoped_slug": slug,
+                    "market_filter": sm.filter_key,
                     "oracle_alignment": 0.8,
                     "oracle_return_proxy": -0.0005,
                     "oracle_price": oracle_price,
@@ -254,6 +280,8 @@ def _synthetic_candidates() -> list[MarketCandidate]:
                 },
             )
         )
+        if len(out) >= len(active_filter_keys()):
+            break
     return out
 
 

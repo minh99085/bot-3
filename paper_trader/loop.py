@@ -106,11 +106,9 @@ class EnhancedPaperLoop:
     async def turn(self) -> dict:
         markets = await fetch_live_markets(limit=30)
         if self.cfg.scope_btc_updown_only:
-            markets = [
-                m
-                for m in markets
-                if "btc-updown" in m.slug or "btc" in m.slug.lower()
-            ] or markets[:0]  # empty if none — Hermes path covers BTC scope
+            from strategy.enhanced_misprice import filter_markets_by_scope
+
+            markets = filter_markets_by_scope(markets) or markets[:0]
 
         for m in markets:
             m.q = self.model_fn(m)

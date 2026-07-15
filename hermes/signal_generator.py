@@ -476,6 +476,26 @@ def signal_generator_tick(
         if sig is not None:
             signals.append(annotate_signal(sig))
 
+    # Rotator: keep only the single highest-conviction ticket this turn
+    from hermes.market_scope import is_rotator
+
+    if is_rotator() and len(signals) > 1:
+        def _conv(s: Signal) -> float:
+            meta = s.meta or {}
+            return float(
+                meta.get("enhanced_conviction_score")
+                or meta.get("enhanced_conviction")
+                or s.confidence
+                or 0.0
+            )
+
+        signals = [max(signals, key=_conv)]
+        logger.info(
+            "rotator: kept top conviction signal slug=%s conv=%.4f",
+            signals[0].slug,
+            _conv(signals[0]),
+        )
+
     tid = turn_id or "adhoc"
     path = write_handoff("signals", signals, tid)
     logger.info("signal_generator: %d signals → %s", len(signals), path.name)

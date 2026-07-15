@@ -30,6 +30,9 @@ data/handoff/*
 !data/handoff/.gitkeep
 logs/*
 !logs/.gitkeep
+artifacts/*
+!artifacts/.gitkeep
+!artifacts/backtest_runs/.gitkeep
 
 # Worktrees + local env
 .worktrees/

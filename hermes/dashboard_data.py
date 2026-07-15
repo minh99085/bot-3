@@ -10,6 +10,7 @@ from typing import Any, Optional
 from hermes.state_io import (
     DATA,
     knowledge_path,
+    ledger_path,
     parse_state_fields,
     read_jsonl,
     read_lessons_md,
@@ -18,12 +19,28 @@ from hermes.state_io import (
 )
 
 STARTING_BANKROLL = 2000.0
+INSTANCE_IDS = ("btc5", "btc15", "eth5", "sol5", "rotator", "legacy", "default")
 
 
 def paper_dir() -> Path:
+    """Dashboard aggregates; prefer all instance folders under data/paper/."""
     p = DATA / "paper"
     p.mkdir(parents=True, exist_ok=True)
     return p
+
+
+def instance_paper_dirs() -> list[Path]:
+    root = paper_dir()
+    dirs: list[Path] = []
+    for child in sorted(root.iterdir()) if root.exists() else []:
+        if child.is_dir() and (child / "trade_ledger.jsonl").exists():
+            dirs.append(child)
+    # Legacy flat ledger
+    if (root / "trade_ledger.jsonl").exists():
+        dirs.append(root)
+    if not dirs:
+        dirs.append(root)
+    return dirs
 
 
 def load_state() -> dict[str, Any]:
@@ -34,20 +51,33 @@ def load_state() -> dict[str, Any]:
         or fields.get("starting_bankroll_usd")
         or STARTING_BANKROLL
     )
+    # Five instances × $2k = $10k fleet capital for desk headline
     fields["capital_usd"] = capital
     fields["starting_bankroll_usd"] = float(
         fields.get("starting_bankroll_usd") or STARTING_BANKROLL
     )
+    fields["fleet_bankroll_usd"] = float(
+        fields.get("fleet_bankroll_usd") or STARTING_BANKROLL * 5
+    )
+    fields["instance_count"] = 5
     return fields
 
 
 def load_trades() -> list[dict[str, Any]]:
-    rows = read_jsonl(paper_dir() / "trade_ledger.jsonl")
+    rows: list[dict[str, Any]] = []
+    for d in instance_paper_dirs():
+        for r in read_jsonl(d / "trade_ledger.jsonl"):
+            if isinstance(r, dict):
+                r.setdefault("instance_id", d.name if d.name != "paper" else "legacy")
+                rows.append(r)
     return rows
 
 
 def load_pretrade() -> list[dict[str, Any]]:
-    return read_jsonl(paper_dir() / "pretrade_decisions.jsonl")
+    rows: list[dict[str, Any]] = []
+    for d in instance_paper_dirs():
+        rows.extend(read_jsonl(d / "pretrade_decisions.jsonl"))
+    return rows
 
 
 def load_fills() -> list[dict[str, Any]]:
@@ -195,10 +225,12 @@ def mispricing_dashboard_snapshot() -> dict[str, Any]:
 
 
 def scoped_market_cards() -> list[dict[str, Any]]:
-    """Performance cards for the two allowed BTC up/down series only."""
+    """Performance cards for each dedicated fast-crypto lane."""
     from hermes.market_scope import (
-        SERIES_5M,
-        SERIES_15M,
+        SERIES_BTC_5M,
+        SERIES_BTC_15M,
+        SERIES_ETH_5M,
+        SERIES_SOL_5M,
         preferred_slugs,
         record_belongs_to_series,
     )
@@ -207,8 +239,10 @@ def scoped_market_cards() -> list[dict[str, Any]]:
     pretrades = load_pretrade()
     cards = []
     for series, label in (
-        (SERIES_15M, "BTC Up/Down 15m"),
-        (SERIES_5M, "BTC Up/Down 5m"),
+        (SERIES_BTC_15M, "BTC Up/Down 15m"),
+        (SERIES_BTC_5M, "BTC Up/Down 5m"),
+        (SERIES_ETH_5M, "ETH Up/Down 5m"),
+        (SERIES_SOL_5M, "SOL Up/Down 5m"),
     ):
         rows = [s for s in settles if record_belongs_to_series(s, series)]
         pts = [p for p in pretrades if record_belongs_to_series(p, series)]
@@ -216,7 +250,16 @@ def scoped_market_cards() -> list[dict[str, Any]]:
         pnls = [float(r.get("pnl_usd", 0)) for r in rows]
         sizes = [float(r.get("size_usd", 0) or 0) for r in rows]
         last_pt = pts[-1] if pts else {}
-        pref = [s for s in preferred_slugs() if ("15m" in s) == series.endswith("15m")]
+        asset = series.split("_")[0]
+        pref = [
+            s
+            for s in preferred_slugs()
+            if s.startswith(f"{asset}-updown-")
+            and (
+                ("-15m-" in s and series.endswith("15m"))
+                or ("-5m-" in s and series.endswith("5m"))
+            )
+        ]
         open_rows = [
             f
             for f in load_fills()
@@ -245,7 +288,7 @@ def scoped_market_cards() -> list[dict[str, Any]]:
 
 
 def scoped_lane_trade_history(series: str, limit: int = 50) -> list[dict[str, Any]]:
-    """Last N settled + open trades for one lane (5m or 15m), newest first."""
+    """Last N settled + open trades for one lane, newest first."""
     from hermes.market_scope import record_belongs_to_series
 
     fills = {f.get("signal_id"): f for f in load_fills()}

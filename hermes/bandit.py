@@ -23,12 +23,15 @@ from pathlib import Path
 from typing import Any, Optional
 
 from hermes.mispricing import MispricingSignal
-from hermes.state_io import DATA, ensure_dirs
+from hermes.state_io import DATA, ensure_dirs, paper_dir
 
 logger = logging.getLogger(__name__)
 
 ARMS = ("exploit", "explore", "skip")
-STATE_PATH = DATA / "paper" / "bandit_state.json"
+
+
+def _bandit_state_path() -> Path:
+    return paper_dir() / "bandit_state.json"
 
 
 def _beta_sample(alpha: float, beta: float) -> float:
@@ -102,7 +105,7 @@ class ContextualBandit:
     """Thompson Sampling over (context → arms)."""
 
     def __init__(self, path: Optional[Path] = None):
-        self.path = path or STATE_PATH
+        self.path = path or _bandit_state_path()
         self.arms: dict[str, dict[str, ArmStats]] = {}  # ctx -> arm -> stats
         self.global_pulls = 0
         self.global_explore = 0

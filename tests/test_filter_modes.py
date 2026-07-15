@@ -50,8 +50,21 @@ def test_load_enhanced_config_mode_kwarg():
     assert cfg.max_single_market_pct == pytest.approx(0.09)
 
 
-def test_load_default_is_strict():
+def test_load_default_is_strict_or_yaml_mode():
+    """Default preset is strict; production YAML may pin mode: moderate."""
     cfg = load_enhanced_config()
+    assert cfg.mode in ("strict", "moderate", "aggressive")
+    # Mode preset always applied — thresholds must match MODE_PRESETS[mode]
+    from models.config import MODE_PRESETS
+
+    preset = MODE_PRESETS[cfg.mode]
+    assert cfg.min_conviction == pytest.approx(preset["min_conviction"])
+    assert cfg.extreme_q_high == pytest.approx(preset["extreme_q_high"])
+    assert cfg.extreme_q_low == pytest.approx(preset["extreme_q_low"])
+
+
+def test_load_explicit_strict():
+    cfg = load_enhanced_config(mode="strict")
     assert cfg.mode == "strict"
     assert cfg.extreme_q_high == pytest.approx(0.88)
     assert cfg.extreme_q_low == pytest.approx(0.12)

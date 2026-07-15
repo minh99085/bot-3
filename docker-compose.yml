@@ -1,47 +1,156 @@
-# Hermes v2 Paper — 24/7 VPS stack (paper mode only)
+# Hermes v2 Paper — 5 isolated instances × $2k (= $10k fleet) + shared dashboard
 # Dashboard: http://<VPS_IP>/dashboard  (nginx → streamlit; 8501 not public)
+#
+# Instances:
+#   hermes-btc5     MARKET_FILTER=btc5     → BTC 5m Up/Down only
+#   hermes-btc15    MARKET_FILTER=btc15    → BTC 15m Up/Down only
+#   hermes-eth5     MARKET_FILTER=eth5     → ETH 5m Up/Down only
+#   hermes-sol5     MARKET_FILTER=sol5     → SOL 5m Up/Down only
+#   hermes-rotator  MARKET_FILTER=rotator  → scans all four; 1 highest-conviction trade
+#
+# Start everything:
+#   docker compose up -d --build
 
 name: hermes-paper
 
+x-bot-common: &bot-common
+  build: .
+  image: hermes-paper:latest
+  restart: unless-stopped
+  command: ["scripts/docker_entrypoint_bot.sh"]
+  env_file:
+    - .env
+  expose:
+    - "8080"
+  healthcheck:
+    test: ["CMD", "scripts/healthcheck_bot.sh"]
+    interval: 60s
+    timeout: 10s
+    retries: 3
+    start_period: 90s
+  networks:
+    - hermes
+  logging:
+    driver: json-file
+    options:
+      max-size: "20m"
+      max-file: "5"
+
 services:
-  bot:
-    build: .
-    image: hermes-paper:latest
-    container_name: hermes-bot
-    restart: unless-stopped
-    command: ["scripts/docker_entrypoint_bot.sh"]
-    env_file:
-      - .env
+  hermes-btc5:
+    <<: *bot-common
+    container_name: hermes-btc5
     environment:
       HERMES_PAPER_ONLY: "1"
       HERMES_LIVE: "0"
-      HERMES_CAPITAL: "${HERMES_CAPITAL:-2000}"
+      HERMES_CAPITAL: "2000"
       HERMES_INTERVAL: "${HERMES_INTERVAL:-300}"
-      HERMES_LOG_DIR: /app/logs
+      HERMES_INSTANCE_ID: btc5
+      MARKET_FILTER: btc5
+      HERMES_LOG_DIR: /app/logs/btc5
+      HERMES_PAPER_DIR: /app/data/paper/btc5
+      HERMES_HANDOFF_DIR: /app/data/handoff/btc5
       HERMES_HEALTH_PORT: "8080"
       HERMES_FORCE_SYNTHETIC: "${HERMES_FORCE_SYNTHETIC:-0}"
-      HERMES_SCOPE_BTC_UPDOWN_ONLY: "${HERMES_SCOPE_BTC_UPDOWN_ONLY:-1}"
-      HERMES_BTC_UPDOWN_SLUGS: "${HERMES_BTC_UPDOWN_SLUGS:-btc-updown-15m-1784113200,btc-updown-5m-1784113500}"
+      HERMES_SCOPE_BTC_UPDOWN_ONLY: "1"
     volumes:
       - ./knowledge:/app/knowledge
       - ./data:/app/data
-      - ./logs:/app/logs
-    # Health only on internal network — not published to host
-    expose:
-      - "8080"
-    healthcheck:
-      test: ["CMD", "scripts/healthcheck_bot.sh"]
-      interval: 60s
-      timeout: 10s
-      retries: 3
-      start_period: 90s
-    networks:
-      - hermes
-    logging:
-      driver: json-file
-      options:
-        max-size: "20m"
-        max-file: "5"
+      - ./logs/btc5:/app/logs/btc5
+      - ./artifacts/btc5:/app/artifacts/btc5
+      - ./config:/app/config:ro
+
+  hermes-btc15:
+    <<: *bot-common
+    container_name: hermes-btc15
+    environment:
+      HERMES_PAPER_ONLY: "1"
+      HERMES_LIVE: "0"
+      HERMES_CAPITAL: "2000"
+      HERMES_INTERVAL: "${HERMES_INTERVAL:-300}"
+      HERMES_INSTANCE_ID: btc15
+      MARKET_FILTER: btc15
+      HERMES_LOG_DIR: /app/logs/btc15
+      HERMES_PAPER_DIR: /app/data/paper/btc15
+      HERMES_HANDOFF_DIR: /app/data/handoff/btc15
+      HERMES_HEALTH_PORT: "8080"
+      HERMES_FORCE_SYNTHETIC: "${HERMES_FORCE_SYNTHETIC:-0}"
+      HERMES_SCOPE_BTC_UPDOWN_ONLY: "1"
+    volumes:
+      - ./knowledge:/app/knowledge
+      - ./data:/app/data
+      - ./logs/btc15:/app/logs/btc15
+      - ./artifacts/btc15:/app/artifacts/btc15
+      - ./config:/app/config:ro
+
+  hermes-eth5:
+    <<: *bot-common
+    container_name: hermes-eth5
+    environment:
+      HERMES_PAPER_ONLY: "1"
+      HERMES_LIVE: "0"
+      HERMES_CAPITAL: "2000"
+      HERMES_INTERVAL: "${HERMES_INTERVAL:-300}"
+      HERMES_INSTANCE_ID: eth5
+      MARKET_FILTER: eth5
+      HERMES_LOG_DIR: /app/logs/eth5
+      HERMES_PAPER_DIR: /app/data/paper/eth5
+      HERMES_HANDOFF_DIR: /app/data/handoff/eth5
+      HERMES_HEALTH_PORT: "8080"
+      HERMES_FORCE_SYNTHETIC: "${HERMES_FORCE_SYNTHETIC:-0}"
+      HERMES_SCOPE_BTC_UPDOWN_ONLY: "1"
+    volumes:
+      - ./knowledge:/app/knowledge
+      - ./data:/app/data
+      - ./logs/eth5:/app/logs/eth5
+      - ./artifacts/eth5:/app/artifacts/eth5
+      - ./config:/app/config:ro
+
+  hermes-sol5:
+    <<: *bot-common
+    container_name: hermes-sol5
+    environment:
+      HERMES_PAPER_ONLY: "1"
+      HERMES_LIVE: "0"
+      HERMES_CAPITAL: "2000"
+      HERMES_INTERVAL: "${HERMES_INTERVAL:-300}"
+      HERMES_INSTANCE_ID: sol5
+      MARKET_FILTER: sol5
+      HERMES_LOG_DIR: /app/logs/sol5
+      HERMES_PAPER_DIR: /app/data/paper/sol5
+      HERMES_HANDOFF_DIR: /app/data/handoff/sol5
+      HERMES_HEALTH_PORT: "8080"
+      HERMES_FORCE_SYNTHETIC: "${HERMES_FORCE_SYNTHETIC:-0}"
+      HERMES_SCOPE_BTC_UPDOWN_ONLY: "1"
+    volumes:
+      - ./knowledge:/app/knowledge
+      - ./data:/app/data
+      - ./logs/sol5:/app/logs/sol5
+      - ./artifacts/sol5:/app/artifacts/sol5
+      - ./config:/app/config:ro
+
+  hermes-rotator:
+    <<: *bot-common
+    container_name: hermes-rotator
+    environment:
+      HERMES_PAPER_ONLY: "1"
+      HERMES_LIVE: "0"
+      HERMES_CAPITAL: "2000"
+      HERMES_INTERVAL: "${HERMES_INTERVAL:-300}"
+      HERMES_INSTANCE_ID: rotator
+      MARKET_FILTER: rotator
+      HERMES_LOG_DIR: /app/logs/rotator
+      HERMES_PAPER_DIR: /app/data/paper/rotator
+      HERMES_HANDOFF_DIR: /app/data/handoff/rotator
+      HERMES_HEALTH_PORT: "8080"
+      HERMES_FORCE_SYNTHETIC: "${HERMES_FORCE_SYNTHETIC:-0}"
+      HERMES_SCOPE_BTC_UPDOWN_ONLY: "1"
+    volumes:
+      - ./knowledge:/app/knowledge
+      - ./data:/app/data
+      - ./logs/rotator:/app/logs/rotator
+      - ./artifacts/rotator:/app/artifacts/rotator
+      - ./config:/app/config:ro
 
   dashboard:
     build: .
@@ -54,7 +163,7 @@ services:
     environment:
       HERMES_PAPER_ONLY: "1"
       HERMES_LIVE: "0"
-      HERMES_CAPITAL: "${HERMES_CAPITAL:-2000}"
+      HERMES_CAPITAL: "2000"
       HERMES_LOG_DIR: /app/logs
       STREAMLIT_SERVER_BASE_URL_PATH: dashboard
       STREAMLIT_SERVER_ADDRESS: "0.0.0.0"
@@ -66,7 +175,7 @@ services:
       - ./data:/app/data
       - ./logs:/app/logs
       - ./.streamlit:/app/.streamlit:ro
-    # Streamlit stays private — only nginx reaches it
+      - ./config:/app/config:ro
     expose:
       - "8501"
     healthcheck:
@@ -82,7 +191,15 @@ services:
       retries: 3
       start_period: 45s
     depends_on:
-      bot:
+      hermes-btc5:
+        condition: service_started
+      hermes-btc15:
+        condition: service_started
+      hermes-eth5:
+        condition: service_started
+      hermes-sol5:
+        condition: service_started
+      hermes-rotator:
         condition: service_started
     networks:
       - hermes

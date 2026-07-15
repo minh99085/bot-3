@@ -64,5 +64,6 @@ When a deploy round is finished, end with: **I am done thinking, push to main vp
 - Memory: `knowledge/STATE.md`, `LESSONS.md`
 - Verifier is sacred: `hermes/verifier.py`
 - **Paper lock:** `HERMES_PAPER_ONLY=1` — live trading disabled in this deployment
-- **Market scope:** BTC Up/Down 5m + 15m only
-- Compose: `bot` + `dashboard` + `nginx` (`deploy/nginx/nginx.conf`)
+- **Market scope:** 5 instances via `MARKET_FILTER` (`btc5` / `btc15` / `eth5` / `sol5` / `rotator`) — see `config/market_filters.yaml`
+- **Fleet capital:** 5 × $2000 = $10k (isolated bankrolls + ledgers under `data/paper/<id>/`)
+- Compose: `hermes-btc5` + `hermes-btc15` + `hermes-eth5` + `hermes-sol5` + `hermes-rotator` + `dashboard` + `nginx`

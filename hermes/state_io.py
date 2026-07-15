@@ -20,20 +20,69 @@ logger = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parents[1]
 KNOWLEDGE = ROOT / "knowledge"
 DATA = ROOT / "data"
+
+
+def _instance_id() -> str:
+    """Per-container isolation key (btc5, btc15, eth5, sol5, rotator, …)."""
+    import os
+
+    env = os.environ.get("HERMES_INSTANCE_ID", "").strip().lower()
+    if env:
+        return env
+    try:
+        from hermes.market_scope import instance_id
+
+        return instance_id()
+    except Exception:  # noqa: BLE001
+        return "default"
+
+
+def paper_dir() -> Path:
+    """Isolated paper ledger root: data/paper/<instance>/."""
+    import os
+
+    override = os.environ.get("HERMES_PAPER_DIR", "").strip()
+    if override:
+        return Path(override)
+    return DATA / "paper" / _instance_id()
+
+
+def handoff_dir() -> Path:
+    import os
+
+    override = os.environ.get("HERMES_HANDOFF_DIR", "").strip()
+    if override:
+        return Path(override)
+    return DATA / "handoff" / _instance_id()
+
+
+# Module-level aliases kept for older imports; resolve at call time via helpers.
 HANDOFF = DATA / "handoff"
-LEDGER = DATA / "paper" / "trade_ledger.jsonl"
+LEDGER = DATA / "paper" / "trade_ledger.jsonl"  # legacy path; prefer ledger_path()
 INBOX = DATA / "paper" / "human_inbox.jsonl"
 
 T = TypeVar("T", bound=BaseModel)
 
 
+def ledger_path() -> Path:
+    return paper_dir() / "trade_ledger.jsonl"
+
+
+def inbox_path() -> Path:
+    return paper_dir() / "human_inbox.jsonl"
+
+
 def ensure_dirs() -> None:
+    import os
+
+    log_dir = Path(os.environ.get("HERMES_LOG_DIR", str(ROOT / "logs")))
     for p in (
         KNOWLEDGE,
-        DATA / "paper",
+        paper_dir(),
         DATA / "live",
-        HANDOFF,
-        ROOT / "logs",
+        handoff_dir(),
+        log_dir,
+        ROOT / "artifacts" / _instance_id(),
     ):
         p.mkdir(parents=True, exist_ok=True)
 
@@ -175,7 +224,7 @@ def write_handoff(stage: str, items: Iterable[BaseModel], turn_id: str) -> Path:
     """Write stage output as JSON (and optionally parquet) for the next stage."""
     ensure_dirs()
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    out = HANDOFF / f"{stage}_{turn_id}_{stamp}.json"
+    out = handoff_dir() / f"{stage}_{turn_id}_{stamp}.json"
     payload = [i.model_dump(mode="json") for i in items]
     out.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
     # Parquet twin when pandas/pyarrow available
@@ -198,11 +247,15 @@ def load_handoff(path: Path, model: Type[T]) -> list[T]:
 def push_inbox(item: dict[str, Any]) -> None:
     """Human-in-the-loop inbox for anything the loop cannot confidently handle."""
     item = {**item, "queued_at": datetime.now(timezone.utc).isoformat()}
-    append_jsonl(INBOX, item)
+    append_jsonl(inbox_path(), item)
     logger.warning("deferred to human inbox: %s", item.get("reason", item))
 
 
 def ledger_path(paper: bool = True) -> Path:
-    base = DATA / ("paper" if paper else "live")
-    base.mkdir(parents=True, exist_ok=True)
-    return base / "trade_ledger.jsonl"
+    """Instance-isolated trade ledger (paper or live twin)."""
+    if paper:
+        p = paper_dir()
+    else:
+        p = DATA / "live" / _instance_id()
+    p.mkdir(parents=True, exist_ok=True)
+    return p / "trade_ledger.jsonl"

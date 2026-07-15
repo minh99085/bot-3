@@ -109,40 +109,58 @@ Synthetic reference (seeded, strict): ~813 trades, **WR ≈ 91%**, max DD &lt; 1
 
 ---
 
-## Architecture
+## Architecture — 5 isolated instances ($2k each = $10k fleet)
 
-| Service | Role |
-|---------|------|
-| `bot` | Overnight paper loop (Discovery → Handoff/pretrade → Verifier → fill) |
-| `dashboard` | Streamlit UI (`baseUrlPath=/dashboard`) |
-| `nginx` | Reverse proxy → clean `/dashboard` URL |
+| Service | MARKET_FILTER | Bankroll | Logs / paper data |
+|---------|---------------|----------|-------------------|
+| `hermes-btc5` | `btc5` | $2000 | `logs/btc5/`, `data/paper/btc5/` |
+| `hermes-btc15` | `btc15` | $2000 | `logs/btc15/`, `data/paper/btc15/` |
+| `hermes-eth5` | `eth5` | $2000 | `logs/eth5/`, `data/paper/eth5/` |
+| `hermes-sol5` | `sol5` | $2000 | `logs/sol5/`, `data/paper/sol5/` |
+| `hermes-rotator` | `rotator` | $2000 | `logs/rotator/` — scans all four, **1** highest-conviction trade/turn |
+| `dashboard` | — | — | Aggregates all instance ledgers |
+| `nginx` | — | — | Public `/dashboard` |
+
+Patterns live in **`config/market_filters.yaml`**. Win-rate knobs (`min_edge`, `min_conviction`, Kelly, risk) stay in `config/enhanced_misprice.yaml` and are **unchanged**.
 
 ```
 Browser ──HTTP :80──► nginx ──/dashboard/*──► dashboard:8501
-                              (8501 not published)
-Bot writes knowledge/ + data/paper/  ◄── shared volumes ──►  Dashboard reads
+5× bots write data/paper/<id>/ + logs/<id>/  ◄── shared volumes ──►  Dashboard reads
 ```
 
 Paper lock: `HERMES_PAPER_ONLY=1` (default). Live orders are refused in broker/executor/CLI.
 
 ---
 
-## Quick start (Docker — local)
+## Quick start (Docker — all 5 instances)
 
 ```bash
 cp .env.example .env
+# Creates hermes-btc5, hermes-btc15, hermes-eth5, hermes-sol5, hermes-rotator + dashboard + nginx
 docker compose up -d --build
 
 # Desk
 open http://localhost/dashboard
-# or
 curl -fsS http://localhost/healthz
 
-# Logs
-docker compose logs -f bot
+# Per-instance logs
+docker compose logs -f hermes-btc5
+docker compose logs -f hermes-rotator
+
+# Status
+docker compose ps
 ```
 
 Stop: `docker compose down`
+
+Each container injects `MARKET_FILTER` + isolated `HERMES_LOG_DIR` / `HERMES_PAPER_DIR`. To run a single lane locally without Docker:
+
+```bash
+export PYTHONPATH=. HERMES_PAPER_ONLY=1
+export HERMES_INSTANCE_ID=btc5 MARKET_FILTER=btc5
+export HERMES_LOG_DIR=logs/btc5 HERMES_PAPER_DIR=data/paper/btc5
+python -m hermes.hermes_loop overnight
+```
 
 ---
 

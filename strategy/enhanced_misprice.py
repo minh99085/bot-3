@@ -200,26 +200,81 @@ def enhance_from_hermes_mispricing(
     return opp
 
 
+def filter_markets_by_scope(
+    markets: Sequence[MarketSnapshot],
+    *,
+    market_filter: Optional[str] = None,
+) -> list[MarketSnapshot]:
+    """Keep only markets matching MARKET_FILTER / market_filter param."""
+    from hermes.market_scope import is_allowed_slug, matches_market_filter, scope_enabled
+
+    if not scope_enabled() and not market_filter:
+        return list(markets)
+    out: list[MarketSnapshot] = []
+    for m in markets:
+        if m.slug and is_allowed_slug(m.slug, market_filter=market_filter):
+            out.append(m)
+            continue
+        if matches_market_filter(
+            slug=m.slug or "",
+            series=str((m.meta or {}).get("scoped_series") or ""),
+            asset=str((m.meta or {}).get("asset") or m.category or ""),
+            timeframe=m.timeframe or "",
+            market_filter=market_filter,
+        ):
+            out.append(m)
+    return out
+
+
 def rank_and_select(
     markets: Sequence[MarketSnapshot],
     *,
     risk_manager: Optional[PortfolioRiskManager] = None,
     config: Optional[EnhancedMispriceConfig] = None,
+    market_filter: Optional[str] = None,
+    max_trades: Optional[int] = None,
 ) -> list[TradeOpportunity]:
-    """Evaluate all markets, keep hard-filter passers, select inside risk budget."""
+    """Evaluate markets, keep hard-filter passers, select inside risk budget.
+
+    Parameters
+    ----------
+    market_filter:
+        Optional override (btc5 / btc15 / eth5 / sol5 / rotator). Defaults to
+        env ``MARKET_FILTER``.
+    max_trades:
+        Cap selected tickets. Rotator instances default to 1 (highest conviction).
+    """
+    from hermes.market_scope import is_rotator, market_filter as active_mf
+
     cfg = config or load_enhanced_config()
     rm = risk_manager or PortfolioRiskManager(cfg)
     guard = rm.evaluate_guards()
+    scoped = filter_markets_by_scope(markets, market_filter=market_filter)
     opps = [
         evaluate_market(m, config=cfg, guard=guard, bankroll=rm.state.bankroll)
-        for m in markets
+        for m in scoped
     ]
-    selected = rm.select_within_budget(opps)
+    # Highest conviction first before risk budget greedy
+    opps_sorted = sorted(
+        [o for o in opps if o.passes_hard_filter],
+        key=lambda o: o.conviction_score,
+        reverse=True,
+    )
+    selected = rm.select_within_budget(opps_sorted)
+    mf = market_filter or active_mf()
+    cap = max_trades
+    if cap is None and (is_rotator() or mf == "rotator"):
+        cap = 1
+    if cap is not None and cap >= 0:
+        selected = selected[:cap]
     logger.info(
-        "enhanced_misprice: %d markets → %d pass filter → %d selected (guard=%s)",
+        "enhanced_misprice: %d markets → %d scoped → %d pass → %d selected "
+        "(filter=%s guard=%s)",
         len(markets),
+        len(scoped),
         sum(1 for o in opps if o.passes_hard_filter),
         len(selected),
+        mf,
         guard.reason,
     )
     return selected
