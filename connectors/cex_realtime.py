@@ -214,7 +214,8 @@ class RealtimeBtcFeed:
                         self._binance = tick
                     self._push_history(mid)
             except Exception as exc2:  # noqa: BLE001
-                logger.warning("Binance spot REST failed: %s", exc2)
+                logger.warning("Binance spot REST failed: %s — trying Coinbase/OKX", exc2)
+                self._refresh_alt_venues()
 
         if ENABLE_BYBIT:
             try:
@@ -240,6 +241,56 @@ class RealtimeBtcFeed:
                             )
             except Exception as exc:  # noqa: BLE001
                 logger.debug("Bybit confirm failed: %s", exc)
+
+    def _refresh_alt_venues(self) -> None:
+        """Coinbase + OKX fallbacks when Binance is geo-blocked (HTTP 451)."""
+        try:
+            with httpx.Client(timeout=8.0) as client:
+                resp = client.get("https://api.exchange.coinbase.com/products/BTC-USD/ticker")
+                resp.raise_for_status()
+                data = resp.json()
+            bid = float(data.get("bid") or 0)
+            ask = float(data.get("ask") or 0)
+            last = float(data.get("price") or 0)
+            mid = (bid + ask) / 2.0 if bid > 0 and ask > 0 else last
+            if mid > 0:
+                tick = BtcTick(
+                    price=mid, bid=bid or mid, ask=ask or mid,
+                    source="coinbase_rest", ts=datetime.now(timezone.utc),
+                )
+                with self._lock:
+                    self._binance = tick
+                self._push_history(mid)
+                logger.info("CEX primary via Coinbase mid=%.2f", mid)
+                return
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Coinbase failed: %s", exc)
+        try:
+            with httpx.Client(timeout=8.0) as client:
+                resp = client.get(
+                    "https://www.okx.com/api/v5/market/ticker",
+                    params={"instId": "BTC-USDT-SWAP"},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+            rows = data.get("data") or []
+            if rows:
+                row = rows[0]
+                bid = float(row.get("bidPx") or 0)
+                ask = float(row.get("askPx") or 0)
+                last = float(row.get("last") or 0)
+                mid = (bid + ask) / 2.0 if bid > 0 and ask > 0 else last
+                if mid > 0:
+                    tick = BtcTick(
+                        price=mid, bid=bid or mid, ask=ask or mid,
+                        source="okx_rest", ts=datetime.now(timezone.utc),
+                    )
+                    with self._lock:
+                        self._binance = tick
+                    self._push_history(mid)
+                    logger.info("CEX primary via OKX mid=%.2f", mid)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("OKX fallback failed: %s", exc)
 
     def get_snapshot(self, *, force_rest: bool = False) -> BtcSnapshot:
         if not self._started:

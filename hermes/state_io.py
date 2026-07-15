@@ -106,6 +106,9 @@ def parse_state_fields(md: Optional[str] = None) -> dict[str, Any]:
 
 def _coerce(val: str) -> Any:
     v = val.strip().strip("`")
+    # Strip HTML comments appended by update_state_field
+    if "<!--" in v:
+        v = v.split("<!--", 1)[0].strip()
     if v.lower() in ("true", "yes"):
         return True
     if v.lower() in ("false", "no"):
@@ -119,16 +122,30 @@ def _coerce(val: str) -> Any:
 
 
 def update_state_field(key: str, value: Any) -> None:
-    """Replace a `**Key**: value` line in STATE.md, or append if missing."""
+    """Replace a `**Key**: value` line in STATE.md, or append if missing.
+
+    Never truncates the document. Strips prior HTML comment suffixes on replace.
+    """
     path = knowledge_path("STATE.md")
     text = read_text(path)
+    if not text.strip():
+        # Recover from accidental wipe
+        text = (
+            "# STATE.md — Hermes Runtime Memory\n\n## Current Snapshot\n\n"
+            "- **Mode**: paper\n"
+            "- **Live Enabled**: false\n"
+            "- **Paper Only Lock**: true\n"
+            "- **Starting Bankroll USD**: 2000\n"
+            "- **Capital USD**: 2000\n"
+            "- **Pause Loop**: false\n"
+            "- **Circuit Breaker**: clear\n"
+        )
     pattern = rf"(^[-*]\s+\*\*{re.escape(key)}\*\*:\s*).+$"
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     repl = rf"\g<1>{value}"
     new_text, n = re.subn(pattern, repl, text, flags=re.MULTILINE | re.IGNORECASE)
     if n == 0:
-        # Append under Current Snapshot section if present
-        stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-        new_text = text.rstrip() + f"\n- **{key}**: {value}  <!-- updated {stamp} -->\n"
+        new_text = text.rstrip() + f"\n- **{key}**: {value}\n"
     write_text(path, new_text)
 
 

@@ -61,6 +61,7 @@ _None — paper book empty at boot ($2000 USDC)._
 |------|--------|
 | mean_reversion | active |
 | momentum | active |
+| mispricing | active |
 | liquidity_sweep | active |
 | news_shock | paper_only |
 | grok_signal | paper_only |
@@ -69,11 +70,11 @@ _None — paper book empty at boot ($2000 USDC)._
 
 ## Goals in Flight
 
-- Specialize on **BTC Up/Down 5m + 15m only** (preferred: `btc-updown-5m-1784113500`, `btc-updown-15m-1784113200`).
-- Grow $2000 paper bankroll via verifier-pass + lessons-driven sizing toward 80%+ WR on these two series.
-- Cold-start size 0.5% bankroll; scale only when lessons show positive EV + rising WR.
+- Specialize on **BTC Up/Down 5m + 15m only** with Option D (CEX mispricing + bandit).
+- Grow $2000 paper bankroll toward 80%+ WR on these two series.
+- Cold-start size 0.5% bankroll; scale when lessons + bandit show positive EV.
 
 ## Notes
 
-**Market scope lock:** ONLY `btc-updown-5m-*` and `btc-updown-15m-*`. All other Polymarket events ignored.
-Starting paper bankroll: **$2000 USDC**. Dashboard: http://&lt;IP&gt;/dashboard
+**Market scope lock:** ONLY `btc-updown-5m-*` and `btc-updown-15m-*`.
+Dashboard: http://&lt;IP&gt;/dashboard
