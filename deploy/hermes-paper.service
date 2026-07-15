@@ -11,10 +11,10 @@ RemainAfterExit=yes
 WorkingDirectory=/opt/financial-freedom-bot
 EnvironmentFile=-/opt/financial-freedom-bot/.env
 
-# Prefer docker compose plugin; fall back to docker-compose binary
-ExecStart=/bin/bash -c 'if docker compose version >/dev/null 2>&1; then docker compose up -d --build --remove-orphans; else docker-compose up -d --build --remove-orphans; fi'
-ExecStop=/bin/bash -c 'if docker compose version >/dev/null 2>&1; then docker compose down; else docker-compose down; fi'
-ExecReload=/bin/bash -c 'if docker compose version >/dev/null 2>&1; then docker compose up -d --build --remove-orphans; else docker-compose up -d --build --remove-orphans; fi'
+# Boot / restart: down orphans then rebuild (same as deploy_vps.sh)
+ExecStart=/bin/bash -c 'if docker compose version >/dev/null 2>&1; then docker compose down --remove-orphans || true; docker compose up -d --build --remove-orphans; else docker-compose down --remove-orphans || true; docker-compose up -d --build --remove-orphans; fi'
+ExecStop=/bin/bash -c 'if docker compose version >/dev/null 2>&1; then docker compose down --remove-orphans; else docker-compose down --remove-orphans; fi'
+ExecReload=/bin/bash -c 'if docker compose version >/dev/null 2>&1; then docker compose down --remove-orphans || true; docker compose up -d --build --remove-orphans; else docker-compose down --remove-orphans || true; docker-compose up -d --build --remove-orphans; fi'
 
 TimeoutStartSec=600
 TimeoutStopSec=120

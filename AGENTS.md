@@ -35,11 +35,24 @@ docker compose up -d --build
 # → http://localhost/dashboard
 ```
 
-### Git workflow
+### Git + VPS deploy workflow (mandatory)
 
-- **Always commit and push directly to `main`.** Do not create feature branches.
-- Do not open PRs from separate branches unless the user explicitly asks.
-- After changes: `git add`, `git commit`, `git push -u origin main`.
+After every code change, always do this sequence — no feature branches, no PRs unless asked:
+
+1. **Commit and push to `main`**
+   ```bash
+   git add -A && git commit -m "..." && git push -u origin main
+   ```
+2. **Sync VPS** (rsync via `./deploy/deploy_vps.sh`)
+3. **On VPS: compose down, remove orphans, rebuild**
+   ```bash
+   docker compose down --remove-orphans
+   docker compose up -d --build --remove-orphans
+   ```
+
+`./deploy/deploy_vps.sh` performs steps 2–3 automatically after a successful SSH check.
+
+When a deploy round is finished, end with: **I am done thinking, push to main vps and rebuild**
 
 ### Architecture pointers
 
@@ -47,4 +60,5 @@ docker compose up -d --build
 - Memory: `knowledge/STATE.md`, `LESSONS.md`
 - Verifier is sacred: `hermes/verifier.py`
 - **Paper lock:** `HERMES_PAPER_ONLY=1` — live trading disabled in this deployment
+- **Market scope:** BTC Up/Down 5m + 15m only
 - Compose: `bot` + `dashboard` + `nginx` (`deploy/nginx/nginx.conf`)

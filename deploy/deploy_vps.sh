@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Deploy Hermes v2 Paper Docker stack to VPS
+# Workflow: push main → sync VPS → compose down --remove-orphans → up -d --build --remove-orphans
 # Dashboard: http://<VPS_IP>/dashboard
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -48,7 +49,7 @@ if ! "${SSH[@]}" "${USER}@${HOST}" "echo ok" 2>/dev/null; then
   exit 1
 fi
 
-echo "Deploying Hermes Paper to ${USER}@${HOST}:${REMOTE_PATH}"
+echo "Syncing Hermes Paper to ${USER}@${HOST}:${REMOTE_PATH}"
 "${SSH[@]}" "${USER}@${HOST}" "mkdir -p ${REMOTE_PATH}"
 
 "${RSYNC[@]}" \
@@ -98,10 +99,21 @@ if command -v ufw >/dev/null 2>&1; then
   echo "UFW: SSH + 80 allowed; 8501 stays closed"
 fi
 
+# Mandatory rebuild path: down → remove orphans → build/up
+echo "compose down --remove-orphans"
+if docker compose version >/dev/null 2>&1; then
+  docker compose down --remove-orphans || true
+  echo "compose up -d --build --remove-orphans"
+  docker compose up -d --build --remove-orphans
+else
+  docker-compose down --remove-orphans || true
+  docker-compose up -d --build --remove-orphans
+fi
+
+# Keep systemd unit in sync (restart policy / boot)
 cp deploy/hermes-paper.service /etc/systemd/system/hermes-paper.service
 systemctl daemon-reload
 systemctl enable hermes-paper.service
-systemctl restart hermes-paper.service
 
 sleep 12
 docker compose ps 2>/dev/null || docker-compose ps
@@ -109,7 +121,7 @@ curl -fsS http://127.0.0.1/healthz && echo " nginx ok" || echo "WARN: nginx heal
 EOF
 
 echo ""
-echo "=== Deployed ==="
+echo "=== Deployed (push main → sync VPS → down/orphans → rebuild) ==="
 echo "Dashboard: http://${HOST}/dashboard"
 echo "Health:    http://${HOST}/healthz"
 echo "SSH logs:  ssh ${USER}@${HOST} 'docker compose -f ${REMOTE_PATH}/docker-compose.yml logs -f'"

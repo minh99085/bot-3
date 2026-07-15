@@ -68,10 +68,18 @@ streamlit run dashboard.py --server.baseUrlPath=dashboard
 From your laptop / cloud agent (SSH key at `~/.ssh/bot3_cloud_agent`):
 
 ```bash
+git push -u origin main
 ./deploy/deploy_vps.sh
 ```
 
-This rsyncs the repo, installs Docker if needed, opens **UFW 80 + SSH only** (not 8501), installs the systemd unit, and starts the stack.
+This rsyncs the repo, then on the VPS runs:
+
+```bash
+docker compose down --remove-orphans
+docker compose up -d --build --remove-orphans
+```
+
+Opens **UFW 80 + SSH only** (not 8501), installs the systemd unit, and starts the stack.
 
 ### Option B — manual on the VPS
 
