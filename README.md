@@ -11,28 +11,38 @@ Targets: consistent 80%+ WR · DD &lt; 15% (guard at 8%) · PF &gt; 1.4 · EV af
 
 ## Quick Start — Validate 80% Win Rate
 
-**Run this first** (proves the enhanced math on a fresh synthetic universe):
+**Step 1 — install**
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 export PYTHONPATH=.
-
-python -m backtest run --synthetic --n_markets 8000 --seed 42 --plots
 ```
 
-You should see **Win rate ≥ 80%**, **Max drawdown ≤ 15%**, and `TARGET` yes.  
-Plots + `report.txt` land in `artifacts/backtest_runs/`.
-
-Next checks:
+**Step 2 — Validate 80%+ Win Rate with Backtest** (do this before trusting paper trades)
 
 ```bash
-python -m backtest compare --n_markets 8000          # naive vs enhanced lift
-python -m backtest monte-carlo --n_runs 50 --plots   # consistency across seeds
-python -m backtest tune --trials 20                  # find robust thresholds
+# Recommended first command (< 2 minutes)
+python -m backtest --fast
 ```
 
-Plain-English walkthrough of every metric and plot: **[BACKTEST_GUIDE.md](BACKTEST_GUIDE.md)**.
+You should see a green verdict like:
+
+```text
+✅ Target met: 88.x% win rate on N trades | Monte Carlo 5th percentile: … | Max DD: …
+```
+
+Full guide (what every number means, plots, tuning): **[BACKTEST_GUIDE.md](BACKTEST_GUIDE.md)**.
+
+```bash
+# Full synthetic validation + naive vs enhanced comparison
+python -m backtest --n-markets 5000 --seed 42 --compare-baseline
+
+# Find & save best thresholds (≥80% WR)
+python -m backtest --optimize --n-markets 5000
+```
+
+Same entrypoint: `python backtest/run.py --fast`
 
 ---
 
@@ -54,10 +64,10 @@ Wraps Option D CEX↔Polymarket mispricing with exact math in:
 
 ```bash
 export PYTHONPATH=.
-python -m backtest run --synthetic --n_markets 8000 --seed 42 --plots
-python -m backtest monte-carlo --n_runs 100 --n_markets 4000 --plots
-python -m backtest compare --n_markets 8000
-python -m backtest tune --trials 30
+python -m backtest --fast
+python -m backtest --n-markets 5000 --seed 42 --compare-baseline
+python -m backtest --optimize --n-markets 5000
+python -m backtest monte-carlo --n_runs 50
 pytest tests/test_kelly.py tests/test_bayesian_conviction.py tests/test_enhanced_misprice.py tests/test_backtest_suite.py -q
 ```
 

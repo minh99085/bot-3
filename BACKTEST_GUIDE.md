@@ -1,115 +1,174 @@
-# Backtest Guide — Prove the 80%+ Win Rate (Plain English)
+# Backtest Guide — Validate 80%+ Win Rate (Beginner Friendly)
 
-This guide is for anyone who has never run a trading backtest before. You do **not** need a PhD. You need about 10 minutes and the command at the top of the README.
-
-## What is a backtest?
-
-A backtest asks: *If we had used today’s rules on thousands of fake-but-realistic markets, how often would we have been right?*
-
-We generate markets where we secretly know the true probability (`true_q`), let a slightly noisy model produce `q`, let a noisy crowd produce market price `p`, then run the **exact same** Hermes filters used in paper trading. At the end we compare predictions to coin-flip outcomes drawn from `true_q`.
-
-If the math is sound and the model is reasonably calibrated (Brier score &lt; 0.18), filtered trades should win **≥ 80%** of the time with drawdowns under **15%**.
+You do **not** need any backtesting experience. This guide gets you from zero to a clear
+pass/fail on the Hermes 80% win-rate target.
 
 ---
 
-## Quick commands
+## Quick Start – Validate 80%+ Win Rate in < 2 minutes
 
 ```bash
-export PYTHONPATH=.
+# one-time setup
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-
-# 1) First thing to run — validate 80% WR
-python -m backtest run --synthetic --n_markets 8000 --seed 42 --plots
-
-# 2) Is it consistent across random universes?
-python -m backtest monte-carlo --n_runs 100 --n_markets 4000 --plots
-
-# 3) How much do Beta + Kelly help vs naive edge-only?
-python -m backtest compare --n_markets 8000
-
-# 4) Search for a robust config
-python -m backtest tune --trials 30 --n_markets 5000
+export PYTHONPATH=.
 ```
 
-Reports land in `artifacts/backtest_runs/`.
-
----
-
-## What each metric means
-
-| Metric | Plain meaning | Why it matters for 80%+ |
-|--------|---------------|-------------------------|
-| **Win rate** | Fraction of taken trades that made money | Primary goal ≥ 80% |
-| **Selectivity** | Trades taken ÷ decision points seen | Lower often means pickier → higher WR |
-| **Profit factor** | Gross wins ÷ gross losses | &gt; 1 means positive expectancy |
-| **Expectancy** | Average $ per trade | Must be &gt; 0 |
-| **Max drawdown** | Worst peak-to-trough equity drop | Must stay ≤ 15% |
-| **Brier score** | How wrong the model’s probabilities are | Need &lt; 0.18 for the WR target to be trustworthy |
-| **WR by conviction / edge** | Win rate inside buckets | Shows *which* filters create the edge |
-
----
-
-## How the math raises win rate
-
-1. **Misprice** finds places where model `q` and market `p` disagree.
-2. **Beta conviction** asks: given a Beta prior centered on `q` with strength `n_eff`, how confident are we that the true probability is on our side of `p`?
-   - YES: `conviction = 1 − BetaCDF(p; α=q·n_eff, β=(1−q)·n_eff)`
-3. **Hard filter** only allows trades when:
-   - `|q − p| ≥ min_edge`
-   - `conviction ≥ min_conviction`
-   - `q` is extreme (`≥ extreme_q_high` or `≤ extreme_q_low`)
-4. **Kelly** sizes the bet: YES `f* = (q−p)/(1−p)`, then `f = κ · min(f*, 1)`, capped at 10% of bankroll.
-5. **Risk budget** refuses new bets when aggregate risk units would exceed the portfolio limit — important once correlated markets show up in the synthetic blocks.
-
-Together: fewer, higher-conviction tickets → higher realized win rate.
-
----
-
-## How to read the plots
-
-- **Equity + underwater drawdown** — growing equity is good; deep red underwater patches mean painful streaks. Keep max DD &lt; 15%.
-- **Calibration (reliability diagram)** — points near the diagonal mean `q` matches reality. If the curve bows away, fix the model before trusting WR.
-- **Win rate vs min_conviction** — shows which threshold lands on 80%, 82%, 85%. Use this when tuning.
-- **Monte Carlo histogram** — a tight bump above 80% with 5th percentile still ≥ 75% means the edge is *consistent*, not a lucky seed.
-
----
-
-## If win rate is below 80%
-
-1. Check **Brier**. If ≥ 0.18, improve the probability model first.
-2. Raise `min_conviction` (e.g. 0.95 → 0.97) in `config/enhanced_misprice.yaml`.
-3. Raise `min_edge` (e.g. 0.12 → 0.14).
-4. Push extremes: `extreme_q_high: 0.88`, `extreme_q_low: 0.12`.
-5. Increase `n_eff.crypto` (80 → 100) so Beta conviction is stricter.
-6. Lower `kappa_base` (0.35 → 0.25) to cut size during learning.
-7. Re-run: `python -m backtest run --synthetic --n_markets 8000 --seed 42 --plots`
-8. Or let the tuner search: `python -m backtest tune --trials 40`
-
----
-
-## No look-ahead bias
-
-At each decision point the strategy only sees `p`, `q`, liquidity, and time-to-resolution. It never sees `true_q` or the eventual outcome until the resolution event. Correlated blocks stress-test the risk budget the same way clustered live markets would.
-
----
-
-## Historical CSV mode
+### 1) Fast first run (recommended)
 
 ```bash
-python -m backtest run --historical --csv data/backtest/example_historical.csv --plots
+python -m backtest --fast
 ```
 
-Required columns: `market_id, decision_time, p, q, resolution_outcome`  
-Optional: `true_q, category, days_to_resolution, liquidity_usd, volume_24h`.
+or:
+
+```bash
+python backtest/run.py --fast
+```
+
+What you should see at the end:
+
+```text
+✅ Target met: 88.x% win rate on N trades | Monte Carlo 5th percentile: 8x.x% | Max DD: x.x%
+```
+
+Artifacts are saved under `artifacts/backtest_runs/YYYYMMDD_HHMMSS/`.
+
+### 2) Full synthetic validation (5,000+ markets)
+
+```bash
+python -m backtest --n-markets 5000 --seed 42 --compare-baseline
+```
+
+This is the rigorous check: more markets, plots on by default, and a side-by-side
+comparison vs naive misprice-only trading.
+
+### 3) Parameter optimization run
+
+```bash
+python -m backtest --optimize --n-markets 5000
+```
+
+Finds thresholds that clear WR ≥ 80% and DD ≤ 15%, then writes:
+
+- `config/best_params.json`
+- `config/best_params.yaml`
+- updates `config/enhanced_misprice.yaml` with the winning values
+
+Fast optimize (for a quick search):
+
+```bash
+python -m backtest --optimize --fast
+```
+
+---
+
+## What the Numbers Mean
+
+| Number | Plain English | Good look |
+|--------|---------------|-----------|
+| **Win rate** | Of the trades the bot *actually took*, how many made money? | ≥ **80%** |
+| **Trades taken** | How many bets passed every filter | Dozens–thousands (not zero) |
+| **Selectivity** | Trades ÷ decision points looked at | Often **~5%** — picky is good |
+| **Max drawdown (DD)** | Worst drop from a peak in the equity curve | ≤ **15%** (hard cap) |
+| **Profit factor** | Gross wins ÷ gross losses | > 1.0 (higher is better) |
+| **Expectancy** | Average dollars per trade | Should be positive |
+| **Brier score** | How wrong the probability model is | < **0.18** or the WR target is unreliable |
+| **Monte Carlo 5th percentile** | In unlucky random universes, what’s the WR floor? | Comfortably ≥ **75–78%** for “consistent” |
+| **Conviction buckets** | WR inside groups of Beta-confidence | Higher conviction should win more often |
+
+**Verdict line** (printed at the end of every run) packs the essentials into one sentence so you don’t have to hunt.
+
+---
+
+## How the Math Delivers 80%+ Win Rate
+
+1. **Misprice** finds markets where the model probability `q` disagrees with the Polymarket price `p`.
+2. **Beta conviction** asks: “Given a Beta prior centered on `q`, how sure are we that the true probability is on our side of `p`?”
+   - YES bet: `conviction = 1 − BetaCDF(p; α = q·n_eff, β = (1−q)·n_eff)`
+3. **Hard filters** only allow a trade when:
+   - `|q − p|` is large enough (`min_edge`)
+   - conviction is high (`min_conviction`)
+   - `q` is extreme (near 0 or 1) — mid-odds coin-flips are skipped
+4. **Kelly** sizes the bet fractionally (`κ ≈ 0.35`) and never above 10% of bankroll.
+5. **Risk budget** blocks new bets when too much correlated risk is already open.
+
+Net effect: the bot takes **fewer** trades, but those trades are heavily tilted toward wins. Selectivity creates the 80%+ win rate — not magic.
+
+---
+
+## Tuning Guide — Push Win Rate from 80% → 84%+
+
+Edit `config/enhanced_misprice.yaml` (or run `--optimize`):
+
+1. Raise `min_conviction`: `0.95` → `0.97`
+2. Raise `min_edge`: `0.12` → `0.14`
+3. Push extremes: `extreme_q_high: 0.88`, `extreme_q_low: 0.12`
+4. Strengthen Beta: `n_eff.crypto: 100` (was 80)
+5. Shrink size while learning: `kappa_base: 0.25`
+6. Re-run: `python -m backtest --fast` then `python -m backtest --n-markets 5000`
+
+Or let the searcher do it:
+
+```bash
+python -m backtest --optimize --n-markets 5000
+```
+
+---
+
+## Interpreting Plots
+
+Saved when plots are enabled (full runs by default; use `--plots` with `--fast` to force):
+
+| File | What to look for |
+|------|------------------|
+| `equity_drawdown.png` | Equity trending up; red underwater DD shallow and short |
+| `calibration.png` | Points near the diagonal → model `q` matches reality |
+| `threshold_sweep.png` | Which `min_conviction` lands on 80% / 82% / 85% WR |
+| `wr_hist.png` | Monte Carlo WR bump above 80%; 5th percentile not collapsing |
+
+If calibration bows away from the diagonal, **fix the probability model** before trusting a high win rate.
+
+---
+
+## Troubleshooting — If Win Rate Is Below 80%
+
+1. **Check Brier** in the report. If ≥ 0.18, the model is too noisy — 80% isn’t honest until calibration improves.
+2. Run optimize: `python -m backtest --optimize --fast`
+3. Manually tighten filters (see Tuning Guide above) and re-run `--fast`.
+4. Confirm you’re using the enhanced path (default). Add `--compare-baseline` — enhanced should beat naive by a large WR lift.
+5. Increase sample size: `--n-markets 8000` so variance doesn’t fake a miss.
+6. Read `artifacts/backtest_runs/*/report.txt` — it includes the exact command to reproduce.
+
+Still stuck? Open `report.json` and check `wr_by_edge` — if the `0.06–0.10` bucket is weak, raise `min_edge`.
+
+---
+
+## Artifact layout
+
+Every run creates:
+
+```text
+artifacts/backtest_runs/YYYYMMDD_HHMMSS/
+  report.txt              # human readable + reproduce command
+  report.json             # machine readable
+  metrics.json            # alias of key metrics
+  parameters_used.yaml    # exact thresholds for this run
+  equity_drawdown.png     # (if plots on)
+  calibration.png
+  threshold_sweep.png
+  …
+```
 
 ---
 
 ## Same code as paper trading
 
-The backtester imports:
+The backtester imports the live modules — no duplicated math:
 
 - `strategy.enhanced_misprice.evaluate_market`
+- `strategy.kelly` / `strategy.bayesian`
 - `risk.portfolio_risk.PortfolioRiskManager`
 - `paper_trader.simulator.PaperSimulator`
 
-No duplicated Kelly / Beta formulas. What you validate here is what the overnight Hermes loop uses.
+What you validate here is what the overnight Hermes paper bot uses.
