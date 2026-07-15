@@ -269,6 +269,21 @@ def generate_signal(
     size = min(capital * 0.02, capital * abs(edge) * 0.25)
     size = max(25.0, size)
 
+    raw = candidate.raw or {}
+    tf = candidate.timeframe or raw.get("timeframe") or "1h"
+    # For HF markets, lean on oracle alignment in conviction
+    oracle_align = float(raw.get("oracle_alignment") or 0.5)
+    if tf in ("5m", "15m") and raw.get("asset"):
+        conv = min(1.0, conv * (0.7 + 0.3 * oracle_align))
+        if conv >= 0.75:
+            tier = ConfidenceTier.A
+        elif conv >= 0.55:
+            tier = ConfidenceTier.B
+        elif conv >= 0.35:
+            tier = ConfidenceTier.C
+        else:
+            tier = ConfidenceTier.D
+
     return Signal(
         market_id=candidate.market_id,
         slug=candidate.slug,
@@ -287,16 +302,33 @@ def generate_signal(
         entry_vwap_target=entry_vwap_target(mkt, direction),
         pre_entry_stability_ok=stable,
         rationale=(
-            f"{mode.value} on {candidate.regime.value} h{candidate.hourly_bucket}; "
-            f"edge={edge:.3f} ev={ev:.3f} bias={bias:.2f}"
+            f"{mode.value} on {candidate.regime.value} h{candidate.hourly_bucket} {tf}; "
+            f"edge={edge:.3f} ev={ev:.3f} bias={bias:.2f} "
+            f"oracle_align={oracle_align:.2f}"
         ),
-        alpha_rules_fired=rules_fired,
+        alpha_rules_fired=rules_fired + [f"tf={tf}", f"oracle_align={oracle_align:.2f}"],
         avoid_bucket_hit=hit_avoid,
         market_series=infer_market_series(
             candidate.market_id, candidate.slug, candidate.question
         ),
+        timeframe=tf,
+        oracle_price=float(raw["oracle_price"]) if raw.get("oracle_price") is not None else None,
+        oracle_source=str(raw.get("oracle_source") or ""),
+        oracle_alignment=oracle_align,
+        oracle_stale=bool(raw.get("oracle_stale") or False),
+        clob_token_id=(
+            str(raw["yes_token_id"])
+            if direction in (Direction.YES, Direction.UP) and raw.get("yes_token_id")
+            else (str(raw["no_token_id"]) if raw.get("no_token_id") else None)
+        ),
         generator_model="alpha-research-agent",
-        meta={"paper": paper, "down_bias": bias, "bucket_edge_prior": bucket_edge},
+        meta={
+            "paper": paper,
+            "down_bias": bias,
+            "bucket_edge_prior": bucket_edge,
+            "asset": raw.get("asset"),
+            "oracle_return_proxy": raw.get("oracle_return_proxy"),
+        },
     )
 
 

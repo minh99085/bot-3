@@ -30,6 +30,7 @@ from hermes.models import (
     AllocationProposal,
     CheckResult,
     ConfidenceTier,
+    Direction,
     EdgeBucket,
     EntryMode,
     LaneStatus,
@@ -65,6 +66,8 @@ MAX_SINGLE_POSITION_PCT = 0.03
 MAX_CORRELATED_EXPOSURE_PCT = 0.08
 MAX_HHI = 0.45  # concentration reject if portfolio would become too peaked
 MIN_DIV_RATIO = 1.05  # reject if allocation destroys diversification
+MIN_ORACLE_ALIGNMENT = 0.45  # BTC/ETH markets must agree with Chainlink dynamics
+MAX_ORACLE_STALE_FOR_HF = True  # reject 5m/15m when oracle marked stale
 ALLOWED_TIERS = {ConfidenceTier.A, ConfidenceTier.B}
 
 
@@ -133,6 +136,57 @@ def _sizing_ok(signal: Signal, state: dict) -> tuple[bool, float, str]:
     return True, round(sized, 2), f"sized ${sized:.2f} (dd_scale={dd_scale:.2f})"
 
 
+def _oracle_ok(signal: Signal) -> tuple[bool, str]:
+    """Chainlink ground-truth gate — critical for 5m/15m BTC/ETH up-down."""
+    asset = (signal.meta or {}).get("asset")
+    is_crypto_hf = signal.timeframe in ("5m", "15m") or (
+        signal.market_series.startswith("btc_") or signal.market_series.startswith("eth_")
+    )
+    if not asset and not is_crypto_hf:
+        return True, "oracle_n/a_non_crypto"
+
+    # Prefer live re-check when possible
+    try:
+        from connectors.chainlink import ChainlinkClient
+
+        cl = ChainlinkClient()
+        if asset in ("BTC", "ETH"):
+            px = cl.get_price(str(asset))
+            signal.oracle_price = px.price_usd
+            signal.oracle_source = px.source
+            signal.oracle_stale = px.stale
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("oracle re-check skipped: %s", exc)
+
+    if signal.oracle_stale and signal.timeframe in ("5m", "15m") and MAX_ORACLE_STALE_FOR_HF:
+        # AggregatorV3 with age under 2h is acceptable; only hard-fail synthetic/streams-stale
+        if signal.oracle_source == "aggregator_v3":
+            pass  # freshness already gated at 7200s in client; treat as soft
+        else:
+            return False, f"oracle_stale_hf source={signal.oracle_source}"
+
+    if signal.oracle_alignment < MIN_ORACLE_ALIGNMENT:
+        return (
+            False,
+            f"oracle_alignment={signal.oracle_alignment:.2f}<{MIN_ORACLE_ALIGNMENT}",
+        )
+
+    # Direction vs oracle return consistency for up/down
+    oret = float((signal.meta or {}).get("oracle_return_proxy") or 0.0)
+    if abs(oret) > 0.0005 and signal.timeframe in ("5m", "15m"):
+        wants_up = signal.direction in (Direction.YES, Direction.UP)
+        if wants_up and oret < -0.001:
+            return False, f"direction_vs_chainlink YES but ret={oret:.4f}"
+        if (not wants_up) and oret > 0.001:
+            return False, f"direction_vs_chainlink NO but ret={oret:.4f}"
+
+    return (
+        True,
+        f"align={signal.oracle_alignment:.2f} src={signal.oracle_source or 'n/a'} "
+        f"px={signal.oracle_price}",
+    )
+
+
 def _allocation_ok(
     signal: Signal,
     proposal: Optional[AllocationProposal],
@@ -165,7 +219,6 @@ def _allocation_ok(
             )
         if sid in proposal.reduce_list:
             action = SubStrategyAction.REDUCE.value
-            # Still allow, but size must already be capped by allocator
             if signal.allocation_usd > 0:
                 return True, f"REDUCE_ok size=${signal.allocation_usd:.2f}", action
             return False, "reduce_sleeve_zero_size", action
@@ -176,7 +229,6 @@ def _allocation_ok(
             action,
         )
 
-    # No proposal yet — require non-toxic size suggestion only
     if signal.size_usd_suggested <= 0:
         return False, "no_size_suggested", action
     return True, "no_proposal_soft_pass", action
@@ -197,6 +249,7 @@ def _allocation_ok(
         "lane active",
         "allocation approved (HRP/BL size + concentration)",
         "sub-strategy not CUT",
+        "Chainlink oracle alignment (esp. 5m/15m)",
     ],
 )
 def verify_signal(
@@ -388,6 +441,19 @@ def verify_signal(
     )
     if not alloc_ok:
         rejections.append(f"allocation:{alloc_detail}")
+
+    # 10. Chainlink oracle ground-truth
+    oracle_ok, oracle_detail = _oracle_ok(signal)
+    checks.append(
+        CheckResult(
+            name="oracle_alignment",
+            passed=oracle_ok,
+            detail=oracle_detail,
+            weight=1.5,
+        )
+    )
+    if not oracle_ok:
+        rejections.append(f"oracle:{oracle_detail}")
 
     # Score: weighted fraction of passed checks
     total_w = sum(c.weight for c in checks) or 1.0

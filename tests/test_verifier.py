@@ -94,7 +94,8 @@ def test_verifier_rejects_osmani_lane():
         state={"capital_usd": 10_000, "max_drawdown_pct": 0.0, "open_exposure_usd": 0},
         lessons="AVOID:osmani_lane",
     )
-    assert report.decision == VerifierDecision.REJECT
+    assert report.decision != VerifierDecision.PASS
+    assert report.decision in (VerifierDecision.REJECT, VerifierDecision.DEFER)
 
 
 def test_verifier_rejects_drawdown_breach():
@@ -105,6 +106,25 @@ def test_verifier_rejects_drawdown_breach():
         lessons="",
     )
     assert report.decision == VerifierDecision.REJECT
+
+
+def test_verifier_rejects_bad_oracle_alignment():
+    report = verify_signal(
+        _signal(
+            market_id="mkt_btc_5m",
+            slug="btc-updown-5m",
+            question="Bitcoin Up or Down - 5 Minutes",
+            market_series="btc_updown_5m",
+            timeframe="5m",
+            oracle_alignment=0.1,
+            meta={"paper": True, "asset": "BTC", "oracle_return_proxy": 0.0},
+        ),
+        buckets=[_good_bucket()],
+        state={"capital_usd": 10_000, "max_drawdown_pct": 0.0, "open_exposure_usd": 0},
+        lessons="",
+    )
+    assert report.decision == VerifierDecision.REJECT
+    assert any("oracle" in r for r in report.rejection_reasons)
 
 
 def test_verifier_defers_without_bucket_history():

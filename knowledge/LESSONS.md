@@ -77,6 +77,22 @@
 - **Promote to**: SKILL
 - **Retired**: false
 
+### [2026-07-15] `les_seed_chainlink_gt` — CRITICAL (data)
+
+- **Rule**: REQUIRE:Chainlink oracle ground-truth for BTC/ETH signals. REJECT 5m/15m when oracle_stale or oracle_alignment < 0.45. Prefer Data Streams; AggregatorV3 is acceptable fallback.
+- **Evidence**: CEX-only ticks are manipulable on short windows; Polymarket 5m/15m resolve via Chainlink + Automation.
+- **Applies to**: oracle, btc_updown, eth_updown, verifier, allocation
+- **Promote to**: ALPHA_RESEARCH_SKILL
+- **Retired**: false
+
+### [2026-07-15] `les_seed_clob_vwap` — HIGH (execution)
+
+- **Rule**: REQUIRE:paper fills walk live CLOB orderbook (py-clob-client-v2) for VWAP/slippage; do not use flat synthetic slip when token_id is known.
+- **Evidence**: Flat slip understates execution drag on thin 5m books.
+- **Applies to**: executor, broker, polymarket
+- **Promote to**: ALPHA_RESEARCH_SKILL
+- **Retired**: false
+
 ## Active Lessons
 
 <!-- lessons_engine appends new dated lessons below -->

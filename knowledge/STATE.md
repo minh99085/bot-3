@@ -11,7 +11,7 @@
 - **Open Exposure USD**: 0
 - **Daily PnL USD**: 0
 - **Max Drawdown Pct**: 0.0
-- **Rolling WR (20)**: 100%
+- **Rolling WR (20)**: 100.00%
 - **Rolling PF (20)**: 2.00
 - **Consecutive Losses**: 0
 - **Circuit Breaker**: clear
@@ -25,6 +25,9 @@
 - **Substrategies Cut**: 0
 - **Substrategies Reduce**: 0
 - **Allocation Method**: none
+- **Oracle BTC**: —
+- **Oracle ETH**: —
+- **Oracle Source**: none
 - **Last Turn**: none
 - **Last Turn At**: never
 - **Last Turn Summary**: boot

@@ -21,21 +21,23 @@ from hermes.models import (
 
 
 def infer_market_series(market_id: str, slug: str = "", question: str = "") -> str:
-    """Map Polymarket BTC/ETH up-down (and peers) into series labels."""
+    """Map Polymarket BTC/ETH up-down (incl. 5m/15m) into series labels."""
     blob = f"{market_id} {slug} {question}".lower()
+    tf = "5m" if re.search(r"\b5\s*m\b|5min|5m-", blob) else (
+        "15m" if re.search(r"\b15\s*m\b|15min|15m-", blob) else ""
+    )
     if re.search(r"\bbtc\b|bitcoin", blob):
-        if re.search(r"up.?down|5m|15m|1h|hourly", blob):
-            return "btc_updown"
+        if tf or re.search(r"up.?down|hourly", blob):
+            return f"btc_updown_{tf}" if tf else "btc_updown"
         return "btc"
     if re.search(r"\beth\b|ethereum", blob):
-        if re.search(r"up.?down|5m|15m|1h|hourly", blob):
-            return "eth_updown"
+        if tf or re.search(r"up.?down|hourly", blob):
+            return f"eth_updown_{tf}" if tf else "eth_updown"
         return "eth"
     if "fed" in blob or "rate" in blob:
         return "macro_rates"
     if "election" in blob or "vote" in blob:
         return "politics"
-    # Synthetic demo ids
     if market_id.startswith("mkt_btc") or "btc" in market_id:
         return "btc_updown"
     if market_id.startswith("mkt_eth") or "eth" in market_id:
@@ -50,22 +52,26 @@ def make_substrategy_id(
     entry_mode: EntryMode | str,
     regime: Regime | str,
     hourly_bucket: int,
+    timeframe: str = "1h",
 ) -> str:
     mode = entry_mode.value if isinstance(entry_mode, EntryMode) else str(entry_mode)
     reg = regime.value if isinstance(regime, Regime) else str(regime)
-    return f"{market_series}|{mode}|{reg}|h{int(hourly_bucket)}"
+    tf = timeframe or "1h"
+    return f"{market_series}|{mode}|{reg}|h{int(hourly_bucket)}|{tf}"
 
 
 def annotate_signal(signal: Signal) -> Signal:
-    """Fill market_series + substrategy_id on a signal in-place-ish (returns copy fields)."""
+    """Fill market_series + substrategy_id on a signal."""
     series = signal.market_series if signal.market_series != "unknown" else infer_market_series(
         signal.market_id, signal.slug, signal.question
     )
+    tf = signal.timeframe or "1h"
     sid = signal.substrategy_id or make_substrategy_id(
-        series, signal.entry_mode, signal.regime, signal.hourly_bucket
+        series, signal.entry_mode, signal.regime, signal.hourly_bucket, tf
     )
     signal.market_series = series
     signal.substrategy_id = sid
+    signal.timeframe = tf
     return signal
 
 

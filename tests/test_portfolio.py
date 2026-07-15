@@ -126,7 +126,11 @@ def test_allocate_sizes_signals():
 
 
 def test_market_series_and_id():
-    assert infer_market_series("x", "btc-5m-updown", "") == "btc_updown"
+    assert infer_market_series("x", "btc-5m-updown", "") == "btc_updown_5m"
     assert infer_market_series("x", "eth-hourly", "ethereum") == "eth_updown"
     sid = make_substrategy_id("btc_updown", EntryMode.MOMENTUM, Regime.TRENDING_DOWN, 20)
-    assert sid == "btc_updown|momentum|trending_down|h20"
+    assert sid == "btc_updown|momentum|trending_down|h20|1h"
+    sid5 = make_substrategy_id(
+        "btc_updown_5m", EntryMode.MOMENTUM, Regime.TRENDING_DOWN, 20, "5m"
+    )
+    assert sid5.endswith("|5m")

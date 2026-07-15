@@ -90,6 +90,7 @@ class MarketCandidate(BaseModel):
     spread_bps: float = 0.0
     regime: Regime = Regime.UNKNOWN
     hourly_bucket: int = Field(ge=0, le=23)
+    timeframe: str = "1h"  # 5m | 15m | 1h | daily
     tags: list[str] = Field(default_factory=list)
     discovered_at: datetime = Field(default_factory=utc_now)
     raw: dict[str, Any] = Field(default_factory=dict)
@@ -148,6 +149,13 @@ class Signal(BaseModel):
     allocation_usd: float = 0.0  # proposed sized USD after HRP/BL
     diversification_contrib: float = 0.0
     view_confidence: float = 0.0  # Black-Litterman view strength
+    # Chainlink / hybrid data fields
+    timeframe: str = "1h"
+    oracle_price: Optional[float] = None
+    oracle_source: str = ""
+    oracle_alignment: float = 0.5
+    oracle_stale: bool = False
+    clob_token_id: Optional[str] = None
     generated_at: datetime = Field(default_factory=utc_now)
     generator_model: str = "alpha-research-agent"
     meta: dict[str, Any] = Field(default_factory=dict)

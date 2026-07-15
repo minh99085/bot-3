@@ -56,13 +56,15 @@ def build_intent(
     )
 
 
-def execute_intent(intent: OrderIntent) -> Fill:
-    """Route to broker connector. Paper fills at limit with modeled slippage."""
+def execute_intent(intent: OrderIntent, signal: Optional[Signal] = None) -> Fill:
+    """Route to broker. Paper fills use CLOB book + Chainlink context when available."""
     try:
         from connectors.broker import BrokerClient
 
         broker = BrokerClient(paper=intent.paper)
-        return broker.execute(intent)
+        token_id = signal.clob_token_id if signal else None
+        asset = (signal.meta or {}).get("asset") if signal else None
+        return broker.execute(intent, token_id=token_id, asset=asset)
     except Exception as exc:  # noqa: BLE001
         logger.warning("broker connector fallback fill (%s)", exc)
         slip = 0.002
@@ -122,7 +124,7 @@ def executor_tick(
             logger.error("PASS report %s has no matching signal", report.signal_id)
             continue
         intent = build_intent(signal, report, paper=paper)
-        fill = execute_intent(intent)
+        fill = execute_intent(intent, signal=signal)
         pos = open_position(fill)
         fills.append(fill)
         positions.append(pos)

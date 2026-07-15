@@ -1,4 +1,9 @@
-"""Broker execution connector — paper first, live behind hard flags."""
+"""Broker execution — paper fills from live CLOB orderbook + Chainlink context.
+
+Paper mode walks the Polymarket book (py-clob-client-v2 / HTTP) for realistic
+VWAP + slippage. Chainlink prices are logged as ground-truth context for
+BTC/ETH markets (especially 5m/15m). Live posts require HERMES_LIVE=1 + PK.
+"""
 
 from __future__ import annotations
 
@@ -17,26 +22,73 @@ class BrokerClient:
         if not paper and os.environ.get("HERMES_LIVE") != "1":
             raise RuntimeError("Refusing live broker without HERMES_LIVE=1")
 
-    def execute(self, intent: OrderIntent) -> Fill:
+    def execute(self, intent: OrderIntent, *, token_id: Optional[str] = None, asset: Optional[str] = None) -> Fill:
         if self.paper or intent.paper:
-            return self._paper_fill(intent)
-        return self._live_fill(intent)
+            return self._paper_fill(intent, token_id=token_id, asset=asset)
+        return self._live_fill(intent, token_id=token_id)
 
-    def _paper_fill(self, intent: OrderIntent) -> Fill:
-        # Conservative adverse selection: 20 bps slippage
-        slip = 0.002
+    def _paper_fill(
+        self,
+        intent: OrderIntent,
+        *,
+        token_id: Optional[str] = None,
+        asset: Optional[str] = None,
+    ) -> Fill:
         direction = intent.direction.value
-        if direction in ("YES", "UP"):
-            px = min(0.99, intent.limit_price + slip)
+        fill_price = intent.limit_price
+        slip_bps = 20.0
+        oracle_note = ""
+
+        # Chainlink context (non-blocking)
+        if asset in ("BTC", "ETH"):
+            try:
+                from connectors.chainlink import ChainlinkClient
+
+                px = ChainlinkClient().get_price(asset)
+                oracle_note = f" cl={px.price_usd:.2f}@{px.source}"
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("chainlink context skipped: %s", exc)
+
+        # Walk orderbook when token_id known
+        if token_id:
+            try:
+                from connectors.polymarket import PolymarketClient
+
+                pm = PolymarketClient()
+                if direction in ("YES", "UP"):
+                    fill_price, slip_bps = pm.simulate_buy_vwap(token_id, intent.size_usd)
+                else:
+                    # Buying NO token if available; else sell-side walk on YES as proxy
+                    fill_price, slip_bps = pm.simulate_buy_vwap(token_id, intent.size_usd)
+                # Respect limit: no fill worse than limit for paper aggressor
+                if direction in ("YES", "UP"):
+                    fill_price = min(0.99, max(fill_price, intent.limit_price))
+                else:
+                    fill_price = max(0.01, min(fill_price, intent.limit_price + 0.02))
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("orderbook sim failed (%s); using limit+slip", exc)
+                slip = 0.002
+                if direction in ("YES", "UP"):
+                    fill_price = min(0.99, intent.limit_price + slip)
+                else:
+                    fill_price = max(0.01, intent.limit_price - slip)
+                slip_bps = 20.0
         else:
-            px = max(0.01, intent.limit_price - slip)
+            slip = 0.002
+            if direction in ("YES", "UP"):
+                fill_price = min(0.99, intent.limit_price + slip)
+            else:
+                fill_price = max(0.01, intent.limit_price - slip)
+
         fees = intent.size_usd * 0.01
         logger.info(
-            "PAPER FILL %s %s $%.2f @ %.4f",
+            "PAPER FILL %s %s $%.2f @ %.4f slip=%.1fbps%s",
             direction,
             intent.market_id,
             intent.size_usd,
-            px,
+            fill_price,
+            slip_bps,
+            oracle_note,
         )
         return Fill(
             intent_id=intent.intent_id,
@@ -44,15 +96,45 @@ class BrokerClient:
             market_id=intent.market_id,
             direction=intent.direction,
             size_usd=intent.size_usd,
-            fill_price=px,
+            fill_price=fill_price,
             fees_usd=fees,
-            slippage_bps=20.0,
+            slippage_bps=float(slip_bps),
             paper=True,
         )
 
-    def _live_fill(self, intent: OrderIntent) -> Fill:
-        # Placeholder — wire Polymarket CLOB / MCP broker here
-        raise NotImplementedError(
-            "Live execution requires connectors/polymarket CLOB + wallet secrets. "
-            "Run paper mode until verifier WR >= 80% on settled trades."
+    def _live_fill(self, intent: OrderIntent, *, token_id: Optional[str] = None) -> Fill:
+        if not token_id:
+            raise NotImplementedError("Live fill requires clob token_id")
+        pk = os.environ.get("POLYMARKET_PK") or os.environ.get("PK")
+        if not pk:
+            raise RuntimeError("POLYMARKET_PK required for live orders")
+        try:
+            from py_clob_client_v2 import ClobClient, OrderArgs, OrderType, Side
+        except ImportError as exc:
+            raise NotImplementedError("py-clob-client-v2 required for live") from exc
+
+        host = os.environ.get("POLYMARKET_CLOB_HOST", "https://clob.polymarket.com")
+        client = ClobClient(host=host, chain_id=137, key=pk)
+        creds = client.create_or_derive_api_key()
+        client = ClobClient(host=host, chain_id=137, key=pk, creds=creds)
+        side = Side.BUY
+        size = intent.size_usd / max(intent.limit_price, 0.01)
+        args = OrderArgs(
+            token_id=token_id,
+            price=float(intent.limit_price),
+            size=float(size),
+            side=side,
+        )
+        resp = client.create_and_post_order(args, order_type=OrderType.GTC)
+        logger.info("LIVE ORDER posted: %s", resp)
+        return Fill(
+            intent_id=intent.intent_id,
+            signal_id=intent.signal_id,
+            market_id=intent.market_id,
+            direction=intent.direction,
+            size_usd=intent.size_usd,
+            fill_price=float(intent.limit_price),
+            fees_usd=intent.size_usd * 0.01,
+            slippage_bps=0.0,
+            paper=False,
         )

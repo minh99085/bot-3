@@ -170,36 +170,121 @@ def filter_candidates(
 
 
 def discover_from_connector(limit: int = 50) -> list[MarketCandidate]:
-    """Pull markets from Polymarket connector (paper-safe mock if offline)."""
+    """Pull markets from Polymarket (prefer crypto up/down) + enrich via Chainlink."""
     import os
 
     if os.environ.get("HERMES_FORCE_SYNTHETIC", "0") == "1":
         return _synthetic_candidates()
     try:
+        from connectors.hybrid_data import HybridDataService
         from connectors.polymarket import PolymarketClient
 
         client = PolymarketClient()
-        return client.list_candidate_markets(limit=limit)
+        try:
+            raw = client.list_crypto_updown_markets(limit=limit)
+        except Exception:
+            raw = client.list_candidate_markets(limit=limit)
+        hybrid = HybridDataService(polymarket=client)
+        return [hybrid.apply_to_candidate(c) for c in raw]
     except Exception as exc:  # noqa: BLE001
-        logger.warning("polymarket connector unavailable (%s); using synthetic set", exc)
+        logger.warning("polymarket/hybrid unavailable (%s); using synthetic set", exc)
         return _synthetic_candidates()
 
 
 def _synthetic_candidates() -> list[MarketCandidate]:
-    """Deterministic paper-mode candidates aligned with EXPLOIT edge buckets."""
-    # Hour 14 UTC aligns with mean_revert / mean_reversion EXPLOIT bucket
+    """Deterministic paper candidates: BTC/ETH 5m/15m + EXPLOIT-aligned macros."""
     hour = 14
     samples = [
-        ("mkt_btc_100k", "will-btc-hit-100k", "Will BTC hit $100k this month?", 0.42, 0.58, 12000, 8000, 80),
-        ("mkt_fed_cut", "fed-rate-cut-july", "Will the Fed cut rates in July?", 0.31, 0.69, 25000, 15000, 60),
-        ("mkt_eth_etf", "eth-etf-inflows", "Will ETH ETF see net inflows this week?", 0.55, 0.45, 9000, 6000, 90),
-        ("mkt_election", "election-turnout-high", "Will turnout exceed 60%?", 0.28, 0.72, 18000, 11000, 70),
-        ("mkt_oil", "oil-above-90", "Will WTI close above $90?", 0.37, 0.63, 7000, 5500, 85),
+        (
+            "mkt_btc_5m",
+            "btc-updown-5m",
+            "Bitcoin Up or Down - 5 Minutes",
+            0.48,
+            0.52,
+            45000,
+            20000,
+            60,
+            "5m",
+            "BTC",
+        ),
+        (
+            "mkt_eth_15m",
+            "eth-updown-15m",
+            "Ethereum Up or Down - 15 Minutes",
+            0.46,
+            0.54,
+            28000,
+            15000,
+            70,
+            "15m",
+            "ETH",
+        ),
+        (
+            "mkt_btc_100k",
+            "will-btc-hit-100k",
+            "Will BTC hit $100k this month?",
+            0.42,
+            0.58,
+            12000,
+            8000,
+            80,
+            "1h",
+            "BTC",
+        ),
+        (
+            "mkt_fed_cut",
+            "fed-rate-cut-july",
+            "Will the Fed cut rates in July?",
+            0.31,
+            0.69,
+            25000,
+            15000,
+            60,
+            "1h",
+            None,
+        ),
+        (
+            "mkt_eth_etf",
+            "eth-etf-inflows",
+            "Will ETH ETF see net inflows this week?",
+            0.55,
+            0.45,
+            9000,
+            6000,
+            90,
+            "1h",
+            "ETH",
+        ),
     ]
     out: list[MarketCandidate] = []
-    for mid, slug, q, yes, no, vol, liq, spread in samples:
-        change = (yes - 0.5) * 0.05
-        regime = Regime.MEAN_REVERT  # align with EXPLOIT seed bucket for paper demos
+    # Optional live Chainlink enrichment even for synthetics
+    oracle_map: dict[str, object] = {}
+    try:
+        from connectors.chainlink import ChainlinkClient
+
+        cl = ChainlinkClient()
+        for a in ("BTC", "ETH"):
+            px = cl.get_price(a)
+            oracle_map[a] = px.price_usd
+            oracle_map[f"{a}_src"] = px.source
+    except Exception:  # noqa: BLE001
+        pass
+
+    for mid, slug, q, yes, no, vol, liq, spread, tf, asset in samples:
+        regime = Regime.MEAN_REVERT
+        raw = {
+            "timeframe": tf,
+            "asset": asset,
+            "oracle_alignment": 0.75 if asset else 0.55,
+            "oracle_return_proxy": -0.001 if asset else 0.0,
+            "oracle_price": oracle_map.get(asset) if asset else None,
+            "oracle_source": oracle_map.get(f"{asset}_src") if asset else None,
+            "oracle_stale": False,
+            "synthetic": True,
+        }
+        tags = ["synthetic", "paper", f"tf:{tf}"]
+        if asset:
+            tags.append(asset.lower())
         out.append(
             MarketCandidate(
                 market_id=mid,
@@ -212,7 +297,9 @@ def _synthetic_candidates() -> list[MarketCandidate]:
                 spread_bps=spread,
                 regime=regime,
                 hourly_bucket=hour,
-                tags=["synthetic", "paper"],
+                timeframe=tf,
+                tags=tags,
+                raw=raw,
             )
         )
     return out
@@ -220,9 +307,8 @@ def _synthetic_candidates() -> list[MarketCandidate]:
 
 @loop(interval="5m", name="discovery")
 def discovery_tick(turn_id: Optional[str] = None) -> list[MarketCandidate]:
-    """Automation entry: discover → handoff JSON/parquet for signal gen."""
+    """Automation entry: discover → hybrid enrich → handoff for signal gen."""
     ensure_dirs()
-    # Skills are loaded so discovery judges "what's worth doing"
     _skill = read_skill()
     _alpha = read_alpha_skill()
     state = parse_state_fields(read_state_md())
@@ -232,13 +318,21 @@ def discovery_tick(turn_id: Optional[str] = None) -> list[MarketCandidate]:
 
     buckets = load_edge_buckets_from_alpha()
     raw = discover_from_connector()
-    # Annotate regime/hour if connector omitted them
     hour = _hour_utc()
     for c in raw:
         if c.hourly_bucket is None:
             c.hourly_bucket = hour
+        tf = (c.raw or {}).get("timeframe") or c.timeframe or "1h"
+        c.timeframe = tf
         if c.regime == Regime.UNKNOWN:
-            c.regime = detect_regime(c.yes_price, c.volume_24h, c.spread_bps)
+            # Prefer oracle-based regime already set by hybrid; else local
+            ret = float((c.raw or {}).get("oracle_return_proxy") or 0.0)
+            if (c.raw or {}).get("asset"):
+                from connectors.hybrid_data import regime_from_oracle
+
+                c.regime = regime_from_oracle(ret, c.spread_bps, c.yes_price, tf)
+            else:
+                c.regime = detect_regime(c.yes_price, c.volume_24h, c.spread_bps)
 
     filtered = filter_candidates(raw, buckets)
     tid = turn_id or datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")

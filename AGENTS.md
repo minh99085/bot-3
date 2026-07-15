@@ -2,7 +2,7 @@
 
 ## Cursor Cloud specific instructions
 
-**Financial Freedom Bot (Hermes v2)** — autonomous Polymarket trading loop.
+**Financial Freedom Bot (Hermes v2)** — autonomous Polymarket + Chainlink trading loop.
 
 ### VPS baseline
 

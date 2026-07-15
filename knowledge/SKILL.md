@@ -15,10 +15,11 @@ Paper mode is default. Live trading is opt-in only after paper evidence clears t
 | Field | Value |
 |-------|-------|
 | Codename | Hermes v2 |
-| Architecture | Loop Engineering (Osmani) + Roan self-improve + Ruuj portfolio |
+| Architecture | Loop Engineering (Osmani) + Roan + Ruuj + Chainlink/Polymarket |
 | Mode | `paper` until STATE.md says otherwise |
 | Verifier model hint | Stronger / different architecture than generator |
 | Allocation | Ledoit-Wolf → HRP/edge-RP → Black-Litterman → cut/reduce |
+| Data | Polymarket Gamma+CLOB (`py-clob-client-v2`) + Chainlink oracles |
 
 ## Five Moves (every turn)
 
@@ -37,7 +38,7 @@ Paper mode is default. Live trading is opt-in only after paper evidence clears t
 | State / Memory | `STATE.md`, `LESSONS.md`, `data/**/trade_ledger.jsonl` |
 | Verifier (sub-agent) | `verifier.py` — assume broken until proven |
 | Worktrees | `.worktrees/{research,signal,risk}` |
-| Connectors | `connectors/` (Polymarket, CEX, broker, alerts) |
+| Connectors | `connectors/` Polymarket CLOB, Chainlink, hybrid, broker, alerts |
 
 ## Hard Rules (we never do X because of Y)
 
@@ -54,6 +55,8 @@ Paper mode is default. Live trading is opt-in only after paper evidence clears t
 11. **We never size with raw sample covariance** — Ledoit-Wolf only (Ruuj).
 12. **We never confuse currently_losing with model_broken** — REDUCE vs CUT.
 13. **We never skip allocation verification** — size/weight must clear HHI + div gates.
+14. **We never trust a single CEX tick for BTC/ETH HF** — Chainlink is ground-truth; CLOB is the book.
+15. **We never PASS 5m/15m crypto when oracle is stale or misaligned** with Polymarket YES pricing.
 
 ## Circuit Breakers
 

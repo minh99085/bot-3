@@ -36,6 +36,13 @@ Reject `unknown`. Be defensive in `high_vol` (require tier A + EV ≥ 0.08).
 
 ## Portfolio Construction (Ruuj layer)
 
+### Data trust (Chainlink + Polymarket)
+
+- **Polymarket**: Gamma discovery + `py-clob-client-v2` orderbook for depth/VWAP
+- **Chainlink**: Data Streams (HMAC) preferred; AggregatorV3 RPC fallback
+- **Hybrid**: `connectors/hybrid_data.py` merges book + oracle → regime + alignment score
+- 5m/15m BTC/ETH up-down markets **require** oracle alignment ≥ 0.45 and non-stale feeds
+
 ### Robust base
 
 1. Build sub-strategy return matrix from settlements
