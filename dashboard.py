@@ -4,7 +4,7 @@ Run locally:
   streamlit run dashboard.py --server.baseUrlPath=dashboard
 
 Production (Docker): nginx proxies http://<VPS_IP>/dashboard → this app.
-Auto-refreshes every 8 seconds. Reads STATE.md, LESSONS.md, and paper ledgers.
+Auto-refreshes every 5 minutes. Reads STATE.md, LESSONS.md, and paper ledgers.
 """
 
 from __future__ import annotations
@@ -47,9 +47,9 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Auto-refresh every 8s (no extra dependency)
+# Auto-refresh every 5 minutes (no extra dependency)
 st.markdown(
-    '<meta http-equiv="refresh" content="8">',
+    '<meta http-equiv="refresh" content="300">',
     unsafe_allow_html=True,
 )
 
@@ -100,7 +100,7 @@ oracle = oracle_alignment_snapshot()
 st.title("Hermes v2 · Paper Trading Desk")
 st.caption(
     f"Starting bankroll **${bankroll:,.0f}** USDC · Mode `{state.get('mode', 'paper')}` · "
-    f"Auto-refresh 8s · Loop Engineering + Ruuj allocation + Chainlink ground-truth"
+    f"Auto-refresh 5 min · Loop Engineering + Ruuj allocation + Chainlink ground-truth"
 )
 
 # ── Top metrics ─────────────────────────────────────────────────────────────
