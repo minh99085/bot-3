@@ -1,0 +1,336 @@
+"""Pre-trade analysis & sizing — Handoff step before Verifier.
+
+Before any trade is proposed for execution:
+  1. Pull sleeve performance from ledger/state
+  2. Read LESSONS.md for binding CUT/REDUCE/AVOID rules
+  3. Recalculate live EV from orderbook + Chainlink context
+  4. Assess portfolio impact (div ratio, concentration)
+  5. Apply HRP/BL allocation weight → recommended % of bankroll (or 0% skip)
+
+Verifier must approve both signal quality and this proposed size.
+All decisions are logged to the paper ledger for the dashboard.
+"""
+
+from __future__ import annotations
+
+import logging
+import re
+from typing import Optional
+
+from hermes.models import (
+    AllocationProposal,
+    PreTradeAnalysis,
+    Signal,
+    SubStrategyAction,
+)
+from hermes.state_io import (
+    append_jsonl,
+    ensure_dirs,
+    ledger_path,
+    parse_state_fields,
+    read_jsonl,
+    read_lessons_md,
+    read_state_md,
+    write_handoff,
+)
+from hermes.substrategy import annotate_signal, default_confidence
+
+logger = logging.getLogger(__name__)
+
+# Bankroll-aware sizing caps ($2000 starting paper)
+DEFAULT_BANKROLL = 2000.0
+MAX_SIZE_PCT = 0.03  # 3% of bankroll per ticket
+MIN_SIZE_PCT = 0.005  # 0.5% floor when trading
+MIN_TICKET_USD = 10.0
+MIN_LIVE_EV = 0.06
+MIN_SLEEVE_WR = 0.55
+MAX_CONCENTRATION = 0.40
+FEE_BPS = 100.0
+SLIPPAGE_BPS_FLOOR = 40.0
+
+
+def _bankroll(state: Optional[dict] = None) -> float:
+    state = state if state is not None else parse_state_fields(read_state_md())
+    return float(
+        state.get("capital_usd")
+        or state.get("capital")
+        or state.get("starting_bankroll_usd")
+        or DEFAULT_BANKROLL
+    )
+
+
+def _sleeve_stats(substrategy_id: str, paper: bool = True) -> dict:
+    rows = read_jsonl(ledger_path(paper=paper))
+    settles = [
+        r
+        for r in rows
+        if (r.get("event") == "settlement" or r.get("won") is not None)
+        and (r.get("substrategy_id") == substrategy_id or substrategy_id in str(r.get("applies_to", "")))
+    ]
+    if not settles:
+        # Soft match on mode|regime fragment
+        parts = substrategy_id.split("|")
+        if len(parts) >= 3:
+            mode, regime = parts[1], parts[2]
+            settles = [
+                r
+                for r in rows
+                if (r.get("event") == "settlement" or r.get("won") is not None)
+                and str(r.get("entry_mode", "")) == mode
+                and str(r.get("regime", "")) == regime
+            ]
+    if not settles:
+        return {"n": 0, "wr": 0.70, "ev": 0.06, "currently_losing": False}
+    wins = sum(1 for r in settles if r.get("won") or float(r.get("pnl_usd", 0)) > 0)
+    rets = []
+    for r in settles:
+        sz = float(r.get("size_usd", 1) or 1)
+        rets.append(float(r.get("pnl_usd", 0)) / sz)
+    last3 = settles[-3:]
+    losing = all(not (r.get("won") or float(r.get("pnl_usd", 0)) > 0) for r in last3)
+    return {
+        "n": len(settles),
+        "wr": wins / len(settles),
+        "ev": sum(rets) / len(rets) if rets else 0.0,
+        "currently_losing": losing and len(last3) >= 3,
+    }
+
+
+def _lessons_for_sleeve(substrategy_id: str, lessons: str) -> list[str]:
+    """Extract actionable lesson rule lines that bind this sleeve."""
+    hits: list[str] = []
+    lower = lessons.lower()
+    parts = substrategy_id.lower().split("|")
+    mode = parts[1] if len(parts) > 1 else ""
+    for block in re.split(r"\n### ", lessons):
+        blob = block.lower()
+        if "retired**: true" in blob:
+            continue
+        rule_m = re.search(r"\*\*rule\*\*:\s*(.+)", block, re.I)
+        if not rule_m:
+            continue
+        rule = rule_m.group(1).strip()
+        rl = rule.lower()
+        if substrategy_id.lower() in blob or substrategy_id.lower() in rl:
+            hits.append(rule)
+            continue
+        if mode and (f"avoid:{mode}" in rl.replace(" ", "") or f"cut:`{mode}" in rl):
+            hits.append(rule)
+            continue
+        if "cut:" in rl and any(p in rl for p in parts[:2]):
+            hits.append(rule)
+        if "reduce weight" in rl and mode and mode in rl:
+            hits.append(rule)
+    # Cap noise
+    return hits[:8]
+
+
+def _recalc_live_ev(signal: Signal) -> tuple[float, float, str]:
+    """Recalc EV after cost using orderbook slip when possible + Chainlink context."""
+    slip_bps = SLIPPAGE_BPS_FLOOR
+    note = "floor_slip"
+    token = signal.clob_token_id
+    if token:
+        try:
+            from connectors.polymarket import PolymarketClient
+
+            pm = PolymarketClient()
+            if signal.direction.value in ("YES", "UP"):
+                _, slip_bps = pm.simulate_buy_vwap(token, max(25.0, signal.size_usd_suggested))
+            else:
+                _, slip_bps = pm.simulate_buy_vwap(token, max(25.0, signal.size_usd_suggested))
+            note = f"book_slip={slip_bps:.1f}bps"
+        except Exception as exc:  # noqa: BLE001
+            note = f"book_unavailable:{exc}"
+    # Oracle alignment soft-adjusts EV for crypto HF
+    align = float(signal.oracle_alignment or 0.5)
+    adj = 0.0
+    if signal.timeframe in ("5m", "15m") and (signal.meta or {}).get("asset"):
+        adj = (align - 0.5) * 0.04  # ±2% EV tilt from alignment
+        note += f" oracle_align={align:.2f}"
+    cost = (FEE_BPS + max(SLIPPAGE_BPS_FLOOR, slip_bps)) / 10_000.0
+    live_ev = float(signal.expected_edge) - cost + adj
+    return live_ev, slip_bps, note
+
+
+def analyze_signal(
+    signal: Signal,
+    proposal: AllocationProposal,
+    *,
+    bankroll: float,
+    lessons: Optional[str] = None,
+    paper: bool = True,
+) -> PreTradeAnalysis:
+    """Produce a size recommendation (% of bankroll) or skip (0%)."""
+    annotate_signal(signal)
+    lessons = lessons if lessons is not None else read_lessons_md()
+    sid = signal.substrategy_id
+    stats = _sleeve_stats(sid, paper=paper)
+    lesson_hits = _lessons_for_sleeve(sid, lessons)
+    live_ev, slip_bps, ev_note = _recalc_live_ev(signal)
+
+    reasons: list[str] = []
+    skip = False
+    size_pct = 0.0
+
+    # Binding lesson cuts
+    for rule in lesson_hits:
+        rl = rule.lower()
+        if rl.startswith("cut:") or "weight cap=0" in rl or "model_broken" in rl:
+            skip = True
+            reasons.append(f"lesson_CUT: {rule[:120]}")
+        if "avoid:" in rl.replace(" ", "")[:40] and sid.split("|")[1] in rl:
+            if "until" in rl or "gated" in rl:
+                skip = True
+                reasons.append(f"lesson_AVOID: {rule[:120]}")
+
+    if sid in proposal.cut_list:
+        skip = True
+        reasons.append("allocation_policy: sleeve on CUT list")
+
+    if live_ev < MIN_LIVE_EV:
+        skip = True
+        reasons.append(f"live_ev={live_ev:.4f}<{MIN_LIVE_EV} ({ev_note})")
+
+    if stats["n"] >= 10 and stats["wr"] < MIN_SLEEVE_WR:
+        skip = True
+        reasons.append(f"sleeve_wr={stats['wr']:.2%} n={stats['n']} below {MIN_SLEEVE_WR:.0%}")
+
+    if signal.oracle_alignment < 0.45 and signal.timeframe in ("5m", "15m"):
+        skip = True
+        reasons.append(f"oracle_alignment={signal.oracle_alignment:.2f} too low for HF")
+
+    # Portfolio impact
+    w = float(proposal.weights.get(sid, signal.allocation_weight or 0.0))
+    if sid in proposal.reduce_list:
+        w = min(w, 0.08)
+        reasons.append("REDUCE cap applied (≤8% sleeve weight)")
+
+    div_before = proposal.diversification_ratio
+    # Approximate post-trade concentration if we add this sleeve weight
+    weights = dict(proposal.weights)
+    weights[sid] = max(weights.get(sid, 0.0), w)
+    total = sum(weights.values()) or 1.0
+    norm = {k: v / total for k, v in weights.items()}
+    hhi_after = sum(v * v for v in norm.values())
+    div_after = div_before * (1.0 - 0.15 * max(0.0, hhi_after - proposal.concentration_hhi))
+
+    if hhi_after > MAX_CONCENTRATION and w > 0.12:
+        skip = True
+        reasons.append(f"concentration_hhi={hhi_after:.3f}>{MAX_CONCENTRATION}")
+
+    if not skip:
+        # Edge-weighted size within sleeve budget share of bankroll
+        edge_scale = min(1.5, max(0.4, live_ev / 0.08))
+        conf = default_confidence(sid, signal)
+        conf_scale = 0.5 + 0.5 * conf.internal_confidence
+        if stats["currently_losing"]:
+            conf_scale *= 0.5
+            reasons.append("currently_losing → half size")
+        if sid in proposal.reduce_list:
+            conf_scale *= 0.5
+        raw_pct = w * MAX_SIZE_PCT / max(MAX_SIZE_PCT, 0.25) * edge_scale * conf_scale
+        # Map sleeve weight to bankroll %: full sleeve at MAX_SINGLE ~ 3%
+        size_pct = min(MAX_SIZE_PCT, max(MIN_SIZE_PCT, w * 0.12 * edge_scale * conf_scale))
+        # Prefer HRP weight * bankroll * gross room factor
+        size_pct = min(MAX_SIZE_PCT, max(0.0, proposal.weights.get(sid, w) * 0.15 * edge_scale * conf_scale))
+        if size_pct < MIN_SIZE_PCT:
+            size_pct = 0.0
+            skip = True
+            reasons.append("size_below_min_pct → skip")
+        else:
+            reasons.append(
+                f"size_pct={size_pct:.2%} from w={w:.3f} edge_scale={edge_scale:.2f} "
+                f"conf_scale={conf_scale:.2f} ({ev_note})"
+            )
+        _ = raw_pct  # kept for debug clarity in reasons if needed
+
+    size_usd = round(bankroll * size_pct, 2) if not skip else 0.0
+    if not skip and size_usd < MIN_TICKET_USD:
+        skip = True
+        size_pct = 0.0
+        size_usd = 0.0
+        reasons.append(f"ticket ${bankroll * size_pct:.2f}<${MIN_TICKET_USD} → skip")
+
+    analysis = PreTradeAnalysis(
+        signal_id=signal.signal_id,
+        substrategy_id=sid,
+        bankroll_usd=bankroll,
+        recommended_size_pct=round(size_pct * 100, 3) if not skip else 0.0,  # store as percent points
+        recommended_size_usd=size_usd,
+        skip=skip,
+        live_ev=round(live_ev, 5),
+        sleeve_wr=round(stats["wr"], 4),
+        sleeve_ev=round(stats["ev"], 5),
+        sleeve_n=int(stats["n"]),
+        portfolio_div_before=round(div_before, 4),
+        portfolio_div_after=round(div_after, 4),
+        concentration_after=round(hhi_after, 4),
+        allocation_weight=round(w, 4),
+        lessons_applied=lesson_hits,
+        reasons=reasons,
+        oracle_alignment=float(signal.oracle_alignment or 0.5),
+    )
+    return analysis
+
+
+def apply_pretrade_to_signal(signal: Signal, analysis: PreTradeAnalysis) -> Signal:
+    signal.pretrade_analysis_id = analysis.analysis_id
+    signal.pretrade_skip = analysis.skip
+    signal.pretrade_reasons = list(analysis.reasons)
+    signal.size_pct_recommended = analysis.recommended_size_pct
+    signal.live_ev = analysis.live_ev
+    if analysis.skip:
+        signal.allocation_usd = 0.0
+        signal.size_usd_suggested = 0.0
+        signal.allocation_weight = 0.0
+    else:
+        signal.allocation_usd = analysis.recommended_size_usd
+        signal.size_usd_suggested = analysis.recommended_size_usd
+        signal.allocation_weight = analysis.allocation_weight
+    return signal
+
+
+def run_pretrade_sizing(
+    signals: list[Signal],
+    proposal: AllocationProposal,
+    *,
+    turn_id: str,
+    paper: bool = True,
+) -> tuple[list[Signal], list[PreTradeAnalysis]]:
+    """Handoff sizing step: analyze each signal, log decisions, return sized set."""
+    ensure_dirs()
+    state = parse_state_fields(read_state_md())
+    bankroll = _bankroll(state)
+    lessons = read_lessons_md()
+    analyses: list[PreTradeAnalysis] = []
+    sized: list[Signal] = []
+
+    for sig in signals:
+        analysis = analyze_signal(
+            sig, proposal, bankroll=bankroll, lessons=lessons, paper=paper
+        )
+        updated = apply_pretrade_to_signal(sig.model_copy(deep=True), analysis)
+        analyses.append(analysis)
+        sized.append(updated)
+        append_jsonl(
+            ledger_path(paper=paper).parent / "pretrade_decisions.jsonl",
+            {"event": "pretrade", **analysis.model_dump(mode="json")},
+        )
+        logger.info(
+            "pretrade %s → %s $%.2f (%.2f%%) skip=%s :: %s",
+            analysis.substrategy_id,
+            "SKIP" if analysis.skip else "SIZE",
+            analysis.recommended_size_usd,
+            analysis.recommended_size_pct,
+            analysis.skip,
+            "; ".join(analysis.reasons[:2]),
+        )
+
+    # Refresh proposal sizes from pretrade
+    proposal.signal_sizes_usd = {
+        s.signal_id: s.allocation_usd for s in sized
+    }
+    write_handoff("pretrade", analyses, turn_id)
+    write_handoff("signals_sized", sized, turn_id)
+    return sized, analyses

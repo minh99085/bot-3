@@ -112,10 +112,20 @@ def _lessons_avoid(signal: Signal, lessons: str) -> list[str]:
 
 
 def _sizing_ok(signal: Signal, state: dict) -> tuple[bool, float, str]:
-    capital = float(state.get("capital_usd", state.get("capital", 10_000)) or 10_000)
+    capital = float(
+        state.get("capital_usd", state.get("capital", state.get("starting_bankroll_usd", 2000)))
+        or 2000
+    )
     dd = float(state.get("max_drawdown_pct", state.get("drawdown_pct", 0)) or 0)
     open_exp = float(state.get("open_exposure_usd", 0) or 0)
-    # Prefer portfolio-layer size when present
+
+    # Pre-trade skip is a hard reject path
+    if signal.pretrade_skip or (
+        signal.pretrade_analysis_id and signal.allocation_usd <= 0 and signal.size_pct_recommended <= 0
+    ):
+        why = "; ".join(signal.pretrade_reasons[:2]) or "pretrade_skip"
+        return False, 0.0, f"pretrade_skip: {why}"
+
     suggested = signal.allocation_usd or signal.size_usd_suggested
 
     dd_scale = 1.0
@@ -125,7 +135,7 @@ def _sizing_ok(signal: Signal, state: dict) -> tuple[bool, float, str]:
         dd_scale = max(0.25, 1.0 - (dd / MAX_PORTFOLIO_DD))
 
     max_usd = capital * MAX_SINGLE_POSITION_PCT * dd_scale
-    sized = min(suggested, max_usd)
+    sized = min(suggested, max_usd) if suggested else 0.0
 
     if open_exp + sized > capital * MAX_CORRELATED_EXPOSURE_PCT * 2:
         return False, 0.0, "correlated/total exposure cap breached"
@@ -133,7 +143,10 @@ def _sizing_ok(signal: Signal, state: dict) -> tuple[bool, float, str]:
     if sized < 10:
         return False, 0.0, "sized below minimum ticket"
 
-    return True, round(sized, 2), f"sized ${sized:.2f} (dd_scale={dd_scale:.2f})"
+    detail = f"sized ${sized:.2f} ({sized/capital*100:.2f}% bankroll, dd_scale={dd_scale:.2f})"
+    if signal.size_pct_recommended:
+        detail += f" pretrade={signal.size_pct_recommended:.2f}%"
+    return True, round(sized, 2), detail
 
 
 def _oracle_ok(signal: Signal) -> tuple[bool, str]:
@@ -250,6 +263,7 @@ def _allocation_ok(
         "allocation approved (HRP/BL size + concentration)",
         "sub-strategy not CUT",
         "Chainlink oracle alignment (esp. 5m/15m)",
+        "pre-trade size approved (or explicit skip)",
     ],
 )
 def verify_signal(

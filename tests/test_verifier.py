@@ -136,3 +136,20 @@ def test_verifier_defers_without_bucket_history():
     )
     assert report.decision in (VerifierDecision.DEFER, VerifierDecision.REJECT)
     assert report.decision != VerifierDecision.PASS
+
+
+def test_verifier_rejects_pretrade_skip():
+    report = verify_signal(
+        _signal(
+            pretrade_skip=True,
+            pretrade_analysis_id="pta_test",
+            size_pct_recommended=0.0,
+            allocation_usd=0.0,
+            pretrade_reasons=["live_ev below floor"],
+        ),
+        buckets=[_good_bucket()],
+        state={"capital_usd": 2000, "max_drawdown_pct": 0.0, "open_exposure_usd": 0},
+        lessons="",
+    )
+    assert report.decision == VerifierDecision.REJECT
+    assert any("pretrade" in r for r in report.rejection_reasons)

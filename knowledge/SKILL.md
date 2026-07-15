@@ -24,8 +24,8 @@ Paper mode is default. Live trading is opt-in only after paper evidence clears t
 ## Five Moves (every turn)
 
 1. **Discovery** — find markets worth trading (`discovery.py`)
-2. **Handoff** — worktrees + **portfolio allocation** (`portfolio.py`) sizes by HRP/BL
-3. **Verification** — checker approves **signal + allocation** (`verifier.py`)
+2. **Handoff** — worktrees + **portfolio allocation** + **pre-trade sizing** (% of bankroll)
+3. **Verification** — checker approves **signal + size** (`verifier.py`)
 4. **Persistence** — STATE.md (incl. portfolio metrics), LESSONS.md, ledger
 5. **Scheduling** — `@loop` cadence + `@goal` stop conditions (`hermes_loop.py`)
 
@@ -57,6 +57,7 @@ Paper mode is default. Live trading is opt-in only after paper evidence clears t
 13. **We never skip allocation verification** — size/weight must clear HHI + div gates.
 14. **We never trust a single CEX tick for BTC/ETH HF** — Chainlink is ground-truth; CLOB is the book.
 15. **We never PASS 5m/15m crypto when oracle is stale or misaligned** with Polymarket YES pricing.
+16. **We never skip pre-trade analysis** — size is % of bankroll (max 3%) or 0% skip; verifier rejects `pretrade_skip`.
 
 ## Circuit Breakers
 

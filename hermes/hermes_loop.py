@@ -23,6 +23,7 @@ from hermes.executor import executor_tick
 from hermes.lessons_engine import lessons_engine_tick
 from hermes.models import LoopTurnResult, Settlement, VerifierDecision, new_id
 from hermes.portfolio import allocation_handoff
+from hermes.pretrade import run_pretrade_sizing
 from hermes.risk_monitor import risk_monitor_tick
 from hermes.signal_generator import signal_generator_tick
 from hermes.state_io import (
@@ -108,7 +109,13 @@ def run_one_turn(paper: bool = True, turn_id: Optional[str] = None) -> LoopTurnR
     # 2b. Handoff — portfolio allocation (HRP + Ledoit-Wolf + BL views)
     proposal, signals = allocation_handoff(signals, turn_id=tid, paper=paper)
 
-    # 3. Verification (maker-checker — signal AND allocation)
+    # 2c. Pre-trade analysis — lessons + live EV + portfolio impact → size % or skip
+    signals, pretrades = run_pretrade_sizing(
+        signals, proposal, turn_id=tid, paper=paper
+    )
+    skipped = sum(1 for p in pretrades if p.skip)
+
+    # 3. Verification (maker-checker — signal AND allocation/size)
     reports = verifier_tick(signals=signals, turn_id=tid, proposal=proposal)
     result.signals_passed = sum(1 for r in reports if r.decision == VerifierDecision.PASS)
     result.signals_rejected = sum(
@@ -133,7 +140,7 @@ def run_one_turn(paper: bool = True, turn_id: Optional[str] = None) -> LoopTurnR
     update_state_field(
         "Last Turn Summary",
         f"{result.candidates_found} cand / {result.signals_generated} sig / "
-        f"{result.signals_passed} pass / {result.orders_sent} fills / "
+        f"skip={skipped} / {result.signals_passed} pass / {result.orders_sent} fills / "
         f"div={proposal.diversification_ratio:.2f}",
     )
     update_state_field(

@@ -23,8 +23,9 @@
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 export PYTHONPATH=.
-python -m hermes.hermes_loop once          # paper turn
+python -m hermes.hermes_loop once          # paper turn ($2000 bankroll)
 python -m hermes.hermes_loop overnight     # cadence + risk monitor
+streamlit run dashboard.py                 # live desk (auto-refresh 8s)
 pytest -q
 ```
 

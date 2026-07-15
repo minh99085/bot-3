@@ -149,6 +149,11 @@ class Signal(BaseModel):
     allocation_usd: float = 0.0  # proposed sized USD after HRP/BL
     diversification_contrib: float = 0.0
     view_confidence: float = 0.0  # Black-Litterman view strength
+    # Pre-trade sizing (Handoff analysis)
+    size_pct_recommended: float = 0.0
+    pretrade_skip: bool = False
+    pretrade_reasons: list[str] = Field(default_factory=list)
+    pretrade_analysis_id: str = ""
     # Chainlink / hybrid data fields
     timeframe: str = "1h"
     oracle_price: Optional[float] = None
@@ -201,6 +206,30 @@ class AllocationProposal(BaseModel):
     view_tilts: dict[str, float] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=utc_now)
     notes: str = ""
+
+
+class PreTradeAnalysis(BaseModel):
+    """Structured pre-trade sizing decision (Handoff → Verifier)."""
+
+    analysis_id: str = Field(default_factory=lambda: new_id("pta_"))
+    signal_id: str
+    substrategy_id: str
+    bankroll_usd: float
+    recommended_size_pct: float = 0.0  # % of bankroll; 0 = skip
+    recommended_size_usd: float = 0.0
+    skip: bool = False
+    live_ev: float = 0.0
+    sleeve_wr: float = 0.0
+    sleeve_ev: float = 0.0
+    sleeve_n: int = 0
+    portfolio_div_before: float = 1.0
+    portfolio_div_after: float = 1.0
+    concentration_after: float = 0.0
+    allocation_weight: float = 0.0
+    lessons_applied: list[str] = Field(default_factory=list)
+    reasons: list[str] = Field(default_factory=list)
+    oracle_alignment: float = 0.5
+    created_at: datetime = Field(default_factory=utc_now)
 
 
 class PortfolioSnapshot(BaseModel):

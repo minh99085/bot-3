@@ -265,7 +265,7 @@ def generate_signal(
     if "DOWN" in read_alpha_skill():
         rules_fired.append("alpha:DOWN_bias_active")
 
-    capital = float(state.get("capital_usd", state.get("capital", 10_000)) or 10_000)
+    capital = float(state.get("capital_usd", state.get("capital", state.get("starting_bankroll_usd", 2000))) or 2000)
     size = min(capital * 0.02, capital * abs(edge) * 0.25)
     size = max(25.0, size)
 

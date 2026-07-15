@@ -44,9 +44,10 @@ from hermes.substrategy import (
 logger = logging.getLogger(__name__)
 
 MAX_SINGLE_WEIGHT = 0.25
-MIN_TICKET_USD = 15.0
+MIN_TICKET_USD = 10.0
 MAX_GROSS_EXPOSURE = 0.35  # of capital across open + new
 TAU = 0.05  # BL uncertainty scalar
+DEFAULT_BANKROLL = 2000.0
 
 
 # ── Covariance: Ledoit-Wolf shrinkage (never raw sample) ─────────────────────
@@ -531,7 +532,12 @@ def allocation_handoff(
 ) -> tuple[AllocationProposal, list[Signal]]:
     """Public Handoff entry: size signals, persist proposal."""
     state = parse_state_fields(read_state_md())
-    capital = float(state.get("capital_usd", state.get("capital", 10_000)) or 10_000)
+    capital = float(
+        state.get("capital_usd")
+        or state.get("capital")
+        or state.get("starting_bankroll_usd")
+        or DEFAULT_BANKROLL
+    )
     open_exp = float(state.get("open_exposure_usd", 0) or 0)
     proposal, sized = allocate(
         signals, capital_usd=capital, open_exposure_usd=open_exp, paper=paper

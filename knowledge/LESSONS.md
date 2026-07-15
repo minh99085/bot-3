@@ -93,6 +93,14 @@
 - **Promote to**: ALPHA_RESEARCH_SKILL
 - **Retired**: false
 
+### [2026-07-15] `les_seed_pretrade_pct` — HIGH (allocation)
+
+- **Rule**: REQUIRE:pre-trade analysis before every order. Size as % of bankroll (max 3%) or skip at 0%. Verifier rejects if pretrade_skip or size unapproved. Log reasons for dashboard.
+- **Evidence**: Fixed notional sizing ignored sleeve health and lessons → fragile WR.
+- **Applies to**: pretrade, allocation, verifier, handoff
+- **Promote to**: ALPHA_RESEARCH_SKILL
+- **Retired**: false
+
 ## Active Lessons
 
 <!-- lessons_engine appends new dated lessons below -->

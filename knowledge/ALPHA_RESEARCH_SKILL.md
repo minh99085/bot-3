@@ -60,14 +60,18 @@ Blend prior with views from:
 
 Low-confidence views barely move weights; high-confidence tilts meaningfully (`tau=0.05`).
 
-### Dynamic sizing in Handoff
+### Dynamic sizing in Handoff (pre-trade analysis)
 
-`allocation_handoff()` sizes each signal by:
+`run_pretrade_sizing()` runs **after** HRP/BL weights and **before** Verifier:
 
-- Sleeve HRP/BL weight
-- Edge share within sleeve
-- Diversification contribution
-- Cut/reduce weight caps
+1. Sleeve stats from ledger (WR, EV, currently_losing)
+2. Binding LESSONS.md CUT/REDUCE/AVOID rules
+3. Live EV recalc from CLOB slip + Chainlink alignment
+4. Portfolio impact (HHI / diversification)
+5. Output **% of $2000 bankroll** or **0% skip**
+
+Max ticket = 3% of bankroll (~$60). Verifier must approve signal **and** size.
+All decisions land in `data/paper/pretrade_decisions.jsonl` (dashboard).
 
 ### Verifier allocation gates
 

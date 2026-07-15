@@ -1,85 +1,85 @@
 # Financial Freedom Bot — Hermes v2
 
-Autonomous Polymarket bot (BTC/ETH up-down incl. **5m/15m**) built on Loop Engineering + Roan self-improvement + Ruuj portfolio construction + **Chainlink oracle ground-truth**.
+Autonomous Polymarket paper bot (BTC/ETH up-down, incl. 5m/15m) with **$2000 starting bankroll**, Loop Engineering cadence, Ruuj portfolio construction, Chainlink ground-truth, and a live Streamlit desk.
 
-**Targets:** consistent 80%+ WR · DD &lt; 8% · PF &gt; 1.4 · positive EV after realistic CLOB slippage.
-
-Triad that closes fragility → consistency: **Chainlink-augmented data + Verifier + Lessons + Portfolio allocation**.
+**Targets:** consistent 80%+ WR · DD &lt; 8% · PF &gt; 1.4 · EV after CLOB fees/slippage.
 
 ---
 
-## Architecture (5 moves × 6 parts)
-
-| Move | Module | Data role |
-|------|--------|-----------|
-| Discovery | `discovery.py` + `hybrid_data.py` | Gamma markets + Chainlink regime |
-| Handoff | `portfolio.py` + worktrees | HRP/BL sizing across sub-strategies |
-| Verification | `verifier.py` | Signal + allocation + **oracle alignment** |
-| Persistence | `knowledge/*`, ledger | STATE portfolio + LESSONS (alpha + alloc + data) |
-| Scheduling | `hermes_loop.py` `@loop`/`@goal` | Overnight paper cadence |
-
-| Connector | Responsibility |
-|-----------|----------------|
-| `connectors/polymarket.py` | Gamma discovery + **`py-clob-client-v2`** orderbook / VWAP |
-| `connectors/chainlink.py` | Data Streams (HMAC) or AggregatorV3 RPC fallback |
-| `connectors/hybrid_data.py` | Merge CLOB + oracle → alignment, regime, timeframe |
-| `connectors/broker.py` | Paper: walk book + log Chainlink; Live: CLOB post |
-
-Sub-strategy key: `market_series|mode|regime|hN|timeframe` (e.g. `btc_updown_5m|momentum|trending_down|h14|5m`).
-
----
-
-## Why Chainlink strengthens 80%+ WR
-
-1. **Ground truth** for BTC/ETH — Polymarket short-horizon markets resolve with Chainlink + Automation; verifying against the same oracle reduces data noise and spoofed CEX ticks.
-2. **Regime detection** uses oracle returns (not just YES mid), cutting false signals in chop.
-3. **Verifier gate**: reject when `oracle_alignment` is low or HF oracle is stale — fewer garbage fills.
-4. **Paper realism**: fills walk the live CLOB; oracle price is logged beside every BTC/ETH fill for post-trade lessons.
-
----
-
-## Quick start (paper)
+## Quick start
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env   # optional: add CHAINLINK_API_KEY/SECRET for Data Streams
 export PYTHONPATH=.
 
+# Bot (paper)
 python -m hermes.hermes_loop demo
 python -m hermes.hermes_loop overnight
-pytest -q
-```
 
-Without Chainlink API keys, Hermes uses **on-chain AggregatorV3** via `ETH_RPC_URL` (public RPC). Synthetic demo mode (`demo`) still exercises the full loop.
-
-### Paper → live migration
-
-1. Paper WR ≥ 80%, PF &gt; 1.4, DD &lt; 8% on settled verifier-pass trades  
-2. Set Data Streams keys (recommended) + `POLYMARKET_PK`  
-3. `Live Enabled: true` in STATE + `HERMES_LIVE=1`  
-4. `./scripts/run_live.sh` — posts via `py-clob-client-v2`  
-
----
-
-## One turn
-
-```
-Gamma markets → Hybrid enrich (CLOB book + Chainlink)
- → Signals → Portfolio handoff (LW/HRP/BL/cut)
- → Verifier (signal + size + oracle)
- → Paper executor (book VWAP + oracle log)
- → Lessons → ALPHA/SKILL (incl. oracle + allocation rules)
+# Dashboard (separate terminal) — $2000 desk
+streamlit run dashboard.py
 ```
 
 ---
 
-## Verifier gates
+## How pre-trade sizing drives 80%+ WR
 
-Bucket edge · live EV · regime/conviction · AVOID · entry quality · DD sizing · **allocation** · **Chainlink oracle alignment** · lane not CUT/GATED.
+Handoff is not “pick a notional.” After signals are generated:
+
+1. **Portfolio weights** — Ledoit-Wolf cov → HRP / edge-RP → Black-Litterman views → cut/reduce caps  
+2. **Pre-trade analysis** (`hermes/pretrade.py`) for each signal:
+   - Sleeve WR / EV from the ledger  
+   - Binding rules from `LESSONS.md`  
+   - Live EV from **orderbook slip + Chainlink alignment**  
+   - Portfolio impact (diversification / HHI)  
+   - Output **% of $2000 bankroll** (max 3%) or **0% skip**  
+3. **Verifier** approves **signal quality and proposed size** (rejects `pretrade_skip`)  
+4. Decisions are logged to `data/paper/pretrade_decisions.jsonl` → visible on the dashboard  
+
+Skipping toxic or low-EV tickets is how the loop protects win rate while lessons compound overnight.
+
+```
+Discovery → Signals → HRP/BL allocation → Pre-trade size% → Verifier → Paper fill
+                                              ↓
+                                    LESSONS + ledger → dashboard
+```
 
 ---
 
-## Git
+## Dashboard
 
-Commit and push **directly to `main`** — no feature branches.
+`dashboard.py` auto-refreshes every 8s and shows:
+
+- Equity curve + total PnL from $2000  
+- Open positions / exposure  
+- Recent trades table  
+- Sub-strategy cards (WR, EV, weight, trend)  
+- Portfolio metrics (div ratio, HHI, CUT/REDUCE)  
+- Latest lessons  
+- Chainlink prices + alignment  
+- Pre-trade sizing decisions  
+
+---
+
+## Architecture (5×6)
+
+| Move | Module |
+|------|--------|
+| Discovery | `discovery.py` + hybrid Chainlink/CLOB |
+| Handoff | `portfolio.py` + **`pretrade.py`** + worktrees |
+| Verification | `verifier.py` (signal + size + oracle) |
+| Persistence | `STATE.md` / `LESSONS.md` / ledgers |
+| Scheduling | `@loop` / `@goal` in `hermes_loop.py` |
+
+Connectors: `polymarket.py` (`py-clob-client-v2`), `chainlink.py`, `hybrid_data.py`, `broker.py`.
+
+---
+
+## Paper → live
+
+1. Paper evidence: WR ≥ 80%, PF &gt; 1.4, DD &lt; 8%  
+2. `CHAINLINK_API_KEY/SECRET` (optional; AggregatorV3 fallback works)  
+3. `POLYMARKET_PK` + STATE `Live Enabled` + `HERMES_LIVE=1`  
+
+Git: push **directly to `main`** (no feature branches).

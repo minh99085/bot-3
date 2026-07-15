@@ -7,12 +7,13 @@
 
 - **Mode**: paper
 - **Live Enabled**: false
-- **Capital USD**: 10000
+- **Starting Bankroll USD**: 2000
+- **Capital USD**: 2000
 - **Open Exposure USD**: 0
 - **Daily PnL USD**: 0
 - **Max Drawdown Pct**: 0.0
-- **Rolling WR (20)**: 100.00%
-- **Rolling PF (20)**: 2.00
+- **Rolling WR (20)**: —
+- **Rolling PF (20)**: —
 - **Consecutive Losses**: 0
 - **Circuit Breaker**: clear
 - **Pause Loop**: false
@@ -43,7 +44,7 @@ _Empty at boot — populated as sub-strategies settle._
 
 ## Open Positions
 
-_None — paper book empty at boot._
+_None — paper book empty at boot ($2000 USDC)._
 
 ## Recent Performance
 
@@ -67,10 +68,11 @@ _None — paper book empty at boot._
 
 ## Goals in Flight
 
-- Collect ≥ 20 paper settlements with verifier-pass + allocation provenance before live.
+- Grow $2000 paper bankroll with verifier-pass + pretrade-sized trades toward 80%+ WR.
 - Maintain diversification ratio ≥ 1.2 and HHI ≤ 0.35 in steady state.
 
 ## Notes
 
-Allocation layer: Ledoit-Wolf → HRP/edge-RP → Black-Litterman → cut/reduce caps.
-Verifier approves **signal + size**. Run `python -m hermes.hermes_loop demo` for a full turn.
+Starting paper bankroll: **$2000 USDC**. Pre-trade sizing outputs % of bankroll (or 0% skip).
+Allocation: Ledoit-Wolf → HRP/edge-RP → Black-Litterman → cut/reduce → pretrade.
+Dashboard: `streamlit run dashboard.py`
