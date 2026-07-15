@@ -39,6 +39,7 @@ from hermes.dashboard_data import (
     recent_lessons,
     recent_lessons_scoped,
     recent_trade_table,
+    scoped_lane_trade_history,
     scoped_market_cards,
     total_pnl,
 )
@@ -139,13 +140,15 @@ for i, card in enumerate(scoped):
         size = card.get("current_size_usd")
         size_s = f"${size:.2f}" if size is not None else "—"
         skip = card.get("last_skip")
+        avg_sz = card.get("avg_size")
+        avg_s = f"${avg_sz:.2f}" if avg_sz is not None else "—"
         st.markdown(
             f"""<div class="block-card">
             <div class="tag">{card['label']}</div>
             <div style="margin-top:0.4rem;font-size:0.8rem;opacity:0.75">{card.get('preferred_slug') or card['series']}</div>
             <div style="margin-top:0.6rem;font-family:JetBrains Mono,monospace">
-            WR <b>{wr}</b> · trades <b>{card['n']}</b> · PnL <b>${card['pnl']:+.2f}</b><br/>
-            last size <b>{size_s}</b>
+            WR <b>{wr}</b> · settled <b>{card['n']}</b> · open <b>{card.get('open_n', 0)}</b> · PnL <b>${card['pnl']:+.2f}</b><br/>
+            avg size <b>{avg_s}</b> · last size <b>{size_s}</b>
             {" · <span style='color:#fbbf24'>SKIP</span>" if skip else " · sized"}
             · EV {card.get('last_live_ev') if card.get('last_live_ev') is not None else '—'}
             </div>
@@ -155,6 +158,41 @@ for i, card in enumerate(scoped):
             </div>""",
             unsafe_allow_html=True,
         )
+        history = scoped_lane_trade_history(card["series"], limit=50)
+        with st.expander(
+            f"Trade history — {card['label']} (last {len(history)} of 50)",
+            expanded=False,
+        ):
+            if history:
+                hist_df = pd.DataFrame(history)
+                # Friendly column order
+                cols = [
+                    c
+                    for c in (
+                        "time",
+                        "slug",
+                        "direction",
+                        "size",
+                        "entry",
+                        "exit",
+                        "won",
+                        "pnl",
+                        "status",
+                        "entry_source",
+                        "bandit",
+                        "sleeve",
+                        "reason",
+                    )
+                    if c in hist_df.columns
+                ]
+                st.dataframe(
+                    hist_df[cols],
+                    use_container_width=True,
+                    height=360,
+                    hide_index=True,
+                )
+            else:
+                st.write("_No trades for this lane yet._")
 
 left, right = st.columns([1.6, 1])
 

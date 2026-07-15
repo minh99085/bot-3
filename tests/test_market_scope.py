@@ -36,3 +36,19 @@ def test_discovery_slugs_include_preferred():
 def test_scope_enabled_default(monkeypatch):
     monkeypatch.delenv("HERMES_SCOPE_BTC_UPDOWN_ONLY", raising=False)
     assert scope_enabled() is True
+
+
+def test_series_from_record_no_substring_collision():
+    from hermes.market_scope import (
+        SERIES_5M,
+        SERIES_15M,
+        record_belongs_to_series,
+        series_from_record,
+    )
+
+    rec_15m = {"substrategy_id": "btc_updown_15m|mispricing|low_vol|h14|15m"}
+    rec_5m = {"substrategy_id": "btc_updown_5m|mispricing|low_vol|h14|5m"}
+    assert series_from_record(rec_15m) == SERIES_15M
+    assert series_from_record(rec_5m) == SERIES_5M
+    assert record_belongs_to_series(rec_15m, SERIES_15M)
+    assert not record_belongs_to_series(rec_15m, SERIES_5M)

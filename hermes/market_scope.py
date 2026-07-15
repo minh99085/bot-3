@@ -79,6 +79,51 @@ def is_allowed_series(series: str) -> bool:
     return series in ALLOWED_SERIES
 
 
+def series_from_record(record: dict) -> Optional[str]:
+    """Resolve btc_updown_5m vs btc_updown_15m without substring false positives.
+
+    ``btc_updown_5m`` must NOT match ``btc_updown_15m`` records.
+    """
+    meta = record.get("meta") or {}
+    if not isinstance(meta, dict):
+        meta = {}
+
+    ms = str(record.get("market_series") or meta.get("market_series") or "").strip()
+    if ms in ALLOWED_SERIES:
+        return ms
+
+    slug = str(
+        record.get("slug")
+        or record.get("market_slug")
+        or meta.get("slug")
+        or ""
+    ).strip().lower()
+    if slug:
+        sm = parse_slug(slug)
+        if sm:
+            return sm.series
+
+    sid = str(record.get("substrategy_id") or meta.get("substrategy_id") or "").strip()
+    if sid:
+        head = sid.split("|", 1)[0].strip()
+        if head in ALLOWED_SERIES:
+            return head
+
+    tf = str(record.get("timeframe") or meta.get("timeframe") or "").strip().lower()
+    if tf == "5m":
+        return SERIES_5M
+    if tf == "15m":
+        return SERIES_15M
+
+    return None
+
+
+def record_belongs_to_series(record: dict, series: str) -> bool:
+    """True when a ledger / pretrade row belongs to one scoped lane."""
+    resolved = series_from_record(record)
+    return resolved == series if resolved else False
+
+
 def series_from_slug(slug: str) -> Optional[str]:
     sm = parse_slug(slug)
     return sm.series if sm else None

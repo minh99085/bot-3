@@ -196,7 +196,12 @@ def mispricing_dashboard_snapshot() -> dict[str, Any]:
 
 def scoped_market_cards() -> list[dict[str, Any]]:
     """Performance cards for the two allowed BTC up/down series only."""
-    from hermes.market_scope import SERIES_5M, SERIES_15M, preferred_slugs
+    from hermes.market_scope import (
+        SERIES_5M,
+        SERIES_15M,
+        preferred_slugs,
+        record_belongs_to_series,
+    )
 
     settles = load_settlements()
     pretrades = load_pretrade()
@@ -205,23 +210,19 @@ def scoped_market_cards() -> list[dict[str, Any]]:
         (SERIES_15M, "BTC Up/Down 15m"),
         (SERIES_5M, "BTC Up/Down 5m"),
     ):
-        rows = [
-            s
-            for s in settles
-            if str(s.get("market_series", "")).startswith(series)
-            or series in str(s.get("substrategy_id", ""))
-            or (series.endswith("15m") and "15m" in str(s.get("slug", "")))
-            or (series.endswith("5m") and "5m" in str(s.get("slug", "")) and "15m" not in str(s.get("slug", "")))
-        ]
-        pts = [
-            p
-            for p in pretrades
-            if series in str(p.get("substrategy_id", ""))
-        ]
+        rows = [s for s in settles if record_belongs_to_series(s, series)]
+        pts = [p for p in pretrades if record_belongs_to_series(p, series)]
         wins = sum(1 for r in rows if r.get("won") or float(r.get("pnl_usd", 0)) > 0)
         pnls = [float(r.get("pnl_usd", 0)) for r in rows]
+        sizes = [float(r.get("size_usd", 0) or 0) for r in rows]
         last_pt = pts[-1] if pts else {}
         pref = [s for s in preferred_slugs() if ("15m" in s) == series.endswith("15m")]
+        open_rows = [
+            f
+            for f in load_fills()
+            if record_belongs_to_series(f, series)
+            and f.get("signal_id") not in {s.get("signal_id") for s in settles}
+        ]
         cards.append(
             {
                 "series": series,
@@ -230,14 +231,88 @@ def scoped_market_cards() -> list[dict[str, Any]]:
                 "n": len(rows),
                 "wr": (wins / len(rows)) if rows else None,
                 "pnl": sum(pnls) if pnls else 0.0,
+                "avg_size": (sum(sizes) / len(sizes)) if sizes else None,
+                "open_n": len(open_rows),
                 "current_size_pct": last_pt.get("recommended_size_pct"),
                 "current_size_usd": last_pt.get("recommended_size_usd"),
                 "last_skip": last_pt.get("skip"),
                 "last_reasons": last_pt.get("reasons") or [],
                 "last_live_ev": last_pt.get("live_ev"),
+                "last_slug": last_pt.get("slug") or (rows[-1].get("slug") if rows else ""),
             }
         )
     return cards
+
+
+def scoped_lane_trade_history(series: str, limit: int = 50) -> list[dict[str, Any]]:
+    """Last N settled + open trades for one lane (5m or 15m), newest first."""
+    from hermes.market_scope import record_belongs_to_series
+
+    fills = {f.get("signal_id"): f for f in load_fills()}
+    settled_ids = set()
+    rows: list[dict[str, Any]] = []
+
+    for s in load_settlements():
+        if not record_belongs_to_series(s, series):
+            continue
+        sid = s.get("signal_id")
+        if sid:
+            settled_ids.add(sid)
+        f = fills.get(sid, {})
+        ts = (
+            s.get("settled_at")
+            or s.get("filled_at")
+            or s.get("created_at")
+            or ""
+        )
+        rows.append(
+            {
+                "time": ts,
+                "market_id": s.get("market_id"),
+                "slug": s.get("slug") or f.get("slug") or "",
+                "direction": s.get("direction"),
+                "entry": f.get("fill_price") or s.get("entry_price"),
+                "exit": s.get("exit_price"),
+                "won": s.get("won"),
+                "pnl": s.get("pnl_usd"),
+                "size": s.get("size_usd") or f.get("size_usd"),
+                "sleeve": s.get("substrategy_id", ""),
+                "entry_source": (f.get("meta") or {}).get("entry_source")
+                or s.get("entry_source")
+                or "",
+                "bandit": (f.get("meta") or {}).get("bandit_arm") or "",
+                "status": "settled",
+                "reason": s.get("notes") or "",
+            }
+        )
+
+    for f in load_fills():
+        if not record_belongs_to_series(f, series):
+            continue
+        if f.get("signal_id") in settled_ids:
+            continue
+        meta = f.get("meta") or {}
+        rows.append(
+            {
+                "time": f.get("filled_at") or "",
+                "market_id": f.get("market_id"),
+                "slug": f.get("slug") or meta.get("slug") or "",
+                "direction": f.get("direction"),
+                "entry": f.get("fill_price"),
+                "exit": "—",
+                "won": "open",
+                "pnl": 0.0,
+                "size": f.get("size_usd"),
+                "sleeve": meta.get("substrategy_id") or f.get("substrategy_id", ""),
+                "entry_source": meta.get("entry_source") or "",
+                "bandit": meta.get("bandit_arm") or "",
+                "status": "open",
+                "reason": "open paper position",
+            }
+        )
+
+    rows.sort(key=lambda r: str(r.get("time") or ""), reverse=True)
+    return rows[:limit]
 
 
 def recent_lessons_scoped(limit: int = 8) -> list[str]:

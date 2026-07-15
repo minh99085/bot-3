@@ -464,7 +464,13 @@ def run_pretrade_sizing(
         sized.append(updated)
         append_jsonl(
             ledger_path(paper=paper).parent / "pretrade_decisions.jsonl",
-            {"event": "pretrade", **analysis.model_dump(mode="json")},
+            {
+                "event": "pretrade",
+                **analysis.model_dump(mode="json"),
+                "market_series": updated.market_series,
+                "slug": updated.slug,
+                "timeframe": updated.timeframe,
+            },
         )
         logger.info(
             "pretrade %s → %s $%.2f (%.2f%%) skip=%s :: %s",
