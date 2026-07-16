@@ -61,7 +61,11 @@ echo "Syncing Hermes Paper to ${USER}@${HOST}:${REMOTE_PATH}"
   --exclude 'data/paper/*' \
   --exclude 'data/live/*' \
   --exclude 'data/handoff/*' \
+  --exclude 'data/parquet/*' \
+  --exclude 'data/models/*' \
+  --exclude 'data/archive/*' \
   --exclude 'logs/*' \
+  --exclude 'artifacts/*' \
   --exclude '.env' \
   "$ROOT/" "${USER}@${HOST}:${REMOTE_PATH}/"
 
