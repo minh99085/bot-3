@@ -1,0 +1,27 @@
+Bot 3 — Full Trading Report
+Generated: 2026-07-16T14:52:45Z
+VPS: 207.246.96.45 | main @ d5ac802
+
+=== A) Live VPS paper fleet ===
+Fleet equity: $9,580.00 / $10,000.00 bankroll
+Fleet PnL: $-420.00
+Settled trades: 7 | WR: 0.0%
+W/L: 0/7 | Instances active: 3/5
+
+  btc5      settled=  1  open=0  pnl=$ -60.00  wr=0.0%  status=active
+  btc15     settled=  2  open=0  pnl=$-120.00  wr=0.0%  status=active
+  eth5      settled=  0  open=0  pnl=$  +0.00  wr=n/a  status=watching
+  sol5      settled=  0  open=0  pnl=$  +0.00  wr=n/a  status=watching
+  rotator   settled=  4  open=1  pnl=$-240.00  wr=0.0%  status=active
+
+=== B) Synthetic backtest validation (strict_real) ===
+✅ Target met: 89.7% win rate on 919 trades | Monte Carlo 5th percentile: 85.3% | Max DD: 8.0%
+Win rate: 89.7% | Trades: 919 | Selectivity: 6.1%
+Profit factor: 3.05 | Max DD: 8.0%
+Brier: 0.143 | Target met: True
+
+=== C) Deploy / freeze ===
+HERMES_PAPER_ONLY=1 | live_real_q=True | strict_real gates frozen
+Autonomy: MCHB, EHO, CBPF, RASP, RGMC, model_registry, data_ingest, continuous_loop
+
+Trade log: 7 settled rows in trades.json
