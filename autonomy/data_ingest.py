@@ -168,7 +168,12 @@ def ingest_active_markets_15m(slugs: Optional[list[str]] = None) -> IngestBatch:
 
 
 def nightly_bulk_download(*, force: bool = False) -> IngestBatch:
-    """Nightly incremental bulk — HuggingFace trades.parquet best-effort."""
+    """Nightly incremental bulk — capped HF sample or synthetic fallback.
+
+    Full HuggingFace ``trades.parquet`` can be tens of GB. Default behaviour:
+    refresh Gamma + write/refresh a local synthetic (or small capped) sample
+    unless ``HERMES_HF_BULK=1`` is set. Resume-aware when bulk is enabled.
+    """
     started = datetime.now(timezone.utc)
     batch = IngestBatch(source="hf_bulk", started_at=started)
     st = _load_state()
@@ -187,50 +192,59 @@ def nightly_bulk_download(*, force: bool = False) -> IngestBatch:
     out.mkdir(parents=True, exist_ok=True)
     dest = out / "trades.parquet"
     part = out / "trades.parquet.part"
+    allow_hf = os.environ.get("HERMES_HF_BULK", "0").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    max_bytes = int(os.environ.get("HERMES_HF_BULK_MAX_BYTES", str(64 * 1024 * 1024)))
     try:
-        with httpx.Client(timeout=120.0, follow_redirects=True) as client:
-            # Resume via Range if part exists
-            headers = {}
-            mode = "wb"
-            existing = 0
-            if part.is_file():
-                existing = part.stat().st_size
-                headers["Range"] = f"bytes={existing}-"
-                mode = "ab"
-            with client.stream("GET", HF_TRADES_URL, headers=headers) as resp:
-                if resp.status_code in (404, 401, 403):
-                    # Fall back: write a tiny synthetic placeholder so pipeline works offline
-                    _write_synthetic_bulk(dest)
-                    batch.n_rows = 100
-                    batch.path = str(dest)
-                    batch.ok = True
-                    batch.error = f"hf_unavailable:{resp.status_code};synthetic_ok"
-                elif resp.status_code in (200, 206):
-                    with part.open(mode) as f:
-                        for chunk in resp.iter_bytes(chunk_size=1 << 16):
-                            f.write(chunk)
-                            time.sleep(0.0)
-                    part.replace(dest)
-                    batch.path = str(dest)
-                    batch.ok = True
-                    try:
-                        import pandas as pd
-
-                        batch.n_rows = int(len(pd.read_parquet(dest, columns=[])))
-                    except Exception:  # noqa: BLE001
+        pull_gamma_markets(limit=100)
+        if not allow_hf:
+            _write_synthetic_bulk(dest)
+            batch.n_rows = 200
+            batch.path = str(dest)
+            batch.ok = True
+            batch.error = "synthetic_default (set HERMES_HF_BULK=1 for remote)"
+        else:
+            with httpx.Client(timeout=120.0, follow_redirects=True) as client:
+                headers: dict[str, str] = {}
+                mode = "wb"
+                existing = 0
+                if part.is_file():
+                    existing = part.stat().st_size
+                    headers["Range"] = f"bytes={existing}-"
+                    mode = "ab"
+                with client.stream("GET", HF_TRADES_URL, headers=headers) as resp:
+                    if resp.status_code in (404, 401, 403):
+                        _write_synthetic_bulk(dest)
+                        batch.n_rows = 200
+                        batch.path = str(dest)
+                        batch.ok = True
+                        batch.error = f"hf_unavailable:{resp.status_code};synthetic_ok"
+                    elif resp.status_code in (200, 206):
+                        written = existing
+                        with part.open(mode) as f:
+                            for chunk in resp.iter_bytes(chunk_size=1 << 16):
+                                f.write(chunk)
+                                written += len(chunk)
+                                if written >= max_bytes:
+                                    batch.error = f"capped_at_{max_bytes}"
+                                    break
+                        part.replace(dest)
+                        batch.path = str(dest)
+                        batch.ok = True
                         batch.n_rows = max(1, dest.stat().st_size // 100)
-                else:
-                    resp.raise_for_status()
+                    else:
+                        resp.raise_for_status()
         st["last_nightly"] = started.isoformat()
         _save_state(st)
-        # Also refresh gamma snapshot
-        pull_gamma_markets(limit=100)
     except Exception as exc:  # noqa: BLE001
         logger.warning("nightly bulk failed: %s — writing synthetic fallback", exc)
         try:
             _write_synthetic_bulk(dest)
             batch.path = str(dest)
-            batch.n_rows = 100
+            batch.n_rows = 200
             batch.ok = True
             batch.error = f"fallback:{exc}"
             st["last_nightly"] = started.isoformat()
