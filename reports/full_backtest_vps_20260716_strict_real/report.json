@@ -1,0 +1,283 @@
+{
+  "tag": "synthetic",
+  "command": "python -m backtest --n-markets 5000 --seed 42 --compare-baseline --no-rich",
+  "verdict": "\u2705 Target met: 89.7% win rate on 919 trades | Monte Carlo 5th percentile: 85.3% | Max DD: 8.0%",
+  "metrics": {
+    "n_trades": 919,
+    "n_decisions": 15000,
+    "n_taken": 919,
+    "n_rejected": 14081,
+    "selectivity": 0.061266666666666664,
+    "win_rate": 0.8966267682263329,
+    "profit_factor": 3.0504749462049077,
+    "expectancy_usd": 18.544162518088743,
+    "total_pnl": 17042.085354123556,
+    "total_return": 8.521042677061775,
+    "max_drawdown_pct": 0.08000000000000011,
+    "avg_drawdown_pct": 0.003084025081746855,
+    "brier": 0.14315294853588686,
+    "avg_edge_taken": 0.2125295209198186,
+    "avg_conviction_winners": 0.9999686733098231,
+    "avg_conviction_losers": 0.9999624481165542,
+    "wr_by_conviction": {
+      "0.97-1.00": 0.8966267682263329
+    },
+    "wr_by_edge": {
+      "0.10-0.15": 0.9239130434782609,
+      "0.15+": 0.8935912938331319
+    },
+    "wr_by_category": {
+      "crypto": 0.8894230769230769,
+      "economics": 0.92,
+      "elections": 0.8785425101214575,
+      "sports": 0.897196261682243
+    },
+    "wr_by_dtr": {
+      "0-5d": 0.9275862068965517,
+      "21-60d": 0.8496732026143791,
+      "5-21d": 0.8894348894348895,
+      "60d+": 0.9130434782608695
+    },
+    "target_met": true,
+    "plain_english": "In plain English: the bot looked at 15000 decision points, took 919 trades (6.1% selectivity), and won 89.7% of them. That clears the 80% win-rate goal with drawdown under the 15% hard cap \u2014 the Beta conviction + extreme-q filters are doing their job by skipping weak mid-odds bets.",
+    "notes": []
+  },
+  "extra": {
+    "mode": "synthetic",
+    "n_markets": 5000,
+    "n_decision_points": 15000,
+    "seed": 42,
+    "fast": false,
+    "threshold_sweep": [
+      {
+        "min_conviction": 0.9,
+        "n": 8441.0,
+        "win_rate": 0.6590451368321288
+      },
+      {
+        "min_conviction": 0.92,
+        "n": 8297.0,
+        "win_rate": 0.6609617934193082
+      },
+      {
+        "min_conviction": 0.94,
+        "n": 8084.0,
+        "win_rate": 0.6620484908461158
+      },
+      {
+        "min_conviction": 0.95,
+        "n": 7934.0,
+        "win_rate": 0.6630955381900681
+      },
+      {
+        "min_conviction": 0.96,
+        "n": 7721.0,
+        "win_rate": 0.6642921901308121
+      },
+      {
+        "min_conviction": 0.97,
+        "n": 7459.0,
+        "win_rate": 0.6649684944362515
+      },
+      {
+        "min_conviction": 0.98,
+        "n": 7067.0,
+        "win_rate": 0.6649214659685864
+      }
+    ],
+    "calibration": [
+      [
+        0.05,
+        0.09249471458773785,
+        1892
+      ],
+      [
+        0.15000000000000002,
+        0.11085271317829458,
+        2580
+      ],
+      [
+        0.25,
+        0.22305953278070836,
+        1327
+      ],
+      [
+        0.35000000000000003,
+        0.3410942956926659,
+        859
+      ],
+      [
+        0.45,
+        0.46464646464646464,
+        792
+      ],
+      [
+        0.55,
+        0.574385510996119,
+        773
+      ],
+      [
+        0.6500000000000001,
+        0.6827262044653349,
+        851
+      ],
+      [
+        0.75,
+        0.7710926694329184,
+        1446
+      ],
+      [
+        0.8500000000000001,
+        0.8536226553880103,
+        2719
+      ],
+      [
+        0.95,
+        0.9136854060193073,
+        1761
+      ]
+    ],
+    "monte_carlo": {
+      "n_runs": 20,
+      "mean_wr": 0.8762926884233204,
+      "median_wr": 0.8759266763927163,
+      "p5_wr": 0.8533803249890206,
+      "p95_wr": 0.8964057507987221,
+      "mean_dd": 0.08330899180868254,
+      "fraction_hit_80": 1.0,
+      "consistent": true,
+      "plain_english": "Across 20 random universes, average win rate was 87.6% (median 87.6%). The unlucky 5th-percentile run still hit 85.3% \u2014 comfortably above 75%, so the edge looks consistent.",
+      "win_rates": [
+        0.8784893267651889,
+        0.8728139904610492,
+        0.8700854700854701,
+        0.8758064516129033,
+        0.8961661341853036,
+        0.8504347826086956,
+        0.8671875,
+        0.8760469011725294,
+        0.8535353535353535,
+        0.8782161234991424,
+        0.8592233009708737,
+        0.9009584664536742,
+        0.8874388254486134,
+        0.8802698145025295,
+        0.8917975567190227,
+        0.8614357262103506,
+        0.8705501618122977,
+        0.8954248366013072,
+        0.8904761904761904,
+        0.8694968553459119
+      ],
+      "max_dds": [
+        0.060026781281985776,
+        0.06635951538847858,
+        0.06506585392958177,
+        0.06044201270114671,
+        0.06619726816630085,
+        0.17506676471661614,
+        0.1049201836645122,
+        0.07610203190605275,
+        0.10916415225210616,
+        0.08474733787770153,
+        0.06073487279107544,
+        0.07402243652069113,
+        0.03197970171041109,
+        0.05383809946523676,
+        0.041907984551802106,
+        0.13473309789479573,
+        0.15360000000000013,
+        0.12120082256831971,
+        0.06931650851287477,
+        0.05675441027396122
+      ]
+    },
+    "compare": {
+      "enhanced": {
+        "n_trades": 919,
+        "n_decisions": 15000,
+        "n_taken": 919,
+        "n_rejected": 14081,
+        "selectivity": 0.061266666666666664,
+        "win_rate": 0.8966267682263329,
+        "profit_factor": 3.0504749462049077,
+        "expectancy_usd": 18.544162518088743,
+        "total_pnl": 17042.085354123556,
+        "total_return": 8.521042677061775,
+        "max_drawdown_pct": 0.08000000000000011,
+        "avg_drawdown_pct": 0.003084025081746855,
+        "brier": 0.14315294853588686,
+        "avg_edge_taken": 0.2125295209198186,
+        "avg_conviction_winners": 0.9999686733098231,
+        "avg_conviction_losers": 0.9999624481165542,
+        "wr_by_conviction": {
+          "0.97-1.00": 0.8966267682263329
+        },
+        "wr_by_edge": {
+          "0.10-0.15": 0.9239130434782609,
+          "0.15+": 0.8935912938331319
+        },
+        "wr_by_category": {
+          "crypto": 0.8894230769230769,
+          "economics": 0.92,
+          "elections": 0.8785425101214575,
+          "sports": 0.897196261682243
+        },
+        "wr_by_dtr": {
+          "0-5d": 0.9275862068965517,
+          "21-60d": 0.8496732026143791,
+          "5-21d": 0.8894348894348895,
+          "60d+": 0.9130434782608695
+        },
+        "target_met": true,
+        "plain_english": "In plain English: the bot looked at 15000 decision points, took 919 trades (6.1% selectivity), and won 89.7% of them. That clears the 80% win-rate goal with drawdown under the 15% hard cap \u2014 the Beta conviction + extreme-q filters are doing their job by skipping weak mid-odds bets.",
+        "notes": []
+      },
+      "naive": {
+        "n_trades": 2727,
+        "n_decisions": 15000,
+        "n_taken": 2727,
+        "n_rejected": 12273,
+        "selectivity": 0.1818,
+        "win_rate": 0.5834250091675834,
+        "profit_factor": 4.841010719696345,
+        "expectancy_usd": 90.9389245518105,
+        "total_pnl": 247990.44725278724,
+        "total_return": 123.99522362639367,
+        "max_drawdown_pct": 0.12429871906900673,
+        "avg_drawdown_pct": 0.005328459356911932,
+        "brier": 0.14315294853588686,
+        "avg_edge_taken": 0.20508821196323995,
+        "avg_conviction_winners": 0.9552359243539446,
+        "avg_conviction_losers": 0.9448031026294377,
+        "wr_by_conviction": {
+          "0.92-0.95": 0.5384615384615384,
+          "0.95-0.97": 0.56353591160221,
+          "0.97-1.00": 0.6259259259259259
+        },
+        "wr_by_edge": {
+          "0.10-0.15": 0.49127906976744184,
+          "0.15+": 0.5967268149391524
+        },
+        "wr_by_category": {
+          "crypto": 0.5902140672782875,
+          "economics": 0.6103703703703703,
+          "elections": 0.5543175487465181,
+          "sports": 0.5808823529411765
+        },
+        "wr_by_dtr": {
+          "0-5d": 0.5705669481302774,
+          "21-60d": 0.5705996131528046,
+          "5-21d": 0.5953408110440035,
+          "60d+": 0.5990990990990991
+        },
+        "target_met": false,
+        "plain_english": "In plain English: the bot looked at 15000 decision points, took 2727 trades (18.2% selectivity), and won 58.3% of them. The 80% target was missed. Raise min_conviction / min_edge, or improve model calibration (lower Brier). See BACKTEST_GUIDE.md.",
+        "notes": []
+      },
+      "wr_lift": 0.3132017590587495,
+      "dd_delta": -0.04429871906900662,
+      "plain_english": "On the same 5000 synthetic markets, the full stack (Beta conviction + Kelly + risk budget) improved win rate by 31.3 percentage points vs naive edge-only fixed sizing (58.3% \u2192 89.7%). The lift comes from skipping mid-odds / low-conviction bets that naive trading still takes."
+    }
+  }
+}
