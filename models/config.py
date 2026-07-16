@@ -130,6 +130,28 @@ class NEffByCategory(BaseModel):
         return float(getattr(self, key, self.default))
 
 
+class AdvancedSignalsConfig(BaseModel):
+    """Tunables for Hurst-gated multi-TF + OBI + log-normal + Kalman ensemble.
+
+    Defaults preserve strict_real performance when history is thin (fallback to
+    momentum_to_q). Never loosens entry gates — only improves q quality.
+    """
+
+    enabled: bool = True
+    swarm_weight: float = Field(0.70, ge=0.0, le=1.0)
+    market_blend: float = Field(0.30, ge=0.0, le=1.0)
+    tf_windows: list[float] = Field(default_factory=lambda: [30.0, 60.0, 120.0, 240.0])
+    tf_weights: list[float] = Field(default_factory=lambda: [0.15, 0.20, 0.30, 0.35])
+    kalman_process_var: float = 1e-4
+    kalman_measure_var: float = 1e-3
+    hurst_window: int = 60
+    garch_alpha: float = 0.08
+    garch_beta: float = 0.90
+    book_levels: int = 5
+    # Soft conviction boost cap from sub-signal agreement (mispricing layer)
+    max_conviction_boost: float = Field(0.10, ge=0.0, le=0.15)
+
+
 class EnhancedMispriceConfig(BaseModel):
     """All tunable thresholds for Kelly + Bayesian conviction + risk guards.
 
@@ -140,6 +162,9 @@ class EnhancedMispriceConfig(BaseModel):
 
     # Profile: applies MODE_PRESETS on load (see load_enhanced_config).
     mode: FilterMode = "strict_real"
+
+    # Advanced multi-signal ensemble (optional; zero-config default on)
+    advanced: AdvancedSignalsConfig = Field(default_factory=AdvancedSignalsConfig)
 
     kappa_base: float = Field(0.35, ge=0.05, le=1.0)
     kappa_guard: float = Field(0.20, ge=0.05, le=1.0)

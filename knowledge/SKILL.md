@@ -68,9 +68,10 @@ Paper mode is default. Live trading is opt-in only after paper evidence clears t
 19. **We only scan/trade scoped fast crypto lanes** via `MARKET_FILTER` (`btc5` / `btc15` / `eth5` / `sol5` / `rotator`).
 20. **We start small on fast markets** — 0.5% bankroll cold-start; scale only when lessons show WR/EV improving.
 21. **We never loosen `strict_real` below `min_edge: 0.14`** — weaker edge buckets destroy WR under real q.
-22. **We never reintroduce artificial extreme-q push (0.97/0.03)** — model q is live `cex_implied_up` only.
-23. **We never ship `moderate` / `aggressive` as production filter mode** — research only; production is `strict_real`.
-24. **We never mark a full backtest green unless Hermes v3 gates clear** — WR≥80%, MC p5≥82%, DD≤8%, PF≥2.5, Brier≤0.15.
+22. **We never reintroduce artificial extreme-q push (0.97/0.03)** — model q is live `cex_implied_up` only (advanced ensemble when CEX history exists; momentum fallback otherwise).
+23. **Advanced ensemble** (`strategy/advanced_signals.py`) improves q quality only — never loosen `STRICT_REAL_FREEZE` gates.
+24. **We never ship `moderate` / `aggressive` as production filter mode** — research only; production is `strict_real`.
+25. **We never mark a full backtest green unless Hermes v3 gates clear** — WR≥80%, MC p5≥82%, DD≤8%, PF≥2.5, Brier≤0.15.
 
 ## Circuit Breakers
 

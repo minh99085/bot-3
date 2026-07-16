@@ -174,20 +174,33 @@ def enhance_from_hermes_mispricing(
     config: Optional[EnhancedMispriceConfig] = None,
     risk_manager: Optional[PortfolioRiskManager] = None,
     bankroll: Optional[float] = None,
+    advanced_features: Optional[dict[str, Any]] = None,
 ) -> TradeOpportunity:
     # Fixed: Removed artificial q pushing and stale q reuse. Bot now uses live(ish) model q and follows Polymarket CLOB more closely.
     """Wrap an existing Hermes ``MispricingSignal`` into enhanced filters.
 
     q := CEX-implied P(UP) (lead signal), lightly smoothed — never forced to 0.97/0.03
     p := Polymarket YES price (live CLOB mid)
+
+    When ``advanced_features`` carries ensemble diagnostics (hurst/obi/kalman),
+    they are attached to the snapshot; q itself already comes from the ensemble
+    via ``cex_implied_up`` when history is available. Hard filters stay intact.
     """
     cfg = config or load_enhanced_config()
     rm = risk_manager or PortfolioRiskManager(cfg)
     guard = rm.evaluate_guards()
 
+    # Prefer advanced ensemble q when present in features (already in cex_implied_up).
+    adv = dict(advanced_features or {})
+    q_raw = float(cex_implied_up)
+    if adv.get("advanced_q") is not None:
+        try:
+            q_raw = float(adv["advanced_q"])
+        except (TypeError, ValueError):
+            pass
+
     # Use live CEX-implied P(UP) as model q. Light shrink toward 0.5 for
     # calibration only — do NOT push toward extremes on dislocation size.
-    q_raw = float(cex_implied_up)
     if not active:
         # Inactive setups: shrink harder so they rarely clear extreme_q gates
         q = 0.5 + 0.25 * (q_raw - 0.5)
@@ -195,16 +208,46 @@ def enhance_from_hermes_mispricing(
         q = 0.5 + 0.90 * (q_raw - 0.5)  # lightly smoothed real cex_implied_up
     q = float(min(0.95, max(0.05, q)))
 
+    # Log strong disagreement between advanced q and toy momentum (selectivity)
+    if adv.get("momentum") is not None and adv.get("advanced_used_fallback") == 0.0:
+        try:
+            from strategy.advanced_signals import momentum_to_q
+
+            toy = momentum_to_q(float(adv.get("momentum", 0.0)), timeframe)
+            if abs(q_raw - toy) > 0.12:
+                logger.info(
+                    "advanced/momentum disagree slug=%s adv_q=%.3f toy_q=%.3f hurst=%s",
+                    slug,
+                    q_raw,
+                    toy,
+                    adv.get("hurst"),
+                )
+        except Exception:  # noqa: BLE001
+            pass
+
+    q_source = "cex_implied_up_smoothed"
+    if adv.get("advanced_used_fallback") == 0.0:
+        q_source = "advanced_ensemble_smoothed"
+    elif adv.get("advanced_q") is not None:
+        q_source = "advanced_fallback_smoothed"
+
     logger.info(
         "enhanced_q slug=%s cex_implied_up=%.4f q=%.4f pm_p=%.4f dislocation=%+.4f "
-        "active=%s (no artificial extreme push)",
+        "active=%s src=%s (no artificial extreme push)",
         slug,
         q_raw,
         q,
         float(pm_implied_up),
         dislocation,
         active,
+        q_source,
     )
+
+    slopes = {
+        k: float(v)
+        for k, v in adv.items()
+        if str(k).startswith("slope_") and isinstance(v, (int, float))
+    } or None
 
     market = MarketSnapshot(
         market_id=market_id,
@@ -216,6 +259,18 @@ def enhance_from_hermes_mispricing(
         liquidity_usd=liquidity_usd,
         volume_24h=volume_24h,
         seconds_to_resolution=seconds_to_resolution,
+        multi_level_obi=float(adv["obi"]) if adv.get("obi") is not None else None,
+        ir=float(adv["ir"]) if adv.get("ir") is not None else None,
+        vamp=float(adv["vamp"]) if adv.get("vamp") is not None else None,
+        hurst=float(adv["hurst"]) if adv.get("hurst") is not None else None,
+        ou_theta=float(adv["ou_theta"]) if adv.get("ou_theta") is not None else None,
+        kalman_q=float(adv["kalman_q"]) if adv.get("kalman_q") is not None else None,
+        garch_vol=(
+            float(adv["garch_sigma_ann"])
+            if adv.get("garch_sigma_ann") is not None
+            else None
+        ),
+        multi_tf_slopes=slopes,
         meta={
             "mispricing_active": active,
             "mispricing_dislocation": dislocation,
@@ -223,9 +278,13 @@ def enhance_from_hermes_mispricing(
             "chainlink_vs_cex_bps": chainlink_vs_cex_bps,
             "entry_source": "enhanced_mispricing",
             "cex_implied_up_raw": q_raw,
-            "model_q_source": "cex_implied_up_smoothed",
+            "model_q_source": q_source,
             "guard_active": guard.guard_active,
             "guard_reason": guard.reason,
+            "advanced_regime": adv.get("advanced_regime_mom"),
+            "hurst": adv.get("hurst"),
+            "obi": adv.get("obi"),
+            "kalman_q": adv.get("kalman_q"),
         },
     )
     opp = evaluate_market(

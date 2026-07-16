@@ -74,3 +74,20 @@ categories: [crypto, elections, sports, economics]
 
 monte_carlo_runs: 100
 tune_trials: 40
+
+# Advanced multi-signal ensemble (Hurst-gated multi-TF + OBI + log-normal + Kalman).
+# Defaults keep strict_real performance; thin history → momentum fallback.
+# Env HERMES_ADVANCED_SIGNALS=0 disables at runtime without YAML edits.
+advanced:
+  enabled: true
+  swarm_weight: 0.70
+  market_blend: 0.30
+  tf_windows: [30.0, 60.0, 120.0, 240.0]
+  tf_weights: [0.15, 0.20, 0.30, 0.35]
+  kalman_process_var: 0.0001
+  kalman_measure_var: 0.001
+  hurst_window: 60
+  garch_alpha: 0.08
+  garch_beta: 0.90
+  book_levels: 5
+  max_conviction_boost: 0.10

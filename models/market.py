@@ -35,6 +35,15 @@ class MarketSnapshot(BaseModel):
     seconds_to_resolution: float = 300.0
     true_q: Optional[float] = None  # backtest only
     resolved_yes: Optional[bool] = None  # backtest only
+    # Optional advanced-ensemble diagnostics (populated when CEX history exists)
+    multi_level_obi: Optional[float] = None
+    ir: Optional[float] = None
+    vamp: Optional[float] = None
+    hurst: Optional[float] = None
+    ou_theta: Optional[float] = None
+    kalman_q: Optional[float] = None
+    garch_vol: Optional[float] = None
+    multi_tf_slopes: Optional[dict[str, float]] = None
     meta: dict[str, Any] = Field(default_factory=dict)
     as_of: datetime = Field(default_factory=utc_now)
 

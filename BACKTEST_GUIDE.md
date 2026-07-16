@@ -93,6 +93,7 @@ Or from the CLI (does not conflict with `--mode synthetic|historical`):
 
 ```bash
 python -m backtest --filter-mode strict_real --fast
+python -m backtest --fast --advanced-features   # ensemble Brier vs toy momentum
 python -m backtest --filter-mode strict_real --n-markets 5000 --seed 42
 ```
 

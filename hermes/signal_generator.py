@@ -384,6 +384,7 @@ def generate_signal(
             chainlink_vs_cex_bps=float(mp.chainlink_vs_cex_bps),
             active=bool(mp.active),
             bankroll=capital,
+            advanced_features=dict(mp.features or {}),
         )
         enhanced_meta = opportunity_to_signal_meta(opp)
         if not opp.passes_hard_filter:

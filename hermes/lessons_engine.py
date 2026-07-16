@@ -518,6 +518,16 @@ def lessons_engine_tick(
             promote_lesson(les)
             out.append(les)
 
+    # Self-improving advanced fusion weights (rolling Brier / WR per sub-signal)
+    try:
+        from strategy.signal_calibration import maybe_recalibrate_from_settlements
+
+        n_cal = maybe_recalibrate_from_settlements(list(settlements or []))
+        if n_cal:
+            logger.info("lessons_engine: advanced calibration ingested %d settlements", n_cal)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("advanced calibration hook failed: %s", exc)
+
     _ = read_skill(), read_alpha_skill()
     logger.info("lessons_engine: wrote %d lessons", len(out))
     return out

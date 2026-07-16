@@ -106,3 +106,18 @@ When a deploy round is finished, end with: **I am done thinking, push to main vp
 - **Market scope:** 5 instances via `MARKET_FILTER` (`btc5` / `btc15` / `eth5` / `sol5` / `rotator`) — see `config/market_filters.yaml`
 - **Fleet capital:** 5 × $2000 = $10k (isolated bankrolls + ledgers under `data/paper/<id>/`)
 - Compose: `hermes-btc5` + `hermes-btc15` + `hermes-eth5` + `hermes-sol5` + `hermes-rotator` + `dashboard` + `nginx`
+
+### Advanced multi-signal ensemble (q quality — strict_real freeze unchanged)
+
+Replaces toy `momentum → cex_implied_up` when CEX tick history is available:
+
+| Module | Role |
+|--------|------|
+| `strategy/advanced_signals.py` | Hurst-gated multi-TF slopes + OBI/IR/VAMP + GARCH log-normal + OU + Kalman fusion |
+| `strategy/signal_calibration.py` | Rolling Brier/WR → re-fit swarm/market blend after N settlements |
+| `hermes/mispricing.py` | Calls ensemble; falls back to momentum when history is thin |
+| `config/enhanced_misprice.yaml` → `advanced:` | Tunables (defaults keep current WR) |
+
+- Env kill-switch: `HERMES_ADVANCED_SIGNALS=0`
+- Zero-config overnight: thin history → same toy map as before; hard filters / Kelly / Bayesian / `live_real_q` untouched
+- Prove ensemble vs momentum: `python -m backtest --fast --advanced-features`

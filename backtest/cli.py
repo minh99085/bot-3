@@ -222,6 +222,54 @@ def run_pipeline(args: argparse.Namespace, argv: list[str]) -> int:
         compare_block = "\n\n" + cmp.summary_text()
         compare_payload = cmp.to_dict()
 
+    # Optional advanced ensemble vs toy momentum (GBM paths)
+    advanced_block = ""
+    advanced_payload = None
+    if getattr(args, "advanced_features", False):
+        from backtest.advanced_eval import evaluate_advanced_ensemble
+
+        console.print("[bold]Advanced ensemble eval (GBM paths vs toy momentum)…[/]")
+        adv = evaluate_advanced_ensemble(
+            n_paths=200 if args.fast else 400,
+            seed=seed,
+        )
+        advanced_payload = {
+            "n_paths": adv.n_paths,
+            "brier_momentum": adv.brier_momentum,
+            "brier_ensemble": adv.brier_ensemble,
+            "hit_momentum": adv.hit_momentum,
+            "hit_ensemble": adv.hit_ensemble,
+            "mean_abs_edge_ensemble": adv.mean_abs_edge_ensemble,
+            "improved_brier": adv.improved_brier,
+            **adv.meta,
+        }
+        tbl = Table(title="Advanced signals")
+        tbl.add_column("Metric")
+        tbl.add_column("Momentum")
+        tbl.add_column("Ensemble")
+        tbl.add_row(
+            "Brier (↓ better)",
+            f"{adv.brier_momentum:.4f}",
+            f"{adv.brier_ensemble:.4f}",
+        )
+        tbl.add_row(
+            "Directional hit",
+            f"{adv.hit_momentum:.1%}",
+            f"{adv.hit_ensemble:.1%}",
+        )
+        console.print(tbl)
+        note = (
+            "ensemble improved vs momentum (Brier and/or hit-rate)"
+            if adv.improved_brier
+            else "ensemble not improved on this seed (hard filters still protect WR)"
+        )
+        advanced_block = (
+            f"\n\nAdvanced ensemble: Brier {adv.brier_ensemble:.4f} vs "
+            f"momentum {adv.brier_momentum:.4f} · hit "
+            f"{adv.hit_ensemble:.1%} vs {adv.hit_momentum:.1%} · {note}"
+        )
+        console.print(advanced_block.strip())
+
     # Full Hermes v3 pass: metrics gates + MC consistency when MC ran.
     # Fast mode uses a lighter bar (small n → path DD noise); full runs enforce v3.
     from models.config import TARGET_WR
@@ -285,6 +333,7 @@ def run_pipeline(args: argparse.Namespace, argv: list[str]) -> int:
         "calibration": calibration_points(er.decisions),
         "monte_carlo": mc_summary.to_dict() if mc_summary else None,
         "compare": compare_payload,
+        "advanced": advanced_payload,
     }
 
     from backtest.artifacts import new_run_dir
@@ -301,6 +350,7 @@ def run_pipeline(args: argparse.Namespace, argv: list[str]) -> int:
         f"{verdict}\n\n"
         f"{m.summary_text()}"
         f"{compare_block}"
+        f"{advanced_block}"
     )
     (run_dir / "report.txt").write_text(report_body)
     (run_dir / "report.json").write_text(
@@ -466,6 +516,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--compare-baseline",
         action="store_true",
         help="Also run naive misprice-only and show win-rate lift vs enhanced",
+    )
+    p.add_argument(
+        "--advanced-features",
+        action="store_true",
+        help=(
+            "Also evaluate Hurst-gated multi-TF + OBI + log-normal + Kalman "
+            "ensemble vs toy momentum on synthetic GBM paths (Brier / hit-rate)"
+        ),
     )
     p.add_argument(
         "--no-rich",

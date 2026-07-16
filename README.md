@@ -53,12 +53,14 @@ Wraps Option D CEX↔Polymarket mispricing with exact math in:
 | Package | Role |
 |---------|------|
 | `strategy/enhanced_misprice.py` | Hard filters + ranking (wraps `hermes.mispricing`) |
+| `strategy/advanced_signals.py` | Multi-signal CEX q: multi-TF + OBI + log-normal + OU/Hurst + Kalman |
+| `strategy/signal_calibration.py` | Self-improving fusion weights from resolved paper trades |
 | `strategy/kelly.py` | Polymarket Kelly: YES `(q-p)/(1-p)`, NO `(p-q)/p`, `f=κ·min(f*,1)` |
 | `strategy/bayesian.py` | Beta conviction via `scipy.stats.beta` |
 | `risk/portfolio_risk.py` | Risk units + DD/WR guards + early exit |
 | `backtest/` | Synthetic + Gamma historical + reporting |
 | `paper_trader/` | Slippage fills + async loop |
-| `config/enhanced_misprice.yaml` | All thresholds tunable |
+| `config/enhanced_misprice.yaml` | All thresholds tunable (`advanced:` ensemble section) |
 
 ### Run backtest (must clear ≥80% WR when Brier &lt; 0.18)
 
@@ -66,11 +68,12 @@ Wraps Option D CEX↔Polymarket mispricing with exact math in:
 export PYTHONPATH=.
 python -m backtest --fast
 python -m backtest --filter-mode strict_real --fast   # high WR, real cex_implied_up as q
+python -m backtest --fast --advanced-features         # + ensemble vs toy momentum Brier
 python -m backtest --filter-mode moderate --fast      # more trades, looser real-q gates
 python -m backtest --n-markets 5000 --seed 42 --compare-baseline
 python -m backtest --optimize --n-markets 5000
 python -m backtest monte-carlo --n_runs 50
-pytest tests/test_kelly.py tests/test_bayesian_conviction.py tests/test_enhanced_misprice.py tests/test_backtest_suite.py tests/test_filter_modes.py -q
+pytest tests/test_kelly.py tests/test_bayesian_conviction.py tests/test_enhanced_misprice.py tests/test_backtest_suite.py tests/test_filter_modes.py tests/test_advanced_signals.py -q
 ```
 
 ### Filter modes (`strict` / `strict_real` / `moderate` / `aggressive`)

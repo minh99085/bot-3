@@ -21,6 +21,11 @@ from typing import Optional
 
 import httpx
 
+# Module-level rolling mids for ETH/SOL (REST polling accumulates history).
+_ASSET_HISTORY: dict[str, list[tuple[float, float]]] = {}
+_ASSET_HISTORY_LOCK = threading.Lock()
+_ASSET_HISTORY_MAX_SEC = 600.0
+
 logger = logging.getLogger(__name__)
 
 BINANCE_FUTURES_WS = os.environ.get(
@@ -292,6 +297,28 @@ class RealtimeBtcFeed:
         except Exception as exc:  # noqa: BLE001
             logger.warning("OKX fallback failed: %s", exc)
 
+    def get_price_history(
+        self, max_points: int = 240
+    ) -> tuple[list[float], list[float]]:
+        """Recent (times, prices) for advanced ensemble — oldest → newest."""
+        with self._lock:
+            hist = list(self._history)
+        if not hist:
+            return [], []
+        n = max(1, int(max_points))
+        hist = hist[-n:]
+        times = [float(t) for t, _ in hist]
+        prices = [float(p) for _, p in hist]
+        return times, prices
+
+    def get_top_of_book(self) -> tuple[Optional[float], Optional[float], float, float]:
+        """Return (bid, ask, bid_sz_proxy, ask_sz_proxy). Sizes unknown on bookTicker → 1.0."""
+        with self._lock:
+            bn = self._binance
+        if bn is None or bn.bid <= 0 or bn.ask <= 0:
+            return None, None, 0.0, 0.0
+        return float(bn.bid), float(bn.ask), 1.0, 1.0
+
     def get_snapshot(self, *, force_rest: bool = False) -> BtcSnapshot:
         if not self._started:
             self.start()
@@ -374,6 +401,31 @@ ASSET_CEX_SYMBOLS: dict[str, str] = {
 }
 
 
+def _push_asset_history(asset: str, price: float) -> None:
+    now = time.time()
+    key = asset.upper()
+    with _ASSET_HISTORY_LOCK:
+        hist = _ASSET_HISTORY.setdefault(key, [])
+        hist.append((now, float(price)))
+        cutoff = now - _ASSET_HISTORY_MAX_SEC
+        _ASSET_HISTORY[key] = [(t, p) for t, p in hist if t >= cutoff]
+
+
+def get_asset_price_history(
+    asset: str, max_points: int = 240
+) -> tuple[list[float], list[float]]:
+    """(times, prices) for any asset — BTC from WS feed, alts from REST cache."""
+    asset_u = (asset or "BTC").upper()
+    if asset_u == "BTC":
+        return get_feed().get_price_history(max_points=max_points)
+    with _ASSET_HISTORY_LOCK:
+        hist = list(_ASSET_HISTORY.get(asset_u, []))
+    if not hist:
+        return [], []
+    hist = hist[-max(1, int(max_points)) :]
+    return [float(t) for t, _ in hist], [float(p) for _, p in hist]
+
+
 def get_asset_mid(asset: str, *, force_rest: bool = False) -> float:
     """Binance futures mid for BTC / ETH / SOL (REST; BTC uses feed when available)."""
     asset_u = (asset or "BTC").upper()
@@ -391,10 +443,57 @@ def get_asset_mid(asset: str, *, force_rest: bool = False) -> float:
         bid = float(data.get("bidPrice") or 0)
         ask = float(data.get("askPrice") or 0)
         if bid > 0 and ask > 0:
-            return (bid + ask) / 2.0
+            mid = (bid + ask) / 2.0
+            _push_asset_history(asset_u, mid)
+            return mid
     except Exception as exc:  # noqa: BLE001
         logger.debug("asset mid %s failed: %s", symbol, exc)
+    # Coinbase/OKX soft fallbacks for geo-blocked Binance
+    try:
+        product = {"ETH": "ETH-USD", "SOL": "SOL-USD"}.get(asset_u)
+        if product:
+            with httpx.Client(timeout=8.0) as client:
+                resp = client.get(
+                    f"https://api.exchange.coinbase.com/products/{product}/ticker"
+                )
+                resp.raise_for_status()
+                data = resp.json()
+            bid = float(data.get("bid") or 0)
+            ask = float(data.get("ask") or 0)
+            last = float(data.get("price") or 0)
+            mid = (bid + ask) / 2.0 if bid > 0 and ask > 0 else last
+            if mid > 0:
+                _push_asset_history(asset_u, mid)
+                return mid
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("asset mid coinbase %s failed: %s", asset_u, exc)
     return 0.0
+
+
+def _asset_momentum_from_history(asset: str) -> tuple[float, float, float, float]:
+    """Compute (ret_30s, ret_60s, ret_3m, momentum) from rolling asset history."""
+    times, prices = get_asset_price_history(asset, max_points=240)
+    if len(prices) < 2:
+        return 0.0, 0.0, 0.0, 0.0
+    now = times[-1]
+    latest = prices[-1]
+
+    def _ret(seconds: float) -> float:
+        target = now - seconds
+        older = prices[0]
+        for t, p in zip(times, prices):
+            if t <= target:
+                older = p
+            else:
+                break
+        if older <= 0:
+            return 0.0
+        return (latest - older) / older
+
+    r30, r60, r3m = _ret(30), _ret(60), _ret(180)
+    raw_m = 0.5 * r30 + 0.3 * r60 + 0.2 * r3m
+    momentum = max(-1.0, min(1.0, raw_m / 0.0015))
+    return r30, r60, r3m, momentum
 
 
 def get_asset_snapshot(asset: str, *, force_rest: bool = False) -> BtcSnapshot:
@@ -403,5 +502,19 @@ def get_asset_snapshot(asset: str, *, force_rest: bool = False) -> BtcSnapshot:
     if asset_u == "BTC":
         return get_btc_snapshot(force_rest=force_rest)
     mid = get_asset_mid(asset_u, force_rest=force_rest)
-    tick = BtcTick(price=mid, bid=mid, ask=mid, source=f"binance_rest_{asset_u.lower()}")
-    return BtcSnapshot(binance=tick, mid=mid, momentum=0.0, sources_agree=True)
+    r30, r60, r3m, mom = _asset_momentum_from_history(asset_u)
+    tick = BtcTick(
+        price=mid,
+        bid=mid,
+        ask=mid,
+        source=f"binance_rest_{asset_u.lower()}",
+    )
+    return BtcSnapshot(
+        binance=tick,
+        mid=mid,
+        ret_30s=r30,
+        ret_60s=r60,
+        ret_3m=r3m,
+        momentum=mom,
+        sources_agree=True,
+    )
