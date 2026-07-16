@@ -37,7 +37,7 @@ from hermes.dashboard_data import (
 from models.config import load_enhanced_config
 
 st.set_page_config(
-    page_title="Hermes v2 Fleet",
+    page_title="Bot 3",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -150,7 +150,7 @@ def main() -> None:
     bandits = data["bandits"]
     cfg = data["config"]
 
-    st.sidebar.title("Hermes v2 Fleet")
+    st.sidebar.title("Bot 3")
     st.sidebar.markdown("**5 isolated paper instances**")
     st.sidebar.markdown(
         f"**${PER_INSTANCE_BANKROLL:,.0f}** each · **${FLEET_BANKROLL:,.0f}** total"
