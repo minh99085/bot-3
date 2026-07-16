@@ -1,0 +1,42 @@
+{
+  "n_trades": 2494,
+  "n_decisions": 15000,
+  "n_taken": 2494,
+  "n_rejected": 12506,
+  "selectivity": 0.16626666666666667,
+  "win_rate": 0.5813953488372093,
+  "profit_factor": 4.719577591632653,
+  "expectancy_usd": 119.07103285295048,
+  "total_pnl": 296963.1559352585,
+  "total_return": 148.48157796762922,
+  "max_drawdown_pct": 0.12403314672889858,
+  "avg_drawdown_pct": 0.0070722499493187044,
+  "brier": 0.14315294853588686,
+  "avg_edge_taken": 0.1514624928581434,
+  "avg_conviction_winners": 0.9985679061554521,
+  "avg_conviction_losers": 0.9994108468326066,
+  "wr_by_conviction": {
+    "0.95-0.97": 1.0,
+    "0.97-1.00": 0.5812274368231047
+  },
+  "wr_by_edge": {
+    "0.06-0.10": 0.4135667396061269,
+    "0.10-0.15": 0.4995340167753961,
+    "0.15+": 0.7520746887966805
+  },
+  "wr_by_category": {
+    "crypto": 0.5577557755775577,
+    "economics": 0.5990415335463258,
+    "elections": 0.5780254777070064,
+    "sports": 0.5899053627760252
+  },
+  "wr_by_dtr": {
+    "0-5d": 0.5825242718446602,
+    "21-60d": 0.5737373737373738,
+    "5-21d": 0.5804387568555759,
+    "60d+": 0.6032608695652174
+  },
+  "target_met": false,
+  "plain_english": "In plain English: the bot looked at 15000 decision points, took 2494 trades (16.6% selectivity), and won 58.1% of them. The 80% target was missed. Raise min_conviction / min_edge, or improve model calibration (lower Brier). See BACKTEST_GUIDE.md.",
+  "notes": []
+}
