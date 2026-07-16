@@ -190,12 +190,15 @@ def update_state_field(key: str, value: Any) -> None:
             "- **Circuit Breaker**: clear\n"
         )
     pattern = rf"(^[-*]\s+\*\*{re.escape(key)}\*\*:\s*).+$"
-    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     repl = rf"\g<1>{value}"
     new_text, n = re.subn(pattern, repl, text, flags=re.MULTILINE | re.IGNORECASE)
     if n == 0:
         new_text = text.rstrip() + f"\n- **{key}**: {value}\n"
-    write_text(path, new_text)
+    try:
+        write_text(path, new_text)
+    except OSError as exc:
+        # Permission races on shared knowledge/ must not kill overnight loops
+        logger.warning("STATE.md update failed for %s: %s", key, exc)
 
 
 def append_jsonl(path: Path, obj: BaseModel | dict[str, Any]) -> None:

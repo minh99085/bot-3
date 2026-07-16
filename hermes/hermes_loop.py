@@ -83,16 +83,23 @@ def run_one_turn(paper: bool = True, turn_id: Optional[str] = None) -> LoopTurnR
     write_heartbeat(last_turn=tid, summary="turn_start")
 
     state = parse_state_fields(read_state_md())
+    # Manual fleet pause only (operator STATE.md). Instance risk pauses are
+    # local — see risk_monitor.instance_paused / snap.pause_loop below.
     if state.get("pause_loop") or state.get("loop_paused"):
-        result.paused = True
-        result.pause_reason = str(state.get("pause_reason", "STATE.md pause flag"))
-        result.finished_at = datetime.now(timezone.utc)
-        result.summary = f"PAUSED: {result.pause_reason}"
-        logger.warning(result.summary)
-        write_heartbeat(last_turn=tid, summary=result.summary)
-        return result
+        reason = str(state.get("pause_reason", "STATE.md pause flag"))
+        # Ignore stale auto-halts left in shared STATE by older builds
+        if reason.startswith("consecutive_losses=") or reason.startswith("rolling_"):
+            logger.info("ignoring stale shared auto-pause: %s", reason)
+        else:
+            result.paused = True
+            result.pause_reason = reason
+            result.finished_at = datetime.now(timezone.utc)
+            result.summary = f"PAUSED: {result.pause_reason}"
+            logger.warning(result.summary)
+            write_heartbeat(last_turn=tid, summary=result.summary)
+            return result
 
-    # Pre-flight risk snapshot (non-blocking read; dedicated loop also runs)
+    # Pre-flight risk snapshot (per-instance ledger; never fleet-wide)
     snap = risk_monitor_tick(paper=paper)
     if snap.pause_loop:
         result.paused = True

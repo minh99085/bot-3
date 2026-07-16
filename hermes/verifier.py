@@ -366,23 +366,27 @@ def verify_signal(
             )
         )
 
-    # 0. Circuit / pause — coerce string flags carefully ("clear" must not trip)
-    paused = bool(state.get("loop_paused") or state.get("pause_loop"))
-    cb_raw = state.get("circuit_breaker", "clear")
-    cb_tripped = str(cb_raw).lower() in {
-        "tripped",
-        "true",
-        "1",
-        "yes",
-        "halt",
-        "active",
-    }
+    # 0. Circuit / pause — per-instance risk file; shared STATE only for manual halt
+    from hermes.risk_monitor import instance_paused, read_instance_risk_state
+
+    inst_paused, inst_reason = instance_paused(paper=True)
+    risk_local = read_instance_risk_state(paper=True)
+    manual_pause = bool(state.get("loop_paused") or state.get("pause_loop"))
+    manual_reason = str(state.get("pause_reason", ""))
+    if manual_pause and (
+        manual_reason.startswith("consecutive_losses=")
+        or manual_reason.startswith("rolling_")
+    ):
+        manual_pause = False  # stale auto-halt from older shared-STATE builds
+    cb_tripped = bool(risk_local.get("circuit_breaker_tripped")) or inst_paused
+    paused = manual_pause or inst_paused
+    cb_raw = "TRIPPED" if cb_tripped else "clear"
     if paused or cb_tripped:
         checks.append(
             CheckResult(
                 name="circuit_breaker",
                 passed=False,
-                detail=f"pause={paused} circuit={cb_raw}",
+                detail=f"pause={paused} circuit={cb_raw} reason={inst_reason or manual_reason}",
             )
         )
         rejections.append("circuit_breaker")

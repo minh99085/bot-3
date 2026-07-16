@@ -124,6 +124,16 @@ cp deploy/hermes-paper.service /etc/systemd/system/hermes-paper.service
 systemctl daemon-reload
 systemctl enable hermes-paper.service
 
+# Re-assert ownership after compose (rsync/root can leave knowledge/ unwritable)
+chown -R 10001:10001 logs data knowledge artifacts 2>/dev/null || true
+# Clear stale shared auto-pause left by pre-fleet risk_monitor builds
+if [[ -f knowledge/STATE.md ]]; then
+  sed -i 's/^\(- \*\*Pause Loop\*\*: \).*/\1false/' knowledge/STATE.md || true
+  sed -i 's/^\(- \*\*Circuit Breaker\*\*: \).*/\1clear/' knowledge/STATE.md || true
+  sed -i 's/^\(- \*\*Pause Reason\*\*: \).*/\1/' knowledge/STATE.md || true
+  chown 10001:10001 knowledge/STATE.md 2>/dev/null || true
+fi
+
 sleep 12
 docker compose ps 2>/dev/null || docker-compose ps
 curl -fsS http://127.0.0.1/healthz && echo " nginx ok" || echo "WARN: nginx health pending"

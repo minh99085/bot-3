@@ -292,9 +292,14 @@ def discovery_tick(turn_id: Optional[str] = None) -> list[MarketCandidate]:
     _skill = read_skill()
     _alpha = read_alpha_skill()
     state = parse_state_fields(read_state_md())
+    # Manual fleet pause only — instance risk halt is enforced in hermes_loop
     if state.get("loop_paused") or state.get("pause_loop"):
-        logger.warning("discovery skipped: loop paused in STATE.md")
-        return []
+        reason = str(state.get("pause_reason", ""))
+        if not (
+            reason.startswith("consecutive_losses=") or reason.startswith("rolling_")
+        ):
+            logger.warning("discovery skipped: loop paused in STATE.md")
+            return []
 
     buckets = load_edge_buckets_from_alpha()
     raw = discover_from_connector()

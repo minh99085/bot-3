@@ -1,15 +1,19 @@
 """Risk monitor — parallel worktree, never blocks the execution path.
 
 Runs on a fast cadence (@loop 30s/1m). Hard kill switch on drawdown,
-daily loss, consecutive losses, and model-drift proxies. Writes pause flags
-into STATE.md so discovery/verifier self-halt on the next tick.
+daily loss, consecutive losses, and model-drift proxies.
+
+Pause flags are written per-instance under data/paper/<instance>/ so one
+desk's consecutive-loss halt cannot freeze the whole fleet via shared STATE.md.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime, timezone
-from typing import Optional
+from pathlib import Path
+from typing import Any, Optional
 
 from hermes.decorators import loop
 from hermes.models import RiskSnapshot
@@ -20,8 +24,6 @@ from hermes.state_io import (
     parse_state_fields,
     read_jsonl,
     read_state_md,
-    update_state_field,
-    knowledge_path,
 )
 from hermes.worktrees import ensure_worktree
 
@@ -33,6 +35,29 @@ MAX_CONSECUTIVE_LOSSES = 4
 MIN_ROLLING_WR_20 = 0.55  # soft pause if rolling WR collapses
 MIN_ROLLING_PF_20 = 1.2
 MAX_OPEN_EXPOSURE_PCT = 0.20
+
+
+def risk_state_path(paper: bool = True) -> Path:
+    return ledger_path(paper=paper).parent / "risk_state.json"
+
+
+def read_instance_risk_state(paper: bool = True) -> dict[str, Any]:
+    path = risk_state_path(paper=paper)
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def instance_paused(paper: bool = True) -> tuple[bool, str]:
+    """Local pause for this container only (not shared STATE.md)."""
+    data = read_instance_risk_state(paper=paper)
+    if data.get("pause_loop"):
+        return True, str(data.get("trip_reason") or "instance risk pause")
+    return False, ""
 
 
 def _recent_settlements(paper: bool = True, n: int = 50) -> list[dict]:
@@ -109,23 +134,27 @@ def compute_risk_snapshot(state: Optional[dict] = None, paper: bool = True) -> R
 
 
 def apply_risk_to_state(snap: RiskSnapshot) -> None:
-    """Persist kill-switch into STATE.md so other loops halt."""
-    update_state_field("Rolling WR (20)", f"{snap.rolling_wr_20:.2%}")
-    update_state_field("Rolling PF (20)", f"{snap.rolling_pf_20:.2f}")
-    update_state_field("Consecutive Losses", str(snap.consecutive_losses))
-    update_state_field("Circuit Breaker", "TRIPPED" if snap.circuit_breaker_tripped else "clear")
-    update_state_field("Pause Loop", "true" if snap.pause_loop else "false")
-    if snap.pause_loop:
-        update_state_field("Pause Reason", snap.trip_reason or "performance gate")
-        logger.error("RISK HALT: %s", snap.trip_reason)
+    """Persist kill-switch per instance — never poison shared STATE.md pause flags."""
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    payload = {
+        "updated_at": stamp,
+        "rolling_wr_20": snap.rolling_wr_20,
+        "rolling_pf_20": snap.rolling_pf_20,
+        "consecutive_losses": snap.consecutive_losses,
+        "circuit_breaker_tripped": snap.circuit_breaker_tripped,
+        "pause_loop": snap.pause_loop,
+        "trip_reason": snap.trip_reason or "",
+        "max_drawdown_pct": snap.max_drawdown_pct,
+    }
+    path = risk_state_path(paper=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    if snap.pause_loop:
+        logger.error("RISK HALT (instance): %s", snap.trip_reason)
     append_jsonl(
         ledger_path(paper=True).parent / "risk_snapshots.jsonl",
         snap,
     )
-    # Touch a marker file in risk worktree
-    marker = knowledge_path("STATE.md")
-    _ = marker, stamp
 
 
 @loop(interval="30s", name="risk_monitor")
