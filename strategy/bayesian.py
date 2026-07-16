@@ -83,12 +83,22 @@ def passes_hard_entry_filter(
     min_conviction: float = 0.92,
     extreme_q_high: float = 0.78,
     extreme_q_low: float = 0.22,
+    extreme_anchor: str = "q",
+    live_real_q: bool = False,
+    extreme_p_high: float | None = None,
+    extreme_p_low: float | None = None,
 ) -> tuple[bool, list[str]]:
-    """Hard entry filter (exact product requirement).
+    """Hard entry filter.
 
     abs(q - p) >= min_edge
     AND conviction >= min_conviction
-    AND (q >= extreme_q_high OR q <= extreme_q_low)
+    AND extreme stretch:
+
+    - Default / synthetic (``extreme_anchor=q``): model q must be extreme.
+      This is what delivers ~90% WR on the synthetic suite.
+    - Live real-q (``live_real_q=True`` and q is mid): Polymarket p must be
+      stretched instead. Live CEX ``cex_implied_up`` sits ~0.4–0.6 and never
+      clears q≥0.85 — without this branch the desk takes zero trades.
     """
     reasons: list[str] = []
     edge = abs(q - p)
@@ -96,8 +106,44 @@ def passes_hard_entry_filter(
         reasons.append(f"edge={edge:.4f}<{min_edge}")
     if conviction < min_conviction:
         reasons.append(f"conviction={conviction:.4f}<{min_conviction}")
-    if not (q >= extreme_q_high or q <= extreme_q_low):
-        reasons.append(
-            f"q={q:.3f} not extreme (need ≥{extreme_q_high} or ≤{extreme_q_low})"
-        )
+
+    q_ext = q >= extreme_q_high or q <= extreme_q_low
+    p_hi = float(extreme_p_high if extreme_p_high is not None else extreme_q_high)
+    p_lo = float(extreme_p_low if extreme_p_low is not None else extreme_q_low)
+    p_ext = p >= p_hi or p <= p_lo
+    anchor = (extreme_anchor or "q").strip().lower()
+
+    # Live real-q: mid CEX q → require stretched Polymarket p (fade path).
+    if live_real_q and not q_ext:
+        extreme_ok = p_ext
+        if not extreme_ok:
+            reasons.append(
+                f"live_real_q: p={p:.3f} not stretched "
+                f"(need ≥{p_hi} or ≤{p_lo}; q={q:.3f} mid)"
+            )
+        return (len(reasons) == 0), reasons
+
+    if anchor == "none":
+        extreme_ok = True
+    elif anchor == "p":
+        extreme_ok = p_ext
+    elif anchor == "either":
+        extreme_ok = q_ext or p_ext
+    else:
+        extreme_ok = q_ext
+
+    if not extreme_ok:
+        if anchor == "p":
+            reasons.append(
+                f"p={p:.3f} not extreme (need ≥{p_hi} or ≤{p_lo})"
+            )
+        elif anchor == "either":
+            reasons.append(
+                f"q={q:.3f}/p={p:.3f} not extreme "
+                f"(need q≥{extreme_q_high}/≤{extreme_q_low} or p≥{p_hi}/≤{p_lo})"
+            )
+        else:
+            reasons.append(
+                f"q={q:.3f} not extreme (need ≥{extreme_q_high} or ≤{extreme_q_low})"
+            )
     return (len(reasons) == 0), reasons

@@ -9,17 +9,25 @@ import yaml
 from pydantic import BaseModel, Field, field_validator
 
 FilterMode = Literal["strict", "strict_real", "moderate", "aggressive"]
+ExtremeAnchor = Literal["q", "p", "either", "none"]
 
 # Hermes Agent v3 — frozen production profile (real cex_implied_up as q).
 # Gold standard: reports/full_backtest_vps_20260716_strict_real
 #   89.7% WR · MC p5 85.3% · 919 trades · DD 8.0% · PF 3.05
 # DO NOT loosen min_edge below 0.14 under real q — weaker buckets destroy WR.
+#
+# extreme_anchor=q + 0.85/0.15 keeps synthetic WR. Live desk sets
+# live_real_q=True so mid CEX q uses extreme_p_* on Polymarket p instead
+# (otherwise q≥0.85 dead-stops all fills for hours).
 STRICT_REAL_FREEZE: dict[str, Any] = {
     "min_edge": 0.14,
     "min_conviction": 0.93,
     "min_conviction_guard": 0.96,
     "extreme_q_high": 0.85,
     "extreme_q_low": 0.15,
+    "extreme_anchor": "q",
+    "extreme_p_high": 0.72,
+    "extreme_p_low": 0.28,
     "kappa_base": 0.35,
     "kappa_guard": 0.20,
     "max_single_market_pct": 0.08,
@@ -57,6 +65,7 @@ MODE_PRESETS: dict[str, dict[str, Any]] = {
         "min_conviction_guard": 0.97,
         "extreme_q_high": 0.88,
         "extreme_q_low": 0.12,
+        "extreme_anchor": "q",
         "kappa_base": 0.35,
         "max_single_market_pct": 0.10,
         "risk_budget": 0.20,
@@ -69,6 +78,9 @@ MODE_PRESETS: dict[str, dict[str, Any]] = {
         "min_conviction_guard": STRICT_REAL_FREEZE["min_conviction_guard"],
         "extreme_q_high": STRICT_REAL_FREEZE["extreme_q_high"],
         "extreme_q_low": STRICT_REAL_FREEZE["extreme_q_low"],
+        "extreme_anchor": STRICT_REAL_FREEZE["extreme_anchor"],
+        "extreme_p_high": STRICT_REAL_FREEZE["extreme_p_high"],
+        "extreme_p_low": STRICT_REAL_FREEZE["extreme_p_low"],
         "kappa_base": STRICT_REAL_FREEZE["kappa_base"],
         "max_single_market_pct": STRICT_REAL_FREEZE["max_single_market_pct"],
         "risk_budget": STRICT_REAL_FREEZE["risk_budget"],
@@ -82,6 +94,7 @@ MODE_PRESETS: dict[str, dict[str, Any]] = {
         "min_conviction_guard": 0.94,
         "extreme_q_high": 0.80,
         "extreme_q_low": 0.20,
+        "extreme_anchor": "q",
         "kappa_base": 0.40,
         "max_single_market_pct": 0.09,
         "risk_budget": 0.20,
@@ -94,6 +107,7 @@ MODE_PRESETS: dict[str, dict[str, Any]] = {
         "min_conviction_guard": 0.95,
         "extreme_q_high": 0.85,
         "extreme_q_low": 0.15,
+        "extreme_anchor": "q",
         "kappa_base": 0.30,
         "max_single_market_pct": 0.08,
         "risk_budget": 0.18,
@@ -138,6 +152,10 @@ class EnhancedMispriceConfig(BaseModel):
     min_conviction_guard: float = Field(0.96, ge=0.5, le=0.99)
     extreme_q_high: float = Field(0.85, ge=0.55, le=0.95)
     extreme_q_low: float = Field(0.15, ge=0.05, le=0.45)
+    # Synthetic / default: extreme on model q. Live real-q uses extreme_p_*.
+    extreme_anchor: ExtremeAnchor = "q"
+    extreme_p_high: float = Field(0.72, ge=0.55, le=0.95)
+    extreme_p_low: float = Field(0.28, ge=0.05, le=0.45)
     early_exit_conviction: float = Field(0.35, ge=0.05, le=0.60)
 
     dd_guard_pct: float = Field(0.08, ge=0.02, le=0.20)
@@ -237,7 +255,7 @@ def apply_mode_preset(
             out["n_eff"] = n_eff
         else:
             out[key] = value
-    # Apply remaining freeze guards (kappa_guard / DD) when production mode
+    # Apply remaining freeze guards when production mode
     if chosen == "strict_real":
         for key in (
             "kappa_guard",
@@ -245,9 +263,14 @@ def apply_mode_preset(
             "rolling_wr_window",
             "rolling_wr_floor",
             "max_drawdown_hard_pct",
+            "extreme_anchor",
+            "extreme_p_high",
+            "extreme_p_low",
         ):
-            if key in STRICT_REAL_FREEZE and key not in preset:
+            if key in STRICT_REAL_FREEZE:
                 out[key] = STRICT_REAL_FREEZE[key]
+    if "extreme_anchor" not in out:
+        out["extreme_anchor"] = "q"
     return out
 
 
@@ -296,7 +319,12 @@ def assert_strict_real_freeze(cfg: EnhancedMispriceConfig) -> None:
             actual = cfg.n_eff.crypto
         else:
             actual = getattr(cfg, key)
-        if abs(float(actual) - float(expected)) > 1e-9:
+        if isinstance(expected, str):
+            if str(actual) != str(expected):
+                raise AssertionError(
+                    f"strict_real freeze violated: {key}={actual!r} (expected {expected!r})"
+                )
+        elif abs(float(actual) - float(expected)) > 1e-9:
             raise AssertionError(
                 f"strict_real freeze violated: {key}={actual} (expected {expected})"
             )

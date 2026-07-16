@@ -82,6 +82,9 @@ def test_load_strict_real_preset():
     assert cfg.min_conviction_guard == pytest.approx(0.96)
     assert cfg.extreme_q_high == pytest.approx(0.85)
     assert cfg.extreme_q_low == pytest.approx(0.15)
+    assert cfg.extreme_anchor == "q"
+    assert cfg.extreme_p_high == pytest.approx(0.72)
+    assert cfg.extreme_p_low == pytest.approx(0.28)
     assert cfg.kappa_base == pytest.approx(0.35)
     assert cfg.max_single_market_pct == pytest.approx(0.08)
     assert cfg.risk_budget == pytest.approx(0.18)
@@ -110,6 +113,9 @@ def test_strict_real_freeze_constant_matches_preset():
         "min_conviction_guard",
         "extreme_q_high",
         "extreme_q_low",
+        "extreme_anchor",
+        "extreme_p_high",
+        "extreme_p_low",
         "kappa_base",
         "max_single_market_pct",
         "risk_budget",

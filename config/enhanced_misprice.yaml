@@ -19,12 +19,16 @@ risk_budget: 0.18
 
 # Hard Bayesian entry filter (selectivity → 80%+ WR when model is calibrated)
 # strict_real: real cex_implied_up as q — edge floor near the only profitable
-# VPS bucket (≥0.15); tighter conviction + extreme_q than moderate.
+# VPS bucket (≥0.15). Synthetic uses extreme on q; live Hermes uses extreme_p_*
+# when CEX q is mid (see live_real_q in enhance_from_hermes_mispricing).
 min_edge: 0.14
 min_conviction: 0.93
 min_conviction_guard: 0.96
 extreme_q_high: 0.85
 extreme_q_low: 0.15
+extreme_anchor: q
+extreme_p_high: 0.72
+extreme_p_low: 0.28
 early_exit_conviction: 0.35
 
 # Drawdown / rolling WR guards

@@ -47,3 +47,35 @@ def test_hard_filter_passes_extreme_yes():
         extreme_q_low=0.22,
     )
     assert ok, reasons
+
+
+def test_hard_filter_live_real_q_uses_pm_stretch():
+    """Live real-q path: CEX q≈0.55, PM p stretched — must not dead-stop."""
+    q, p = 0.55, 0.765
+    bayes = bayesian_conviction(q, p, 80, side="NO")
+    ok_synth, _ = passes_hard_entry_filter(
+        q, p, bayes.conviction,
+        min_edge=0.14, min_conviction=0.93,
+        extreme_q_high=0.85, extreme_q_low=0.15, extreme_anchor="q",
+    )
+    assert not ok_synth
+    ok_live, reasons = passes_hard_entry_filter(
+        q, p, bayes.conviction,
+        min_edge=0.14, min_conviction=0.93,
+        extreme_q_high=0.85, extreme_q_low=0.15, extreme_anchor="q",
+        live_real_q=True, extreme_p_high=0.72, extreme_p_low=0.28,
+    )
+    assert ok_live, reasons
+
+
+def test_hard_filter_live_real_q_still_blocks_unstretched_pm():
+    q, p = 0.55, 0.62  # edge 0.07 < 0.14 anyway; also p not stretched
+    bayes = bayesian_conviction(q, p, 80, side="NO")
+    ok, reasons = passes_hard_entry_filter(
+        q, p, bayes.conviction,
+        min_edge=0.14, min_conviction=0.93,
+        extreme_q_high=0.85, extreme_q_low=0.15,
+        live_real_q=True, extreme_p_high=0.72, extreme_p_low=0.28,
+    )
+    assert not ok
+    assert any("edge" in r or "stretched" in r or "conviction" in r for r in reasons)

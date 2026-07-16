@@ -36,6 +36,7 @@ def evaluate_market(
     config: Optional[EnhancedMispriceConfig] = None,
     guard: Optional[GuardState] = None,
     bankroll: Optional[float] = None,
+    live_real_q: bool = False,
 ) -> TradeOpportunity:
     # Fixed: Removed artificial q pushing and stale q reuse. Bot now uses live(ish) model q and follows Polymarket CLOB more closely.
     """Run enhanced filters + Kelly sizing on one market snapshot.
@@ -44,6 +45,8 @@ def evaluate_market(
     ----------
     market.p : Polymarket implied P(YES/UP)
     market.q : model fair P(YES/UP) — from CEX mispricing or other pluggable model
+    live_real_q : when True (Hermes live paper), mid CEX q uses Polymarket p
+        stretch gates instead of requiring q≥0.85 (which never fires live).
     """
     cfg = config or load_enhanced_config()
     kappa = guard.kappa if guard else cfg.kappa_base
@@ -87,6 +90,10 @@ def evaluate_market(
         min_conviction=min_conv,
         extreme_q_high=cfg.extreme_q_high,
         extreme_q_low=cfg.extreme_q_low,
+        extreme_anchor=getattr(cfg, "extreme_anchor", "q"),
+        live_real_q=live_real_q,
+        extreme_p_high=getattr(cfg, "extreme_p_high", None),
+        extreme_p_low=getattr(cfg, "extreme_p_low", None),
     )
 
     liq = liquidity_score(market.liquidity_usd, market.volume_24h)
@@ -226,12 +233,15 @@ def enhance_from_hermes_mispricing(
         config=cfg,
         guard=guard,
         bankroll=bankroll if bankroll is not None else rm.state.bankroll,
+        # Live Hermes path: real cex_implied_up never hits q≥0.85 — use PM p stretch.
+        live_real_q=True,
     )
     # Attach guard snapshot for dashboard / verifier meta
     opp.meta["kappa"] = guard.kappa
     opp.meta["min_conviction_gate"] = guard.min_conviction
     opp.meta["drawdown_pct"] = guard.drawdown_pct
     opp.meta["rolling_wr"] = guard.rolling_wr
+    opp.meta["live_real_q"] = True
     return opp
 
 

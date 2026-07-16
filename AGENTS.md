@@ -26,8 +26,11 @@ mode: strict_real
 min_edge: 0.14          # CRITICAL — below this destroys WR under real q
 min_conviction: 0.93
 min_conviction_guard: 0.96
-extreme_q_high: 0.85
+extreme_q_high: 0.85    # synthetic / when model q is already extreme
 extreme_q_low: 0.15
+extreme_anchor: q
+extreme_p_high: 0.72    # live real-q only: fade stretched Polymarket YES
+extreme_p_low: 0.28
 kappa_base: 0.35
 kappa_guard: 0.20
 max_single_market_pct: 0.08
@@ -36,7 +39,7 @@ dd_guard_pct: 0.08
 max_drawdown_hard_pct: 0.15
 ```
 
-Never restore artificial extreme-q push (0.97/0.03). Model q = live `cex_implied_up` (lightly smoothed).
+Never restore artificial extreme-q push (0.97/0.03). Model q = live `cex_implied_up` (lightly smoothed). Live path sets `live_real_q=True` so mid CEX q uses `extreme_p_*` on Polymarket — requiring q≥0.85 live dead-stops the desk.
 
 ### VPS baseline
 
