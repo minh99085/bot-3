@@ -10,11 +10,42 @@ from pydantic import BaseModel, Field, field_validator
 
 FilterMode = Literal["strict", "strict_real", "moderate", "aggressive"]
 
+# Hermes Agent v3 — frozen production profile (real cex_implied_up as q).
+# Gold standard: reports/full_backtest_vps_20260716_strict_real
+#   89.7% WR · MC p5 85.3% · 919 trades · DD 8.0% · PF 3.05
+# DO NOT loosen min_edge below 0.14 under real q — weaker buckets destroy WR.
+STRICT_REAL_FREEZE: dict[str, Any] = {
+    "min_edge": 0.14,
+    "min_conviction": 0.93,
+    "min_conviction_guard": 0.96,
+    "extreme_q_high": 0.85,
+    "extreme_q_low": 0.15,
+    "kappa_base": 0.35,
+    "kappa_guard": 0.20,
+    "max_single_market_pct": 0.08,
+    "risk_budget": 0.18,
+    "dd_guard_pct": 0.08,
+    "rolling_wr_window": 20,
+    "rolling_wr_floor": 0.75,
+    "max_drawdown_hard_pct": 0.15,
+    "n_eff_crypto": 80.0,
+}
+
+# Non-negotiable backtest gates (Hermes Agent v3)
+TARGET_WR = 0.80
+TARGET_WR_MEAN = 0.87
+TARGET_MC_P5 = 0.82
+TARGET_DD = 0.08
+TARGET_PF = 2.5
+TARGET_BRIER = 0.15
+TARGET_SELECTIVITY_MIN = 0.04
+TARGET_SELECTIVITY_MAX = 0.10
+
 # Mode presets control entry filters + sizing. Tuned on synthetic backtests
 # (seed=42, 5k markets + Monte Carlo) so that:
 #   strict      → max WR, fewest trades (legacy; extreme_q band assumes inflated q)
-#   strict_real → high WR with real cex_implied_up as q (edge ≥0.14 bucket)
-#   moderate    → more trades, looser real-q gates
+#   strict_real → Hermes v3 production (real q; frozen — see STRICT_REAL_FREEZE)
+#   moderate    → more trades, looser real-q gates (research only; fails v3 gates)
 #   aggressive  → highest frequency, still aiming ~80%+ WR
 #
 # Keep min_edge high under real-q modes: edge <0.15 buckets destroy WR on
@@ -32,22 +63,20 @@ MODE_PRESETS: dict[str, dict[str, Any]] = {
         "n_eff_crypto": 80.0,
     },
     "strict_real": {
-        # High-WR live paper: real cex_implied_up as q (no artificial push).
-        # Edge floor near the only profitable VPS bucket (≥0.15 ≈ 75% WR).
-        "min_edge": 0.14,
-        "min_conviction": 0.93,
-        "min_conviction_guard": 0.96,
-        "extreme_q_high": 0.85,
-        "extreme_q_low": 0.15,
-        "kappa_base": 0.35,
-        "max_single_market_pct": 0.08,
-        "risk_budget": 0.18,
-        "n_eff_crypto": 80.0,
+        # Hermes Agent v3 freeze — real cex_implied_up as q (no artificial push).
+        "min_edge": STRICT_REAL_FREEZE["min_edge"],
+        "min_conviction": STRICT_REAL_FREEZE["min_conviction"],
+        "min_conviction_guard": STRICT_REAL_FREEZE["min_conviction_guard"],
+        "extreme_q_high": STRICT_REAL_FREEZE["extreme_q_high"],
+        "extreme_q_low": STRICT_REAL_FREEZE["extreme_q_low"],
+        "kappa_base": STRICT_REAL_FREEZE["kappa_base"],
+        "max_single_market_pct": STRICT_REAL_FREEZE["max_single_market_pct"],
+        "risk_budget": STRICT_REAL_FREEZE["risk_budget"],
+        "n_eff_crypto": STRICT_REAL_FREEZE["n_eff_crypto"],
     },
     "moderate": {
-        # Live paper: real cex_implied_up as q (no artificial 0.97/0.03 push).
-        # Wider extreme_q band + slightly looser edge/conviction so genuine
-        # CEX-implied probs can clear gates without fake q inflation.
+        # Research / live-safer exploration only — NOT production.
+        # Wider gates admit mid-odds losers under real q (VPS: ~58% WR).
         "min_edge": 0.085,
         "min_conviction": 0.88,
         "min_conviction_guard": 0.94,
@@ -90,25 +119,25 @@ class NEffByCategory(BaseModel):
 class EnhancedMispriceConfig(BaseModel):
     """All tunable thresholds for Kelly + Bayesian conviction + risk guards.
 
-    Designed so that with a reasonably calibrated probability model
-    (Brier < 0.18), filtered trades target ≥80% realized win rate.
+    Hermes Agent v3 defaults match ``strict_real`` (real cex_implied_up as q).
+    With calibrated model noise (Brier ≤ 0.15), filtered trades target ≥80% WR,
+    MC p5 ≥ 82%, and max DD ≤ 8%.
     """
 
     # Profile: applies MODE_PRESETS on load (see load_enhanced_config).
-    mode: FilterMode = "strict"
+    mode: FilterMode = "strict_real"
 
     kappa_base: float = Field(0.35, ge=0.05, le=1.0)
     kappa_guard: float = Field(0.20, ge=0.05, le=1.0)
-    max_single_market_pct: float = Field(0.10, ge=0.01, le=0.25)
-    risk_budget: float = Field(0.20, ge=0.05, le=1.0)
+    max_single_market_pct: float = Field(0.08, ge=0.01, le=0.25)
+    risk_budget: float = Field(0.18, ge=0.05, le=1.0)
 
-    # Product baseline: 0.06 / 0.92 / 0.78|0.22. Defaults below match
-    # the ``strict`` mode preset.
-    min_edge: float = Field(0.12, ge=0.02, le=0.20)
-    min_conviction: float = Field(0.95, ge=0.5, le=0.99)
-    min_conviction_guard: float = Field(0.97, ge=0.5, le=0.99)
-    extreme_q_high: float = Field(0.88, ge=0.55, le=0.95)
-    extreme_q_low: float = Field(0.12, ge=0.05, le=0.45)
+    # Frozen strict_real production thresholds (see STRICT_REAL_FREEZE).
+    min_edge: float = Field(0.14, ge=0.02, le=0.20)
+    min_conviction: float = Field(0.93, ge=0.5, le=0.99)
+    min_conviction_guard: float = Field(0.96, ge=0.5, le=0.99)
+    extreme_q_high: float = Field(0.85, ge=0.55, le=0.95)
+    extreme_q_low: float = Field(0.15, ge=0.05, le=0.45)
     early_exit_conviction: float = Field(0.35, ge=0.05, le=0.60)
 
     dd_guard_pct: float = Field(0.08, ge=0.02, le=0.20)
@@ -154,7 +183,7 @@ class EnhancedMispriceConfig(BaseModel):
     @field_validator("extreme_q_low")
     @classmethod
     def _low_lt_high(cls, v: float, info) -> float:  # noqa: ANN001
-        high = info.data.get("extreme_q_high", 0.78)
+        high = info.data.get("extreme_q_high", 0.85)
         if v >= high:
             raise ValueError("extreme_q_low must be < extreme_q_high")
         return v
@@ -169,6 +198,19 @@ class EnhancedMispriceConfig(BaseModel):
             )
         return key
 
+    @field_validator("min_edge")
+    @classmethod
+    def _freeze_edge_floor(cls, v: float, info) -> float:  # noqa: ANN001
+        """Under strict_real, never allow min_edge below the frozen floor."""
+        mode = str(info.data.get("mode") or "strict_real").strip().lower()
+        floor = float(STRICT_REAL_FREEZE["min_edge"])
+        if mode == "strict_real" and v + 1e-12 < floor:
+            raise ValueError(
+                f"strict_real forbids min_edge<{floor} (got {v}); "
+                "weaker edge buckets destroy WR under real q"
+            )
+        return v
+
 
 def apply_mode_preset(
     raw: dict[str, Any],
@@ -182,7 +224,7 @@ def apply_mode_preset(
     when the preset defines ``n_eff_crypto``.
     """
     out = dict(raw)
-    chosen = (mode or out.get("mode") or "strict")
+    chosen = (mode or out.get("mode") or "strict_real")
     chosen = str(chosen).strip().lower()
     if chosen not in MODE_PRESETS:
         raise ValueError(f"Unknown filter mode {chosen!r}; expected {sorted(MODE_PRESETS)}")
@@ -195,6 +237,17 @@ def apply_mode_preset(
             out["n_eff"] = n_eff
         else:
             out[key] = value
+    # Apply remaining freeze guards (kappa_guard / DD) when production mode
+    if chosen == "strict_real":
+        for key in (
+            "kappa_guard",
+            "dd_guard_pct",
+            "rolling_wr_window",
+            "rolling_wr_floor",
+            "max_drawdown_hard_pct",
+        ):
+            if key in STRICT_REAL_FREEZE and key not in preset:
+                out[key] = STRICT_REAL_FREEZE[key]
     return out
 
 
@@ -211,7 +264,7 @@ def load_enhanced_config(
     mode:
         If set, forces that filter profile (strict / strict_real / moderate /
         aggressive) after YAML load. Otherwise uses ``mode:`` from the YAML
-        (default strict; production YAML pins strict_real).
+        (default / production: strict_real).
     """
     cfg_path = Path(path) if path else Path("config/enhanced_misprice.yaml")
     raw: dict[str, Any] = {}
@@ -232,3 +285,18 @@ def load_enhanced_config(
                 fine = {**fine, "n_eff": merged_n}
             raw = {**raw, **fine}
     return EnhancedMispriceConfig.model_validate(raw)
+
+
+def assert_strict_real_freeze(cfg: EnhancedMispriceConfig) -> None:
+    """Raise if a strict_real config drifts from the Hermes v3 freeze."""
+    if cfg.mode != "strict_real":
+        return
+    for key, expected in STRICT_REAL_FREEZE.items():
+        if key == "n_eff_crypto":
+            actual = cfg.n_eff.crypto
+        else:
+            actual = getattr(cfg, key)
+        if abs(float(actual) - float(expected)) > 1e-9:
+            raise AssertionError(
+                f"strict_real freeze violated: {key}={actual} (expected {expected})"
+            )

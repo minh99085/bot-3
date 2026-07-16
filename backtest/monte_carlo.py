@@ -28,7 +28,7 @@ class MonteCarloSummary:
     p95_wr: float = 0.0
     mean_dd: float = 0.0
     fraction_hit_80: float = 0.0
-    consistent: bool = False  # 5th percentile comfortably above 75–78%
+    consistent: bool = False  # Hermes v3: p5 ≥ 82% and mean ≥ 87%
     plain_english: str = ""
 
     def to_dict(self) -> dict:
@@ -100,26 +100,33 @@ def run_monte_carlo(
 
     arr = np.asarray(wrs, dtype=float)
     p5 = float(np.percentile(arr, 5)) if len(arr) else 0.0
+    from models.config import TARGET_MC_P5, TARGET_WR_MEAN
+
+    mean_wr = float(arr.mean()) if len(arr) else 0.0
+    consistent = p5 >= TARGET_MC_P5 and mean_wr >= TARGET_WR_MEAN
     summary = MonteCarloSummary(
         n_runs=runs,
         win_rates=wrs,
         max_dds=dds,
         n_trades=ns,
-        mean_wr=float(arr.mean()) if len(arr) else 0.0,
+        mean_wr=mean_wr,
         median_wr=float(np.median(arr)) if len(arr) else 0.0,
         p5_wr=p5,
         p95_wr=float(np.percentile(arr, 95)) if len(arr) else 0.0,
         mean_dd=float(np.mean(dds)) if dds else 0.0,
         fraction_hit_80=float(np.mean(arr >= 0.80)) if len(arr) else 0.0,
-        consistent=p5 >= 0.75,
+        consistent=consistent,
         plain_english=(
-            f"Across {runs} random universes, average win rate was {100 * float(arr.mean()):.1f}% "
+            f"Across {runs} random universes, average win rate was {100 * mean_wr:.1f}% "
             f"(median {100 * float(np.median(arr)):.1f}%). "
             f"The unlucky 5th-percentile run still hit {100 * p5:.1f}% — "
             + (
-                "comfortably above 75%, so the edge looks consistent."
-                if p5 >= 0.75
-                else "below 75%; tighten filters or improve calibration before trusting live paper."
+                f"clears Hermes v3 gates (p5≥{100 * TARGET_MC_P5:.0f}%, mean≥{100 * TARGET_WR_MEAN:.0f}%)."
+                if consistent
+                else (
+                    f"misses Hermes v3 MC gates (need p5≥{100 * TARGET_MC_P5:.0f}% and "
+                    f"mean≥{100 * TARGET_WR_MEAN:.0f}%); tighten filters before trusting live paper."
+                )
             )
         ),
     )

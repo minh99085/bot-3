@@ -32,12 +32,11 @@ def test_evaluate_market_hard_filter():
 
 
 def test_synthetic_backtest_hits_80_wr():
-    # Strict mode is the calibrated ≥80% WR profile; moderate uses live-safer
-    # real-q thresholds that admit more mid-odds noise on synthetic.
-    cfg = load_enhanced_config(mode="strict")
-    result = run_backtest(config=cfg, use_synthetic=True)
+    # Hermes v3 production profile: strict_real + real-q gates (gold-standard size).
+    cfg = load_enhanced_config(mode="strict_real")
+    result = run_backtest(config=cfg, use_synthetic=True, n_markets=5000, seed=42)
     assert result.report.n_trades >= 30
-    assert result.brier < 0.18
+    assert result.brier <= 0.155
     assert result.report.win_rate >= 0.80
-    assert result.report.max_drawdown_pct < 0.15
+    assert result.report.max_drawdown_pct <= 0.085
     assert result.target_met

@@ -1,9 +1,15 @@
-"""Models package — config + market schemas."""
-
 from models.config import (
     MODE_PRESETS,
+    STRICT_REAL_FREEZE,
+    TARGET_BRIER,
+    TARGET_DD,
+    TARGET_MC_P5,
+    TARGET_PF,
+    TARGET_WR,
+    TARGET_WR_MEAN,
     EnhancedMispriceConfig,
     apply_mode_preset,
+    assert_strict_real_freeze,
     load_enhanced_config,
 )
 from models.market import (
@@ -18,8 +24,16 @@ from models.market import (
 
 __all__ = [
     "MODE_PRESETS",
+    "STRICT_REAL_FREEZE",
+    "TARGET_BRIER",
+    "TARGET_DD",
+    "TARGET_MC_P5",
+    "TARGET_PF",
+    "TARGET_WR",
+    "TARGET_WR_MEAN",
     "EnhancedMispriceConfig",
     "apply_mode_preset",
+    "assert_strict_real_freeze",
     "load_enhanced_config",
     "MarketSnapshot",
     "TradeOpportunity",

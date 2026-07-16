@@ -111,7 +111,7 @@ def print_metrics_table(console: Console, m) -> None:
     table.add_row("Max drawdown", f"{m.max_drawdown_pct:.1%}")
     table.add_row("Expectancy / trade", f"${m.expectancy_usd:.2f}")
     table.add_row("Model Brier", f"{m.brier:.3f}")
-    table.add_row("Target (≥80% WR, DD≤15%)", "YES ✅" if m.target_met else "NO ❌")
+    table.add_row("Target (v3: ≥80% WR, DD≤8%, Brier≤0.15, PF≥2.5)", "YES ✅" if m.target_met else "NO ❌")
     console.print(table)
     console.print(Panel(m.plain_english, title="What this means", border_style="blue"))
 
@@ -222,15 +222,31 @@ def run_pipeline(args: argparse.Namespace, argv: list[str]) -> int:
         compare_block = "\n\n" + cmp.summary_text()
         compare_payload = cmp.to_dict()
 
+    # Full Hermes v3 pass: metrics gates + MC consistency when MC ran.
+    # Fast mode uses a lighter bar (small n → path DD noise); full runs enforce v3.
+    from models.config import TARGET_WR
+
+    if args.fast:
+        v3_ok = (
+            m.win_rate >= TARGET_WR
+            and m.max_drawdown_pct <= cfg.max_drawdown_hard_pct
+            and m.n_trades >= 20
+        )
+        if mc_summary is not None:
+            v3_ok = v3_ok and mc_summary.p5_wr >= 0.75
+    else:
+        v3_ok = bool(m.target_met)
+        if mc_summary is not None:
+            v3_ok = v3_ok and bool(mc_summary.consistent)
     verdict = format_verdict(
         win_rate=m.win_rate,
         n_trades=m.n_trades,
         max_dd=m.max_drawdown_pct,
-        target_met=m.target_met,
+        target_met=v3_ok,
         mc_p5=mc_p5,
     )
-    print_verdict_banner(console, verdict, ok=m.target_met)
-    if m.target_met and args.fast:
+    print_verdict_banner(console, verdict, ok=v3_ok)
+    if v3_ok and args.fast:
         console.print(
             Panel(
                 "[bold green]🎉 Success![/]\n"
@@ -311,16 +327,18 @@ def run_pipeline(args: argparse.Namespace, argv: list[str]) -> int:
     (run_dir / "extra.json").write_text(json.dumps(extra, indent=2, default=str))
 
     console.print(f"[green]Artifacts → {run_dir}[/]")
-    if not m.target_met:
+    if not v3_ok:
         console.print(
             Panel(
-                "Win rate below 80%. See [bold]BACKTEST_GUIDE.md[/] → Troubleshooting.\n"
+                "Hermes Agent v3 gates missed (WR / DD / Brier / PF / MC p5). "
+                "See [bold]BACKTEST_GUIDE.md[/] → Troubleshooting.\n"
+                "Keep [cyan]mode: strict_real[/] and [cyan]min_edge ≥ 0.14[/]. "
                 "Quick try: [cyan]python -m backtest --optimize --fast[/]",
                 border_style="red",
                 title="Next step",
             )
         )
-    return 0 if m.target_met else 1
+    return 0 if v3_ok else 1
 
 
 def _run_optimize(

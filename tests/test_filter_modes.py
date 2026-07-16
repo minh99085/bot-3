@@ -8,7 +8,9 @@ from backtest.engine import BacktestEngine
 from backtest.metrics import compute_metrics
 from models.config import (
     MODE_PRESETS,
+    STRICT_REAL_FREEZE,
     apply_mode_preset,
+    assert_strict_real_freeze,
     load_enhanced_config,
 )
 
@@ -83,6 +85,7 @@ def test_load_strict_real_preset():
     assert cfg.kappa_base == pytest.approx(0.35)
     assert cfg.max_single_market_pct == pytest.approx(0.08)
     assert cfg.risk_budget == pytest.approx(0.18)
+    assert_strict_real_freeze(cfg)
 
 
 def test_yaml_defaults_to_strict_real():
@@ -92,6 +95,27 @@ def test_yaml_defaults_to_strict_real():
     assert cfg.min_conviction == pytest.approx(
         MODE_PRESETS["strict_real"]["min_conviction"]
     )
+    assert_strict_real_freeze(cfg)
+
+
+def test_strict_real_rejects_edge_below_freeze():
+    with pytest.raises(ValueError, match="min_edge"):
+        load_enhanced_config(mode="strict_real", overrides={"min_edge": 0.10})
+
+
+def test_strict_real_freeze_constant_matches_preset():
+    for key in (
+        "min_edge",
+        "min_conviction",
+        "min_conviction_guard",
+        "extreme_q_high",
+        "extreme_q_low",
+        "kappa_base",
+        "max_single_market_pct",
+        "risk_budget",
+        "n_eff_crypto",
+    ):
+        assert MODE_PRESETS["strict_real"][key] == STRICT_REAL_FREEZE[key]
 
 
 def test_moderate_more_trades_than_strict_and_wr_above_80():

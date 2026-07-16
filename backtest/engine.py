@@ -456,12 +456,12 @@ def run_backtest(
 
     metrics = compute_metrics(er)
     report = metrics_to_legacy_report(metrics, er)
-    target = metrics.win_rate >= 0.80 and metrics.max_drawdown_pct <= cfg.max_drawdown_hard_pct
+    target = bool(metrics.target_met)
     suggestions: list[str] = []
     if not target:
         suggestions = [
-            "# WR or DD missed target — try raising min_conviction / min_edge,",
-            "# extreme_q_high, n_eff.crypto, or lowering kappa_base. See BACKTEST_GUIDE.md",
+            "# Hermes v3 gates missed — keep mode: strict_real, min_edge≥0.14,",
+            "# raise min_conviction / extreme_q, or lower kappa_base. See BACKTEST_GUIDE.md",
         ]
     return BacktestResult(
         report=report,

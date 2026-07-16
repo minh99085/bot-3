@@ -1,12 +1,13 @@
-# Filter profile — switches entry thresholds via MODE_PRESETS in models/config.py
+# Filter profile — Hermes Agent v3 production lock
 # options: strict | strict_real | moderate | aggressive
 #
-#   strict       — max WR, fewest trades (legacy extreme_q 0.88/0.12; inflated-q era)
-#   strict_real  — high WR with real cex_implied_up as q (edge 0.14, conv 0.93)
-#   moderate     — more trades, looser real-q gates (edge 0.085)
-#   aggressive   — highest frequency, ~80–83% WR on synthetic
+#   strict       — legacy max WR (inflated-q era thresholds)
+#   strict_real  — PRODUCTION FREEZE (real cex_implied_up as q) — DO NOT LOOSEN
+#   moderate     — research only (fails v3 gates under real q)
+#   aggressive   — research frequency profile
 #
 # Tip: set mode alone; the preset overwrites the threshold fields below.
+# Frozen values live in models.config.STRICT_REAL_FREEZE.
 mode: strict_real
 
 # --- Active thresholds (mirrored from the selected mode; do not hand-edit

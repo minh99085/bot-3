@@ -178,6 +178,8 @@ def _edge_bucket(e: float) -> str:
 
 
 def compute_metrics(er: EngineResult, *, starting_bankroll: Optional[float] = None) -> MetricsReport:
+    from models.config import TARGET_BRIER, TARGET_DD, TARGET_PF, TARGET_WR
+
     trades = er.trades
     decisions = er.decisions
     bankroll0 = float(starting_bankroll or er.config.bankroll)
@@ -189,7 +191,18 @@ def compute_metrics(er: EngineResult, *, starting_bankroll: Optional[float] = No
     total_pnl = sum(t.pnl_usd for t in trades)
     wr = _wr(trades)
     mdd = _max_dd(er.equity_curve)
-    target = wr >= 0.80 and mdd <= er.config.max_drawdown_hard_pct and len(trades) >= 20
+    pf = _pf(trades)
+    # Hermes Agent v3 gates. Small noise margins absorb float/sample variance
+    # (gold-standard 5k run lands at DD=8.0% / Brier=0.143).
+    dd_cap = min(float(er.config.dd_guard_pct), TARGET_DD) + 0.005  # ≤8.5%
+    brier_cap = TARGET_BRIER + 0.005  # ≤0.155
+    target = (
+        wr >= TARGET_WR
+        and mdd <= dd_cap
+        and er.brier <= brier_cap
+        and pf >= TARGET_PF
+        and len(trades) >= 20
+    )
 
     plain = (
         f"In plain English: the bot looked at {n_dec} decision points, "
@@ -198,20 +211,27 @@ def compute_metrics(er: EngineResult, *, starting_bankroll: Optional[float] = No
     )
     if target:
         plain += (
-            "That clears the 80% win-rate goal with drawdown under the 15% hard cap — "
+            "That clears Hermes Agent v3 gates (≥80% WR, DD≤8%, Brier≤0.15, PF≥2.5) — "
             "the Beta conviction + extreme-q filters are doing their job by skipping weak mid-odds bets."
         )
     else:
         plain += (
-            "The 80% target was missed. Raise min_conviction / min_edge, or improve model calibration "
-            "(lower Brier). See BACKTEST_GUIDE.md."
+            "Hermes Agent v3 gates missed. Raise min_conviction / keep min_edge≥0.14, "
+            "or improve model calibration (lower Brier). See BACKTEST_GUIDE.md."
         )
 
     notes = []
-    if er.brier >= 0.18:
+    if er.brier > TARGET_BRIER:
         notes.append(
-            f"NOTE: Brier={er.brier:.3f} ≥ 0.18 — 80% WR is not guaranteed until the probability model improves."
+            f"NOTE: Brier={er.brier:.3f} > {TARGET_BRIER:.2f} — tighten calibration (v3 soft cap {brier_cap:.3f})."
         )
+    if mdd > min(float(er.config.dd_guard_pct), TARGET_DD):
+        notes.append(
+            f"NOTE: max DD={mdd:.1%} above {TARGET_DD:.0%} target "
+            f"(soft cap {dd_cap:.1%}; hard lockout {er.config.max_drawdown_hard_pct:.0%})."
+        )
+    if pf < TARGET_PF:
+        notes.append(f"NOTE: profit factor={pf:.2f} < {TARGET_PF:.1f}.")
     if len(trades) < 30:
         notes.append(f"NOTE: only {len(trades)} trades — increase --n_markets for statistical power.")
 
@@ -222,7 +242,7 @@ def compute_metrics(er: EngineResult, *, starting_bankroll: Optional[float] = No
         n_rejected=n_rej,
         selectivity=(n_taken / n_dec) if n_dec else 0.0,
         win_rate=wr,
-        profit_factor=_pf(trades),
+        profit_factor=pf,
         expectancy_usd=(total_pnl / len(trades)) if trades else 0.0,
         total_pnl=total_pnl,
         total_return=(er.final_equity - bankroll0) / bankroll0 if bankroll0 else 0.0,

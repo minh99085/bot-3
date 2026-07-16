@@ -1,4 +1,4 @@
-# SKILL.md — Financial Freedom Bot (Hermes v2)
+# SKILL.md — Financial Freedom Bot (Hermes Agent v3)
 
 > Living project skill. Every agent reads this file at the start of a turn.
 > The agent forgets; the repo doesn't. Update this file when conventions or
@@ -6,7 +6,11 @@
 
 ## Mission
 
-Autonomous Polymarket prediction-market trading loop targeting **consistent 80%+ win rate** on settled trades, **max drawdown < 8%**, **profit factor > 1.4**, with positive expectancy after fees and slippage.
+Autonomous Polymarket paper-trading loop targeting **consistent ≥80% win rate**
+(Monte Carlo p5 ≥ 82%, mean ≥ 87%) under **real `cex_implied_up` as q**, with
+**max drawdown ≤ 8%**, **profit factor ≥ 2.5**, selectivity 4–10%, Brier ≤ 0.15.
+
+Gold standard: `reports/full_backtest_vps_20260716_strict_real`.
 
 Paper mode is default. Live trading is opt-in only after paper evidence clears the gates.
 
@@ -14,8 +18,9 @@ Paper mode is default. Live trading is opt-in only after paper evidence clears t
 
 | Field | Value |
 |-------|-------|
-| Codename | Hermes v2 |
+| Codename | Hermes Agent v3 |
 | Architecture | Loop Engineering (Osmani) + Roan + Ruuj + Chainlink/Polymarket |
+| Filter mode | `strict_real` (frozen — see `STRICT_REAL_FREEZE`) |
 | Mode | `paper` until STATE.md says otherwise |
 | Verifier model hint | Stronger / different architecture than generator |
 | Allocation | Ledoit-Wolf → HRP/edge-RP → Black-Litterman → cut/reduce |
@@ -60,8 +65,12 @@ Paper mode is default. Live trading is opt-in only after paper evidence clears t
 16. **We never skip pre-trade analysis** — size is % of bankroll (max 3%) or 0% skip; verifier rejects `pretrade_skip`.
 17. **We never expose Streamlit :8501 publicly** — Nginx serves `http://<IP>/dashboard` only.
 18. **Hermes Paper deployments keep `HERMES_PAPER_ONLY=1`** — no live orders on the VPS stack.
-19. **We only scan/trade BTC Up/Down 5m + 15m** (`btc-updown-5m-*`, `btc-updown-15m-*`). All other markets are out of scope.
+19. **We only scan/trade scoped fast crypto lanes** via `MARKET_FILTER` (`btc5` / `btc15` / `eth5` / `sol5` / `rotator`).
 20. **We start small on fast markets** — 0.5% bankroll cold-start; scale only when lessons show WR/EV improving.
+21. **We never loosen `strict_real` below `min_edge: 0.14`** — weaker edge buckets destroy WR under real q.
+22. **We never reintroduce artificial extreme-q push (0.97/0.03)** — model q is live `cex_implied_up` only.
+23. **We never ship `moderate` / `aggressive` as production filter mode** — research only; production is `strict_real`.
+24. **We never mark a full backtest green unless Hermes v3 gates clear** — WR≥80%, MC p5≥82%, DD≤8%, PF≥2.5, Brier≤0.15.
 
 ## Circuit Breakers
 
