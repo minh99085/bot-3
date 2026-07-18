@@ -1,6 +1,16 @@
-"""Production backtest suite — generator, engine, compare, 80% WR gate."""
+"""Backtest suite — PLUMBING SANITY CHECKS ONLY.
+
+These tests verify the machinery (generator → engine → metrics) runs, tracks
+every decision, and conserves cash. They deliberately assert NOTHING about
+synthetic win rate: synthetic performance is not evidence of edge, and the
+old ≥80%-WR gates here were enshrining a circular harness. The honesty
+guardrails live in tests/test_synthetic_honesty.py; go/no-go is judged only
+on real out-of-sample performance after costs.
+"""
 
 from __future__ import annotations
+
+import pytest
 
 from backtest.compare import compare_naive_vs_enhanced
 from backtest.engine import BacktestEngine, run_backtest
@@ -9,48 +19,49 @@ from backtest.synthetic_generator import SyntheticDataGenerator
 from models.config import load_enhanced_config
 
 
-def test_synthetic_generator_multi_decision_and_correlation():
+def test_synthetic_generator_multi_decision_and_chronology():
     cfg = load_enhanced_config()
-    uni = SyntheticDataGenerator(cfg, seed=42).generate(n_markets=5000)
-    assert uni.n_markets == 5000
-    # 3 decision fracs by default
-    assert len(uni.decisions) == 5000 * len(cfg.decision_fracs)
-    # Chronological sort stable
+    uni = SyntheticDataGenerator(cfg, seed=42).generate(n_markets=300)
+    assert uni.n_markets == 300
+    assert len(uni.decisions) == 300 * len(cfg.decision_fracs)
     chrono = uni.chronological()
     assert all(
         chrono[i].decision_time <= chrono[i + 1].decision_time
-        for i in range(0, len(chrono) - 1, max(1, len(chrono) // 50))
+        for i in range(len(chrono) - 1)
     )
 
 
-def test_engine_enhanced_hits_80_wr():
+def test_engine_runs_tracks_and_conserves_cash():
     cfg = load_enhanced_config(mode="strict_real")
     er = BacktestEngine(cfg, mode="enhanced", seed=42).run_synthetic(
-        n_markets=5000, seed=42
+        n_markets=300, seed=42
     )
     m = compute_metrics(er)
-    assert m.n_trades >= 30
-    assert m.brier <= 0.155
-    assert m.win_rate >= 0.80
-    assert m.max_drawdown_pct <= 0.085
-    assert m.profit_factor >= 2.5
-    assert m.target_met
     # Every decision tracked
     assert m.n_decisions == er.n_decision_points
     assert m.n_taken + m.n_rejected == m.n_decisions
+    # Cash conservation: starting bankroll + total PnL == final cash
+    total_pnl = sum(t.pnl_usd for t in er.trades)
+    assert er.final_cash == pytest.approx(cfg.bankroll + total_pnl, rel=1e-9)
+    # Synthetic runs are labeled as such all the way through
+    assert er.data_source == "synthetic"
+    assert m.data_source == "synthetic"
+    assert "SANITY" in m.summary_text().upper()
 
 
-def test_naive_vs_enhanced_lift():
+def test_naive_vs_enhanced_compare_runs():
     cfg = load_enhanced_config(mode="strict_real")
-    cmp = compare_naive_vs_enhanced(n_markets=5000, seed=42, config=cfg)
-    # Enhanced should be pickier and usually higher WR
-    assert cmp.enhanced.n_trades <= cmp.naive.n_trades or cmp.enhanced.win_rate >= cmp.naive.win_rate
-    assert cmp.enhanced.win_rate >= 0.80
+    cmp = compare_naive_vs_enhanced(n_markets=300, seed=42, config=cfg)
+    # Structural comparison only — no synthetic WR gate (that was the red flag).
+    assert cmp.enhanced.n_decisions == cmp.naive.n_decisions
+    assert cmp.enhanced.n_trades >= 0 and cmp.naive.n_trades >= 0
 
 
 def test_threshold_sweep_monotonic_ish():
     cfg = load_enhanced_config(mode="strict_real")
-    er = BacktestEngine(cfg, mode="enhanced", seed=7).run_synthetic(n_markets=3000, seed=7)
+    er = BacktestEngine(cfg, mode="enhanced", seed=7).run_synthetic(
+        n_markets=300, seed=7
+    )
     rows = threshold_sweep(er.decisions)
     assert rows
     # Higher threshold should not explode n without bound
@@ -59,8 +70,7 @@ def test_threshold_sweep_monotonic_ish():
 
 def test_run_backtest_compat_wrapper():
     cfg = load_enhanced_config(mode="strict_real")
-    result = run_backtest(config=cfg, use_synthetic=True, n_markets=5000, seed=42)
+    result = run_backtest(config=cfg, use_synthetic=True, n_markets=300, seed=42)
     assert result.engine is not None
-    assert result.report.n_trades >= 20
-    assert result.report.win_rate >= 0.80
-    assert result.target_met
+    assert result.engine.data_source == "synthetic"
+    assert result.report.n_trades == len(result.engine.trades)

@@ -1,4 +1,4 @@
-"""Backtest must clear ≥80% WR under calibrated synthetic model."""
+"""Strategy unit tests + synthetic plumbing checks (sanity-only, no WR gates)."""
 
 from __future__ import annotations
 
@@ -31,12 +31,16 @@ def test_evaluate_market_hard_filter():
     assert opp.conviction >= 0.92
 
 
-def test_synthetic_backtest_hits_80_wr():
-    # Hermes v3 production profile: strict_real + real-q gates (gold-standard size).
+def test_synthetic_backtest_is_sanity_only():
+    """Synthetic runs are plumbing checks — no WR gate (that gate WAS the bug).
+
+    The old assertion here (win_rate >= 0.80 on synthetic data) enshrined the
+    circular q = true_q + noise harness. Honesty guardrails now live in
+    tests/test_synthetic_honesty.py.
+    """
     cfg = load_enhanced_config(mode="strict_real")
-    result = run_backtest(config=cfg, use_synthetic=True, n_markets=5000, seed=42)
-    assert result.report.n_trades >= 30
-    assert result.brier <= 0.155
-    assert result.report.win_rate >= 0.80
-    assert result.report.max_drawdown_pct <= 0.085
-    assert result.target_met
+    result = run_backtest(config=cfg, use_synthetic=True, n_markets=300, seed=42)
+    assert result.engine is not None
+    assert result.engine.data_source == "synthetic"
+    # Machinery consistency, not performance
+    assert result.report.n_trades == len(result.engine.trades)

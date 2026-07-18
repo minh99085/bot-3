@@ -17,7 +17,7 @@ def test_format_verdict_pass():
 
 
 def test_cli_fast_exits_zero(monkeypatch, tmp_path):
-    """python -m backtest --fast should hit ≥80% WR with defaults."""
+    """python -m backtest --fast completes and exits 0 (synthetic = sanity-only)."""
     # Keep artifacts under tmp by monkeypatching ARTIFACT_ROOT
     import backtest.artifacts as art
     import backtest.cli as cli

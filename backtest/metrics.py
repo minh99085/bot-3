@@ -85,15 +85,29 @@ class MetricsReport:
     target_met: bool = False
     plain_english: str = ""
     notes: list[str] = field(default_factory=list)
+    data_source: str = "unknown"  # "synthetic" runs are plumbing sanity only
 
     def summary_text(self) -> str:
-        lines = [
-            "=== Hermes Enhanced Misprice — Backtest Report ===",
+        lines = ["=== Hermes Enhanced Misprice — Backtest Report ==="]
+        if self.data_source == "synthetic":
+            lines += [
+                "",
+                "*** SYNTHETIC DATA — PLUMBING SANITY CHECK ONLY ***",
+                "*** Not evidence of edge. Go/no-go is judged ONLY on real   ***",
+                "*** out-of-sample performance after costs. A high synthetic ***",
+                "*** win rate is a red flag (see null-edge test), not a goal.***",
+            ]
+        wr_line = (
+            f"Win rate:         {self.win_rate:.1%}   (synthetic — sanity only)"
+            if self.data_source == "synthetic"
+            else f"Win rate:         {self.win_rate:.1%}   {'✓ TARGET' if self.win_rate >= 0.80 else '✗ below 80%'}"
+        )
+        lines += [
             "",
             f"Trades taken:     {self.n_trades}",
             f"Decisions seen:   {self.n_decisions}  (taken={self.n_taken}, rejected={self.n_rejected})",
             f"Selectivity:      {self.selectivity:.1%}  ← lower = pickier (usually good for WR)",
-            f"Win rate:         {self.win_rate:.1%}   {'✓ TARGET' if self.win_rate >= 0.80 else '✗ below 80%'}",
+            wr_line,
             f"Profit factor:    {self.profit_factor:.2f}",
             f"Expectancy/trade: ${self.expectancy_usd:.2f}",
             f"Total PnL:        ${self.total_pnl:.2f}  (return {self.total_return:.1%})",
@@ -209,7 +223,13 @@ def compute_metrics(er: EngineResult, *, starting_bankroll: Optional[float] = No
         f"took {n_taken} trades ({(n_taken / n_dec) if n_dec else 0:.1%} selectivity), "
         f"and won {wr:.1%} of them. "
     )
-    if target:
+    if er.data_source == "synthetic":
+        plain += (
+            "SYNTHETIC run — plumbing sanity check only. These numbers are not "
+            "evidence of edge; judge go/no-go ONLY on real out-of-sample "
+            "performance after costs."
+        )
+    elif target:
         plain += (
             "That clears Hermes Agent v3 gates (≥80% WR, DD≤8%, Brier≤0.15, PF≥2.5) — "
             "the Beta conviction + extreme-q filters are doing their job by skipping weak mid-odds bets."
@@ -248,6 +268,7 @@ def compute_metrics(er: EngineResult, *, starting_bankroll: Optional[float] = No
         total_return=(er.final_equity - bankroll0) / bankroll0 if bankroll0 else 0.0,
         max_drawdown_pct=mdd,
         avg_drawdown_pct=_avg_dd(er.equity_curve),
+        data_source=er.data_source,
         brier=er.brier,
         avg_edge_taken=float(np.mean([t.edge_at_entry for t in trades])) if trades else 0.0,
         avg_conviction_winners=float(np.mean([t.conviction_at_entry for t in winners])) if winners else 0.0,

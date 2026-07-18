@@ -294,14 +294,15 @@ def run_pipeline(args: argparse.Namespace, argv: list[str]) -> int:
         mc_p5=mc_p5,
     )
     print_verdict_banner(console, verdict, ok=v3_ok)
-    if v3_ok and args.fast:
+    if args.mode == "synthetic":
         console.print(
             Panel(
-                "[bold green]🎉 Success![/]\n"
-                "The Kelly + Beta conviction filters cleared the 80% win-rate target "
-                "in fast mode. Next: run a full validation:\n"
-                "  [cyan]python -m backtest --n-markets 5000 --seed 42[/]",
-                border_style="green",
+                "[bold yellow]SYNTHETIC RUN — PLUMBING SANITY CHECK ONLY[/]\n"
+                "These numbers are NOT evidence of edge. A high synthetic win "
+                "rate is a red flag (see the null-edge guardrail test), not a "
+                "goal. Go/no-go is judged ONLY on real out-of-sample "
+                "performance after costs.",
+                border_style="yellow",
             )
         )
 
@@ -377,13 +378,16 @@ def run_pipeline(args: argparse.Namespace, argv: list[str]) -> int:
     (run_dir / "extra.json").write_text(json.dumps(extra, indent=2, default=str))
 
     console.print(f"[green]Artifacts → {run_dir}[/]")
+    if args.mode == "synthetic":
+        # Synthetic is a sanity harness: exit 0 when the run completed.
+        # Performance gates only apply to real out-of-sample data.
+        return 0
     if not v3_ok:
         console.print(
             Panel(
                 "Hermes Agent v3 gates missed (WR / DD / Brier / PF / MC p5). "
                 "See [bold]BACKTEST_GUIDE.md[/] → Troubleshooting.\n"
-                "Keep [cyan]mode: strict_real[/] and [cyan]min_edge ≥ 0.14[/]. "
-                "Quick try: [cyan]python -m backtest --optimize --fast[/]",
+                "Keep [cyan]mode: strict_real[/] and [cyan]min_edge ≥ 0.14[/]. ",
                 border_style="red",
                 title="Next step",
             )
@@ -434,11 +438,18 @@ def _run_optimize(
     print_verdict_banner(console, verdict, ok=ok)
 
     save_best_params(result.best_params, metrics=result.best_metrics)
-    if ok:
+    if ok and getattr(args, "apply_params", False):
         apply_best_params_to_config(args.config, result.best_params)
         console.print(
             "[green]Active config updated with best params "
             f"({args.config}) and config/best_params.json[/]"
+        )
+    elif ok:
+        console.print(
+            "[yellow]Best params saved to config/best_params.json but NOT "
+            "applied: they were tuned on SYNTHETIC data (sanity-only). "
+            "Validate on real out-of-sample data first; pass --apply-params "
+            "to force.[/]"
         )
 
     path = save_run_bundle(
@@ -497,7 +508,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--optimize",
         action="store_true",
-        help="Search thresholds for ≥80%% WR and save best params to config",
+        help="Search thresholds on SYNTHETIC data (sanity-only; params are saved but not applied)",
+    )
+    p.add_argument(
+        "--apply-params",
+        dest="apply_params",
+        action="store_true",
+        help="DANGER: apply optimizer params to the active config even though they were tuned on synthetic data",
     )
     p.add_argument(
         "--plots",
@@ -598,7 +615,11 @@ def _legacy_dispatch(args: argparse.Namespace, argv: list[str]) -> int:
         if args.plots:
             save_monte_carlo_hist(summary.win_rates, path / "wr_hist.png")
         console.print(f"[green]Artifacts → {path}[/]")
-        return 0 if summary.consistent else 1
+        console.print(
+            "[yellow]Monte Carlo runs on synthetic universes — plumbing "
+            "sanity check only, not evidence of edge.[/]"
+        )
+        return 0
 
     if args.legacy_cmd == "tune":
         args.optimize = True
