@@ -167,22 +167,21 @@ def run_pipeline(args: argparse.Namespace, argv: list[str]) -> int:
     ) as progress:
         task = progress.add_task("simulating", total=3)
         if args.mode == "historical":
-            from backtest.historical import (
-                load_historical_decisions,
-                write_example_historical_csv,
-            )
+            from backtest.historical import load_historical_decisions
 
             progress.advance(task)
-            csv_path = args.csv
-            if not csv_path:
-                write_example_historical_csv()
-            decisions = load_historical_decisions(csv_path)
+            # No fabricated fallback data: use a real CSV or the pulled
+            # gamma corpus cache (scripts/pull_gamma_corpus.py).
+            decisions = load_historical_decisions(args.csv)
             progress.advance(task)
             if len(decisions) < 20:
-                console.print("[yellow]Few historical rows — falling back to synthetic.[/]")
-                er = engine.run_synthetic(n_markets=n_markets, seed=seed)
-            else:
-                er = engine.run_on_decisions(decisions)
+                console.print(
+                    "[red]Historical mode needs real data: pass --csv or pull "
+                    "the corpus with scripts/pull_gamma_corpus.py "
+                    f"(found {len(decisions)} decisions).[/]"
+                )
+                return 2
+            er = engine.run_on_decisions(decisions)
             progress.advance(task)
         else:
             progress.advance(task)

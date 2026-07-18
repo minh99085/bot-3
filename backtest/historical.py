@@ -1,9 +1,13 @@
 """Historical / CSV loader for backtests.
 
 Supports:
-  - Gamma API / cache (best-effort)
+  - real corpus via backtest.gamma_corpus (preferred; cache-first)
+  - Gamma API / cache (best-effort, snapshot-level)
   - CSV stub: market_id, decision_time, p, q, resolution_outcome [, true_q, category, ...]
-  - Example synthetic historical CSV writer for demos
+
+The old "example historical CSV" writer fabricated q = true_q + noise —
+the exact circular pattern the honest harness forbids — and was removed.
+Nothing in this module may invent a model q from a resolution outcome.
 """
 
 from __future__ import annotations
@@ -23,7 +27,6 @@ logger = logging.getLogger(__name__)
 
 GAMMA_MARKETS = "https://gamma-api.polymarket.com/markets"
 CACHE_DIR = Path("data/cache")
-EXAMPLE_CSV = Path("data/backtest/example_historical.csv")
 
 
 def _parse_prices(raw: Any) -> tuple[float, float]:
@@ -91,12 +94,10 @@ def gamma_to_snapshots(rows: list[dict[str, Any]], *, category: str = "crypto") 
             resolved_yes = True
         elif mid <= 0.05:
             resolved_yes = False
-        if resolved_yes is True:
-            q = 0.88
-        elif resolved_yes is False:
-            q = 0.12
-        else:
-            q = float(mid)
+        # Honesty: no model ran at this timestamp, so there is no model q.
+        # q := p is an explicit placeholder (flagged in meta); the old code
+        # fabricated q = 0.88/0.12 FROM the outcome, which is peeking.
+        q = float(mid)
         slug = str(row.get("slug") or row.get("conditionId") or f"hist_{i}")
         out.append(
             MarketSnapshot(
@@ -106,13 +107,13 @@ def gamma_to_snapshots(rows: list[dict[str, Any]], *, category: str = "crypto") 
                 category=category,
                 timeframe="1h",
                 p=float(min(0.98, max(0.02, mid if 0.05 < mid < 0.95 else yes_p))),
-                q=q,
+                q=float(min(0.98, max(0.02, q))),
                 liquidity_usd=float(row.get("liquidityNum") or row.get("liquidity") or 1000.0),
                 volume_24h=float(row.get("volume24hr") or row.get("volume") or 0.0),
                 seconds_to_resolution=0.0,
                 true_q=1.0 if resolved_yes else (0.0 if resolved_yes is False else None),
                 resolved_yes=resolved_yes,
-                meta={"source": "gamma"},
+                meta={"source": "gamma", "q_source": "market_placeholder_no_model"},
                 as_of=datetime.now(timezone.utc),
             )
         )
@@ -122,52 +123,6 @@ def gamma_to_snapshots(rows: list[dict[str, Any]], *, category: str = "crypto") 
 def load_historical(*, limit: int = 200, use_cache: bool = True) -> list[MarketSnapshot]:
     rows = fetch_gamma_markets(limit=limit, closed=True, use_cache=use_cache)
     return [m for m in gamma_to_snapshots(rows) if m.resolved_yes is not None]
-
-
-def write_example_historical_csv(path: Path = EXAMPLE_CSV, n: int = 200, seed: int = 7) -> Path:
-    """Write a demo CSV matching the historical stub schema."""
-    import numpy as np
-
-    rng = np.random.default_rng(seed)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", newline="") as f:
-        w = csv.DictWriter(
-            f,
-            fieldnames=[
-                "market_id",
-                "decision_time",
-                "p",
-                "q",
-                "resolution_outcome",
-                "true_q",
-                "category",
-                "days_to_resolution",
-                "liquidity_usd",
-                "volume_24h",
-            ],
-        )
-        w.writeheader()
-        for i in range(n):
-            true_q = float(rng.beta(2, 8) if rng.random() < 0.5 else rng.beta(8, 2))
-            q = float(np.clip(true_q + rng.normal(0, 0.05), 0.02, 0.98))
-            p = float(np.clip(true_q + rng.normal(0, 0.12), 0.02, 0.98))
-            outcome = int(rng.random() < true_q)
-            w.writerow(
-                {
-                    "market_id": f"hist_{i:04d}",
-                    "decision_time": float(i),
-                    "p": p,
-                    "q": q,
-                    "resolution_outcome": outcome,
-                    "true_q": true_q,
-                    "category": "crypto",
-                    "days_to_resolution": float(rng.choice([3, 14, 45])),
-                    "liquidity_usd": float(rng.lognormal(8.5, 0.8)),
-                    "volume_24h": float(rng.lognormal(9.0, 0.8)),
-                }
-            )
-    logger.info("Wrote example historical CSV → %s", path)
-    return path
 
 
 def load_decisions_from_csv(path: Path | str) -> list[DecisionPoint]:
@@ -210,11 +165,15 @@ def load_decisions_from_csv(path: Path | str) -> list[DecisionPoint]:
 def load_historical_decisions(
     csv_path: Optional[Path | str] = None,
 ) -> list[DecisionPoint]:
-    """Prefer CSV; else map Gamma snapshots → single decision points."""
+    """Prefer explicit CSV, then the real gamma corpus cache, then snapshots."""
     if csv_path:
         return load_decisions_from_csv(csv_path)
-    if EXAMPLE_CSV.is_file():
-        return load_decisions_from_csv(EXAMPLE_CSV)
+    from backtest.gamma_corpus import DEFAULT_CACHE_DIR, load_corpus
+
+    if (Path(DEFAULT_CACHE_DIR) / "pages").is_dir():
+        corpus = load_corpus()
+        if corpus.decisions:
+            return corpus.decisions
     snaps = load_historical(limit=200)
     decisions: list[DecisionPoint] = []
     for i, m in enumerate(snaps):

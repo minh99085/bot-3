@@ -1,0 +1,46 @@
+{
+  "_comment": "FIXTURE \u2014 synthetic CLOB /prices-history responses keyed by UP-token id. Shapes mirror the real API: {'history': [{'t': epoch_sec, 'p': price}, ...]}.",
+  "111111": {
+    "history": [
+      {
+        "t": 1784113200,
+        "p": 0.5
+      },
+      {
+        "t": 1784113260,
+        "p": 0.55
+      },
+      {
+        "t": 1784113320,
+        "p": 0.61
+      },
+      {
+        "t": 1784113380,
+        "p": 0.72
+      },
+      {
+        "t": 1784113440,
+        "p": 0.83
+      }
+    ]
+  },
+  "555555": {
+    "history": []
+  },
+  "444444": {
+    "history": [
+      {
+        "t": 1784113230,
+        "p": 0.48
+      },
+      {
+        "t": 1784113350,
+        "p": 0.44
+      },
+      {
+        "t": 1784113430,
+        "p": 0.31
+      }
+    ]
+  }
+}
