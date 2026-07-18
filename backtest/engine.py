@@ -139,6 +139,9 @@ class EngineResult:
     seed: int = 0
     final_cash: float = 0.0
     final_equity: float = 0.0
+    # "synthetic" | "historical" | "unknown" — synthetic numbers are a
+    # plumbing sanity check only, never evidence of edge.
+    data_source: str = "unknown"
 
 
 class BacktestEngine:
@@ -150,10 +153,15 @@ class BacktestEngine:
         *,
         mode: Mode = "enhanced",
         seed: int = 7,
+        live_real_q: bool = True,
     ) -> None:
         self.cfg = config or load_enhanced_config()
         self.mode = mode
         self.seed = seed
+        # The live desk always evaluates with live_real_q=True (PM p-stretch
+        # anchor); the backtest must exercise the same gate, not the
+        # synthetic-only q-anchor.
+        self.live_real_q = live_real_q
 
     def run_on_decisions(
         self,
@@ -326,7 +334,11 @@ class BacktestEngine:
                 # Strip settlement fields from strategy view conceptually — evaluate_market
                 # only uses p,q,liquidity,time; true_q is unused there.
                 opp = evaluate_market(
-                    snap, config=cfg, guard=guard, bankroll=max(sizing_br, 1.0)
+                    snap,
+                    config=cfg,
+                    guard=guard,
+                    bankroll=max(sizing_br, 1.0),
+                    live_real_q=self.live_real_q,
                 )
             else:
                 opp = naive_evaluate(d, bankroll=max(sizing_br, 1.0), config=cfg)
@@ -417,6 +429,10 @@ class BacktestEngine:
             equity_curve.append(sim.equity)
 
         brier = estimate_brier_from_decisions(list(decisions))
+        m0 = (decisions[0].meta or {}) if decisions else {}
+        data_source = (
+            "synthetic" if m0.get("synthetic") else str(m0.get("source") or "unknown")
+        )
         return EngineResult(
             mode=self.mode,
             config=cfg,
@@ -430,6 +446,7 @@ class BacktestEngine:
             seed=seed if seed is not None else self.seed,
             final_cash=sim.cash,
             final_equity=sim.equity,
+            data_source=data_source,
         )
 
     def run_synthetic(
@@ -527,29 +544,18 @@ def run_backtest(
 def ensure_target_or_tighten(
     *,
     config: Optional[EnhancedMispriceConfig] = None,
-    max_rounds: int = 3,
+    max_rounds: int = 3,  # kept for signature compat; tuning loop removed
 ) -> BacktestResult:
-    cfg = (config or load_enhanced_config()).model_copy(deep=True)
-    last: Optional[BacktestResult] = None
-    for round_i in range(max_rounds):
-        cfg.synthetic_seed = cfg.synthetic_seed + round_i * 17
-        result = run_backtest(config=cfg, use_synthetic=True)
-        last = result
-        logger.info(
-            "backtest round %d: n=%d WR=%.1f%% DD=%.1f%% Brier=%.3f target=%s",
-            round_i + 1,
-            result.report.n_trades,
-            100 * result.report.win_rate,
-            100 * result.report.max_drawdown_pct,
-            result.brier,
-            result.target_met,
-        )
-        if result.target_met and result.report.n_trades >= 30:
-            return result
-        cfg.min_conviction = min(0.97, cfg.min_conviction + 0.01)
-        cfg.min_edge = min(0.14, cfg.min_edge + 0.01)
-        cfg.extreme_q_high = min(0.90, cfg.extreme_q_high + 0.01)
-        cfg.extreme_q_low = max(0.10, cfg.extreme_q_low - 0.01)
-        cfg.kappa_base = max(0.15, cfg.kappa_base - 0.05)
-    assert last is not None
-    return last
+    """DEPRECATED tuning loop — now a single sanity run.
+
+    The old behavior mutated gates until the SYNTHETIC win rate met target,
+    which is tuning the model to flatter itself on fake data. Synthetic
+    results are a plumbing sanity check only; parameters may only be chosen
+    on real, strictly-past data (walk-forward). This now runs once and
+    returns whatever honestly happened.
+    """
+    logger.warning(
+        "ensure_target_or_tighten: refusing to tune gates against synthetic "
+        "results (sanity-only data). Running a single pass."
+    )
+    return run_backtest(config=config, use_synthetic=True)
