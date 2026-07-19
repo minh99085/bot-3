@@ -1,4 +1,4 @@
-"""Fleet dashboard aggregation — 5 instances × $2k = $10k."""
+"""Fleet dashboard aggregation — 10 BTC15 lanes × $2k = $20k."""
 
 from __future__ import annotations
 
@@ -8,31 +8,35 @@ import hermes.dashboard_data as dashboard_data
 
 
 def test_fleet_constants():
-    assert dashboard_data.FLEET_INSTANCE_COUNT == 5
+    assert dashboard_data.FLEET_INSTANCE_COUNT == 10
     assert dashboard_data.PER_INSTANCE_BANKROLL == 2000.0
-    assert dashboard_data.FLEET_BANKROLL == 10000.0
+    assert dashboard_data.FLEET_BANKROLL == 20000.0
+    assert len(dashboard_data.INSTANCE_IDS) == 10
+    assert dashboard_data.INSTANCE_IDS[0] == "lane01_baseline"
+    assert dashboard_data.INSTANCE_IDS[-1] == "lane10_depth"
 
 
 def test_instance_cards_isolated(monkeypatch, tmp_path):
     paper = tmp_path / "paper"
-    for iid in ("btc5", "btc15", "eth5", "sol5", "rotator"):
+    ids = dashboard_data.INSTANCE_IDS
+    for iid in ids:
         d = paper / iid
         d.mkdir(parents=True)
         rows = [
             {
                 "event": "fill",
                 "signal_id": f"{iid}-1",
-                "slug": "btc-updown-5m-1",
+                "slug": "btc-updown-15m-1",
                 "size_usd": 50,
                 "fill_price": 0.9,
             },
             {
                 "event": "settlement",
                 "signal_id": f"{iid}-1",
-                "slug": "btc-updown-5m-1",
-                "pnl_usd": 10.0 if iid != "sol5" else -5.0,
-                "won": iid != "sol5",
-                "settled_at": f"2026-07-15T10:00:00Z",
+                "slug": "btc-updown-15m-1",
+                "pnl_usd": 10.0 if iid != "lane09_random" else -5.0,
+                "won": iid != "lane09_random",
+                "settled_at": "2026-07-15T10:00:00Z",
             },
         ]
         (d / "trade_ledger.jsonl").write_text(
@@ -42,29 +46,31 @@ def test_instance_cards_isolated(monkeypatch, tmp_path):
     monkeypatch.setattr(dashboard_data, "paper_dir", lambda: paper)
 
     cards = dashboard_data.instance_cards()
-    assert len(cards) == 5
+    assert len(cards) == 10
     by_id = {c["id"]: c for c in cards}
 
-    assert by_id["btc5"]["bankroll"] == 2000.0
-    assert by_id["btc5"]["equity"] == 2010.0
-    assert by_id["btc5"]["trades"] == 1
-    assert by_id["sol5"]["pnl"] == -5.0
+    assert by_id["lane01_baseline"]["bankroll"] == 2000.0
+    assert by_id["lane01_baseline"]["equity"] == 2010.0
+    assert by_id["lane01_baseline"]["trades"] == 1
+    assert by_id["lane01_baseline"]["variant"] == "baseline"
+    assert by_id["lane09_random"]["pnl"] == -5.0
+    assert by_id["lane09_random"]["role"] == "null"
 
     fleet = dashboard_data.fleet_summary()
-    assert fleet["fleet_bankroll"] == 10000.0
-    # 4 winners (+10) + 1 loser (-5) = +35
-    assert fleet["fleet_equity"] == 10035.0
-    assert fleet["total_pnl"] == 35.0
-    assert fleet["total_trades"] == 5
-    assert fleet["wins"] == 4
+    assert fleet["fleet_bankroll"] == 20000.0
+    # 9 winners (+10) + 1 loser (-5) = +85
+    assert fleet["fleet_equity"] == 20085.0
+    assert fleet["total_pnl"] == 85.0
+    assert fleet["total_trades"] == 10
+    assert fleet["wins"] == 9
     assert fleet["losses"] == 1
 
 
 def test_fleet_equity_curve_chronological(monkeypatch, tmp_path):
     paper = tmp_path / "paper"
     for iid, pnl, ts in (
-        ("btc5", 10.0, "2026-07-15T10:00:00Z"),
-        ("btc15", 20.0, "2026-07-15T10:01:00Z"),
+        ("lane01_baseline", 10.0, "2026-07-15T10:00:00Z"),
+        ("lane02_chainlink", 20.0, "2026-07-15T10:01:00Z"),
     ):
         d = paper / iid
         d.mkdir(parents=True)
@@ -83,14 +89,57 @@ def test_fleet_equity_curve_chronological(monkeypatch, tmp_path):
 
     monkeypatch.setattr(dashboard_data, "paper_dir", lambda: paper)
     curve = dashboard_data.fleet_equity_curve()
-    assert curve[0]["equity"] == 10000.0
-    assert curve[-1]["equity"] == 10030.0
+    assert curve[0]["equity"] == 20000.0
+    assert curve[-1]["equity"] == 20030.0
     assert curve[1]["ts"] == "2026-07-15T10:00:00Z"
     assert curve[2]["ts"] == "2026-07-15T10:01:00Z"
 
 
 def test_load_state_fleet_bankroll():
     state = dashboard_data.load_state()
-    assert state["fleet_bankroll_usd"] == 10000.0
+    assert state["fleet_bankroll_usd"] == 20000.0
     assert state["per_instance_bankroll_usd"] == 2000.0
-    assert state["instance_count"] == 5
+    assert state["instance_count"] == 10
+
+
+def test_lane_scoreboard(monkeypatch, tmp_path):
+    paper = tmp_path / "paper"
+    # Minimal paired ledgers: baseline beats random on same window
+    for iid, pnl, won in (
+        ("lane01_baseline", 8.0, True),
+        ("lane09_random", -3.0, False),
+    ):
+        d = paper / iid
+        d.mkdir(parents=True)
+        rows = [
+            {
+                "event": "fill",
+                "signal_id": f"{iid}-1",
+                "slug": "btc-updown-15m-1700000000",
+                "filled_at": "2026-07-15T10:00:00Z",
+                "size_usd": 40,
+                "fill_price": 0.55,
+                "direction": "UP",
+                "won": None,
+            },
+            {
+                "event": "settlement",
+                "signal_id": f"{iid}-1",
+                "slug": "btc-updown-15m-1700000000",
+                "settled_at": "2026-07-15T10:15:00Z",
+                "pnl_usd": pnl,
+                "won": won,
+                "size_usd": 40,
+                "entry_price": 0.55,
+            },
+        ]
+        (d / "trade_ledger.jsonl").write_text(
+            "\n".join(json.dumps(r) for r in rows) + "\n"
+        )
+
+    monkeypatch.setattr(dashboard_data, "paper_dir", lambda: paper)
+    board = dashboard_data.lane_scoreboard()
+    assert board["null_lane"] == "lane09_random"
+    by_lane = {r["lane"]: r for r in board["rows"]}
+    assert "lane01_baseline" in by_lane
+    assert by_lane["lane01_baseline"]["delta_vs_null"] == 11.0

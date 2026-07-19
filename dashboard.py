@@ -1,4 +1,4 @@
-"""Hermes v2 fleet dashboard — 5 isolated instances, $10k total bankroll."""
+"""Hermes v2 dashboard — 10-lane BTC15 paired experiment, $20k fleet."""
 
 from __future__ import annotations
 
@@ -31,13 +31,12 @@ from hermes.dashboard_data import (
     fleet_summary,
     instance_cards,
     instance_trade_history,
+    lane_scoreboard,
     load_state,
-    scoped_market_cards,
 )
-from models.config import load_enhanced_config
 
 st.set_page_config(
-    page_title="Bot 3",
+    page_title="Bot 3 · 10 Lanes",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -49,11 +48,18 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+ROLE_PILL = {
+    "control": ("#38bdf8", "control"),
+    "experiment": ("#4ade80", "experiment"),
+    "neg_control": ("#f87171", "neg control"),
+    "null": ("#94a3b8", "null"),
+}
+
 st.markdown(
     """
 <style>
-    .main-header { font-size: 2.2rem; font-weight: 700; margin-bottom: 0.25rem; }
-    .sub-header { color: #888; font-size: 1rem; margin-bottom: 1.5rem; }
+    .main-header { font-size: 2.0rem; font-weight: 700; margin-bottom: 0.25rem; }
+    .sub-header { color: #888; font-size: 1rem; margin-bottom: 1.25rem; }
     .fleet-pill {
         display: inline-block;
         background: #1a1a2e;
@@ -61,25 +67,40 @@ st.markdown(
         border-radius: 8px;
         padding: 0.35rem 0.75rem;
         margin-right: 0.5rem;
+        margin-bottom: 0.35rem;
         font-size: 0.85rem;
     }
     .instance-card {
         background: #1a1a2e;
         border: 1px solid #333;
+        border-left: 3px solid var(--accent, #38bdf8);
         border-radius: 12px;
-        padding: 1rem 1.1rem;
-        margin-bottom: 0.75rem;
+        padding: 0.85rem 0.95rem;
+        margin-bottom: 0.65rem;
         height: 100%;
     }
-    .instance-title { font-size: 1.05rem; font-weight: 600; margin-bottom: 0.15rem; }
-    .instance-sub { color: #888; font-size: 0.8rem; margin-bottom: 0.6rem; }
-    .metric-row { display: flex; justify-content: space-between; font-size: 0.88rem; margin: 0.2rem 0; }
+    .instance-title { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.1rem; }
+    .instance-sub {
+        color: #888; font-size: 0.72rem; margin-bottom: 0.45rem;
+        line-height: 1.25; min-height: 2.1em;
+    }
+    .role-pill {
+        display: inline-block;
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        border-radius: 4px;
+        padding: 0.1rem 0.4rem;
+        margin-bottom: 0.35rem;
+        border: 1px solid;
+    }
+    .metric-row { display: flex; justify-content: space-between; font-size: 0.82rem; margin: 0.15rem 0; }
     .metric-label { color: #aaa; }
     .metric-value { font-weight: 600; }
     .positive { color: #00c853; }
     .negative { color: #ff5252; }
     .neutral { color: #888; }
-    div[data-testid="stMetricValue"] { font-size: 1.35rem; }
+    div[data-testid="stMetricValue"] { font-size: 1.25rem; }
 </style>
 """,
     unsafe_allow_html=True,
@@ -92,10 +113,9 @@ def cached_fleet():
         "state": load_state(),
         "fleet": fleet_summary(),
         "instances": instance_cards(),
-        "scoped": scoped_market_cards(),
+        "scoreboard": lane_scoreboard(),
         "equity": fleet_equity_curve(),
         "bandits": bandit_states_all(),
-        "config": load_enhanced_config().model_dump(),
     }
 
 
@@ -112,17 +132,19 @@ def fmt_pnl(value: float) -> str:
     return f"{sign}${value:,.2f}"
 
 
-def render_instance_card(card: dict) -> None:
+def render_lane_card(card: dict) -> None:
     pnl = card["pnl"]
     pnl_cls = pnl_class(pnl)
     wr = card.get("win_rate") or 0.0
+    accent = card.get("accent") or "#38bdf8"
+    role = card.get("role") or "experiment"
+    role_color, role_label = ROLE_PILL.get(role, ROLE_PILL["experiment"])
     st.markdown(
         f"""
-<div class="instance-card">
+<div class="instance-card" style="--accent: {accent}">
+  <div class="role-pill" style="color:{role_color};border-color:{role_color}">{role_label}</div>
   <div class="instance-title">{card['label']}</div>
   <div class="instance-sub">{card['subtitle']}</div>
-  <div class="metric-row"><span class="metric-label">Bankroll</span>
-    <span class="metric-value">${card['bankroll']:,.0f}</span></div>
   <div class="metric-row"><span class="metric-label">Equity</span>
     <span class="metric-value">${card['equity']:,.2f}</span></div>
   <div class="metric-row"><span class="metric-label">P&L</span>
@@ -130,7 +152,7 @@ def render_instance_card(card: dict) -> None:
   <div class="metric-row"><span class="metric-label">Win rate</span>
     <span class="metric-value">{wr:.1%}</span></div>
   <div class="metric-row"><span class="metric-label">Trades</span>
-    <span class="metric-value">{card['trades']} ({card['wins']}W / {card['losses']}L)</span></div>
+    <span class="metric-value">{card['trades']} ({card['wins']}W/{card['losses']}L)</span></div>
   <div class="metric-row"><span class="metric-label">Open</span>
     <span class="metric-value">{card['open_positions']}</span></div>
   <div class="metric-row"><span class="metric-label">Status</span>
@@ -145,21 +167,23 @@ def main() -> None:
     data = cached_fleet()
     fleet = data["fleet"]
     instances = data["instances"]
-    scoped = data["scoped"]
+    scoreboard = data["scoreboard"]
     fleet_eq = data["equity"]
     bandits = data["bandits"]
-    cfg = data["config"]
 
     st.sidebar.title("Bot 3")
-    st.sidebar.markdown("**5 isolated paper instances**")
+    st.sidebar.markdown("**10-lane BTC15 experiment**")
     st.sidebar.markdown(
         f"**${PER_INSTANCE_BANKROLL:,.0f}** each · **${FLEET_BANKROLL:,.0f}** total"
     )
     st.sidebar.markdown("---")
-    st.sidebar.markdown("**Instances**")
+    st.sidebar.markdown("**Lanes**")
     for inst in instances:
-        dot = "🟢" if inst["status"] in ("active", "watching") else "⚪"
-        st.sidebar.markdown(f"{dot} **{inst['label']}** — ${inst['equity']:,.0f}")
+        active = inst["status"] in ("active", "watching")
+        mark = "●" if active else "○"
+        st.sidebar.markdown(
+            f"{mark} **{inst['label']}** — ${inst['equity']:,.0f}"
+        )
     st.sidebar.markdown("---")
     if st.sidebar.button("Refresh now"):
         st.cache_data.clear()
@@ -167,11 +191,14 @@ def main() -> None:
     st.sidebar.caption(f"Auto-refresh every {REFRESH_SEC}s")
 
     st.markdown(
-        '<p class="main-header">Hermes v2 · 5-Instance Paper Fleet</p>',
+        '<p class="main-header">Hermes v2 · 10-Lane BTC15 Experiment</p>',
         unsafe_allow_html=True,
     )
     st.markdown(
-        '<p class="sub-header">BTC / ETH / SOL lanes + rotator · strict_real filter · paper only</p>',
+        '<p class="sub-header">'
+        "Paired paper fleet on btc-updown-15m · $2k × 10 = $20k · "
+        "rank by ΔPnL vs random null"
+        "</p>",
         unsafe_allow_html=True,
     )
 
@@ -192,15 +219,17 @@ def main() -> None:
     c5.metric("Total trades", f"{fleet['total_trades']}")
     c6.metric("Open positions", f"{fleet['open_positions']}")
 
+    shared = scoreboard.get("n_shared_windows", 0)
     st.markdown(
-        f'<span class="fleet-pill">{FLEET_INSTANCE_COUNT} instances</span>'
-        f'<span class="fleet-pill">${PER_INSTANCE_BANKROLL:,.0f} per instance</span>'
-        f'<span class="fleet-pill">{fleet["wins"]}W / {fleet["losses"]}L settled</span>',
+        f'<span class="fleet-pill">{FLEET_INSTANCE_COUNT} lanes</span>'
+        f'<span class="fleet-pill">${PER_INSTANCE_BANKROLL:,.0f} / lane</span>'
+        f'<span class="fleet-pill">{fleet["wins"]}W / {fleet["losses"]}L settled</span>'
+        f'<span class="fleet-pill">{shared} shared windows</span>',
         unsafe_allow_html=True,
     )
 
     st.markdown("---")
-    st.subheader("Fleet equity ($10,000 baseline)")
+    st.subheader("Fleet equity ($20,000 baseline)")
     if len(fleet_eq) > 1:
         fig = go.Figure()
         fig.add_trace(
@@ -221,7 +250,7 @@ def main() -> None:
             annotation_text=f"Start ${FLEET_BANKROLL:,.0f}",
         )
         fig.update_layout(
-            height=340,
+            height=320,
             margin=dict(l=0, r=0, t=30, b=0),
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
@@ -232,100 +261,114 @@ def main() -> None:
         )
         st.plotly_chart(fig, use_container_width=True)
     else:
-        st.info("No settlement history yet — fleet equity chart appears after first settled trades.")
-
-    st.markdown("---")
-    st.subheader("Instance overview")
-
-    row1 = st.columns(3)
-    for col, card in zip(row1, instances[:3]):
-        with col:
-            render_instance_card(card)
-
-    row2 = st.columns(3)
-    with row2[0]:
-        render_instance_card(instances[3])
-    with row2[1]:
-        render_instance_card(instances[4])
-    with row2[2]:
-        ret_pct = fleet_pnl / FLEET_BANKROLL * 100 if FLEET_BANKROLL else 0.0
-        st.markdown(
-            f"""
-<div class="instance-card">
-  <div class="instance-title">Fleet aggregate</div>
-  <div class="instance-sub">Sum of all 5 instance ledgers</div>
-  <div class="metric-row"><span class="metric-label">Starting capital</span>
-    <span class="metric-value">${FLEET_BANKROLL:,.0f}</span></div>
-  <div class="metric-row"><span class="metric-label">Current equity</span>
-    <span class="metric-value">${fleet['fleet_equity']:,.2f}</span></div>
-  <div class="metric-row"><span class="metric-label">Return</span>
-    <span class="metric-value {pnl_class(fleet_pnl)}">{ret_pct:+.2f}%</span></div>
-  <div class="metric-row"><span class="metric-label">Instances reporting</span>
-    <span class="metric-value">{fleet['instances_with_data']}/{FLEET_INSTANCE_COUNT}</span></div>
-</div>
-""",
-            unsafe_allow_html=True,
+        st.info(
+            "No settlement history yet — fleet equity chart appears after first settled trades."
         )
 
     st.markdown("---")
-    st.subheader("Per-instance trade history")
-    tab_labels = [f"{c['label']} (${c['equity']:,.0f})" for c in instances]
-    tabs = st.tabs(tab_labels)
+    st.subheader("Lane overview")
+    # 2×5 grid
+    for row_start in (0, 5):
+        cols = st.columns(5)
+        for col, card in zip(cols, instances[row_start : row_start + 5]):
+            with col:
+                render_lane_card(card)
 
-    for tab, card in zip(tabs, instances):
-        with tab:
-            iid = card["id"]
-            hist = instance_trade_history(iid)
-            ic1, ic2, ic3, ic4 = st.columns(4)
-            ic1.metric("Bankroll", f"${card['bankroll']:,.0f}")
-            ic2.metric("Equity", f"${card['equity']:,.2f}")
-            ic3.metric("Win rate", f"{(card.get('win_rate') or 0):.1%}")
-            ic4.metric("Trades", card["trades"])
-
-            if hist:
-                df = pd.DataFrame(hist)
-                st.dataframe(df, use_container_width=True, hide_index=True)
-            else:
-                st.info(f"No trades yet for {card['label']}.")
+    ret_pct = fleet_pnl / FLEET_BANKROLL * 100 if FLEET_BANKROLL else 0.0
+    st.caption(
+        f"Fleet aggregate: ${fleet['fleet_equity']:,.2f} equity · "
+        f"{ret_pct:+.2f}% return · "
+        f"{fleet['instances_with_data']}/{FLEET_INSTANCE_COUNT} lanes reporting"
+    )
 
     st.markdown("---")
-    st.subheader("Market lane breakdown")
-    st.caption("Slug-pattern view across the fleet (may overlap with instance scopes).")
-    if scoped:
-        lane_cols = st.columns(len(scoped))
-        for col, lane in zip(lane_cols, scoped):
-            with col:
-                lp = lane["pnl"]
-                wr = lane.get("wr")
-                wr_txt = f"{wr:.1%}" if wr is not None else "—"
-                st.markdown(f"**{lane['label']}**")
-                st.markdown(f"Trades: {lane['n']} · WR: {wr_txt}")
-                st.markdown(f"P&L: :{('green' if lp >= 0 else 'red')}[{fmt_pnl(lp)}]")
+    st.subheader("Paired scoreboard vs null")
+    st.caption(
+        "All lanes trade the same btc-updown-15m windows. "
+        "ΔPnL vs null cancels market luck — promotion signal is beat lane09 (random)."
+    )
+    rows = scoreboard.get("rows") or []
+    if rows:
+        df = pd.DataFrame(rows)
+        display = df.rename(
+            columns={
+                "label": "Lane",
+                "role": "Role",
+                "n": "N",
+                "wr": "WR",
+                "pnl": "PnL $",
+                "avg_entry": "Avg entry",
+                "n_paired": "N paired",
+                "delta_vs_null": "ΔPnL vs null",
+            }
+        )[
+            [
+                "Lane",
+                "Role",
+                "N",
+                "WR",
+                "PnL $",
+                "Avg entry",
+                "N paired",
+                "ΔPnL vs null",
+            ]
+        ]
+        st.dataframe(
+            display.style.format(
+                {
+                    "WR": "{:.1%}",
+                    "PnL $": "{:+.2f}",
+                    "Avg entry": "{:.3f}",
+                    "ΔPnL vs null": "{:+.2f}",
+                }
+            ),
+            use_container_width=True,
+            hide_index=True,
+        )
+        for note in scoreboard.get("notes") or []:
+            st.warning(note)
+    else:
+        st.info("No lane ledgers yet — scoreboard fills as settlements arrive.")
+
+    st.markdown("---")
+    st.subheader("Lane trade history")
+    options = {f"{c['label']} (${c['equity']:,.0f})": c["id"] for c in instances}
+    choice = st.selectbox("Select lane", list(options.keys()))
+    iid = options[choice]
+    card = next(c for c in instances if c["id"] == iid)
+    hist = instance_trade_history(iid)
+    ic1, ic2, ic3, ic4 = st.columns(4)
+    ic1.metric("Bankroll", f"${card['bankroll']:,.0f}")
+    ic2.metric("Equity", f"${card['equity']:,.2f}")
+    ic3.metric("Win rate", f"{(card.get('win_rate') or 0):.1%}")
+    ic4.metric("Trades", card["trades"])
+    if hist:
+        st.dataframe(pd.DataFrame(hist), use_container_width=True, hide_index=True)
+    else:
+        st.info(f"No trades yet for {card['label']}.")
 
     st.markdown("---")
     col_a, col_b = st.columns(2)
     with col_a:
-        st.subheader("Bandit state (per instance)")
+        st.subheader("Bandit state (per lane)")
         if bandits:
             for bid, bstate in bandits.items():
-                with st.expander(f"Instance `{bid}`"):
+                with st.expander(f"Lane `{bid}`"):
                     st.json(bstate)
         else:
             st.info("No bandit state files yet.")
 
     with col_b:
-        st.subheader("Strategy config")
+        st.subheader("Experiment config")
         st.json(
             {
-                "mode": cfg.get("mode", "strict_real"),
-                "min_edge": cfg.get("min_edge"),
-                "min_conviction": cfg.get("min_conviction"),
-                "extreme_q_high": cfg.get("extreme_q_high"),
-                "extreme_q_low": cfg.get("extreme_q_low"),
-                "kappa_base": cfg.get("kappa_base"),
-                "max_single_market_pct": cfg.get("max_single_market_pct"),
-                "per_instance_bankroll": PER_INSTANCE_BANKROLL,
+                "market_filter": "btc15",
+                "series": "btc_updown_15m",
+                "lanes": FLEET_INSTANCE_COUNT,
+                "per_lane_bankroll": PER_INSTANCE_BANKROLL,
                 "fleet_bankroll": FLEET_BANKROLL,
+                "null_lane": scoreboard.get("null_lane"),
+                "ranking": "paired ΔPnL vs random_null",
             }
         )
 
