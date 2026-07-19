@@ -268,8 +268,8 @@ def render_text(report: dict[str, Any]) -> str:
     if not report["trades"]:
         lines.append("  (none)")
     for t in report["trades"]:
-        q = t.get("live_real_q")
-        q_txt = f"{q}" if q is not None else "?"
+        q = t.get("model_q")
+        q_txt = f"{float(q):.4f}" if q is not None else "?"
         lines.append(
             f"  {t.get('settled_at')}  {t['instance_id']:22}  "
             f"{str(t.get('direction') or '?'):4}  pnl=${float(t.get('pnl_usd') or 0):+8.2f}  "

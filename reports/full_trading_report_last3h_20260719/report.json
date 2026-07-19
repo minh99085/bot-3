@@ -1,11 +1,11 @@
 {
   "window": "last_3_hours",
-  "cutoff_utc": "2026-07-19T14:50:57.314160+00:00",
-  "generated_at": "2026-07-19T17:50:57.314160+00:00",
+  "cutoff_utc": "2026-07-19T14:51:04.554462+00:00",
+  "generated_at": "2026-07-19T17:51:04.554462+00:00",
   "vps_host": "207.246.96.45",
-  "main_commit": "775b4f8",
+  "main_commit": "6559071",
   "section_a_last_3h": {
-    "cutoff_utc": "2026-07-19T14:50:57.314160+00:00",
+    "cutoff_utc": "2026-07-19T14:51:04.554462+00:00",
     "window_hours": 3.0,
     "fleet_bankroll_usd": 20000.0,
     "fleet_equity_usd": 20895.46,
@@ -231,6 +231,7 @@
       "settled_at": "2026-07-19T15:16:16.936047Z",
       "entry_source": "enhanced_mispricing",
       "model_q_source": "advanced_ensemble_smoothed",
+      "model_q": 0.1895,
       "live_real_q": true,
       "enhanced_edge": 0.1855,
       "bandit_arm": "explore"
@@ -247,6 +248,7 @@
       "settled_at": "2026-07-19T15:47:18.798271Z",
       "entry_source": "enhanced_mispricing",
       "model_q_source": "barrier_cex_open",
+      "model_q": 0.5908211558309813,
       "live_real_q": true,
       "enhanced_edge": 0.23418,
       "bandit_arm": "explore"
@@ -263,6 +265,7 @@
       "settled_at": "2026-07-19T15:47:19.170093Z",
       "entry_source": "enhanced_mispricing",
       "model_q_source": "barrier_cex_open",
+      "model_q": 0.5976561688758874,
       "live_real_q": true,
       "enhanced_edge": 0.22734,
       "bandit_arm": "explore"
@@ -279,6 +282,7 @@
       "settled_at": "2026-07-19T15:47:19.352393Z",
       "entry_source": "enhanced_mispricing",
       "model_q_source": "barrier_cex_open",
+      "model_q": 0.5314111391190275,
       "live_real_q": true,
       "enhanced_edge": 0.29359,
       "bandit_arm": "explore"
@@ -295,6 +299,7 @@
       "settled_at": "2026-07-19T15:47:20.388553Z",
       "entry_source": "enhanced_mispricing",
       "model_q_source": "advanced_ensemble_smoothed",
+      "model_q": 0.5920860991909018,
       "live_real_q": true,
       "enhanced_edge": 0.20291,
       "bandit_arm": "explore"
@@ -311,6 +316,7 @@
       "settled_at": "2026-07-19T15:47:21.461717Z",
       "entry_source": "enhanced_mispricing",
       "model_q_source": "barrier_cex_open",
+      "model_q": 0.600439001110613,
       "live_real_q": true,
       "enhanced_edge": 0.19456,
       "bandit_arm": "explore"
@@ -327,6 +333,7 @@
       "settled_at": "2026-07-19T15:47:34.384932Z",
       "entry_source": "enhanced_mispricing",
       "model_q_source": "advanced_ensemble_smoothed",
+      "model_q": 0.6125,
       "live_real_q": true,
       "enhanced_edge": 0.2325,
       "bandit_arm": "explore"
@@ -343,6 +350,7 @@
       "settled_at": "2026-07-19T16:03:10.737779Z",
       "entry_source": "enhanced_mispricing",
       "model_q_source": "advanced_ensemble_smoothed",
+      "model_q": 0.40636234223823836,
       "live_real_q": true,
       "enhanced_edge": 0.23136,
       "bandit_arm": "explore"
@@ -359,6 +367,7 @@
       "settled_at": "2026-07-19T16:03:12.400345Z",
       "entry_source": "enhanced_mispricing",
       "model_q_source": "barrier_cex_open",
+      "model_q": 0.47960030312254603,
       "live_real_q": true,
       "enhanced_edge": 0.3046,
       "bandit_arm": "explore"
@@ -375,6 +384,7 @@
       "settled_at": "2026-07-19T16:03:12.852930Z",
       "entry_source": "enhanced_mispricing",
       "model_q_source": "barrier_cex_open",
+      "model_q": 0.47933698607948316,
       "live_real_q": true,
       "enhanced_edge": 0.30434,
       "bandit_arm": "explore"
@@ -391,6 +401,7 @@
       "settled_at": "2026-07-19T16:03:13.017162Z",
       "entry_source": "enhanced_mispricing",
       "model_q_source": "barrier_cex_open",
+      "model_q": 0.4938521242796985,
       "live_real_q": true,
       "enhanced_edge": 0.31885,
       "bandit_arm": "explore"
@@ -407,6 +418,7 @@
       "settled_at": "2026-07-19T16:03:13.083960Z",
       "entry_source": "enhanced_mispricing",
       "model_q_source": "barrier_cex_open",
+      "model_q": 0.4805687194381675,
       "live_real_q": true,
       "enhanced_edge": 0.30557,
       "bandit_arm": "explore"
@@ -423,6 +435,7 @@
       "settled_at": "2026-07-19T16:03:15.070783Z",
       "entry_source": "enhanced_mispricing",
       "model_q_source": "barrier_cex_open",
+      "model_q": 0.47881647546698997,
       "live_real_q": true,
       "enhanced_edge": 0.30382,
       "bandit_arm": "explore"
@@ -439,6 +452,7 @@
       "settled_at": "2026-07-19T16:03:21.477624Z",
       "entry_source": "enhanced_mispricing",
       "model_q_source": "advanced_ensemble_smoothed",
+      "model_q": 0.1895,
       "live_real_q": true,
       "enhanced_edge": 0.1855,
       "bandit_arm": "explore"
@@ -455,6 +469,7 @@
       "settled_at": "2026-07-19T16:19:06.525470Z",
       "entry_source": "enhanced_mispricing",
       "model_q_source": "advanced_ensemble_smoothed",
+      "model_q": 0.09499999999999997,
       "live_real_q": true,
       "enhanced_edge": 0.12,
       "bandit_arm": "explore"
@@ -471,6 +486,7 @@
       "settled_at": "2026-07-19T16:34:49.180675Z",
       "entry_source": "enhanced_mispricing",
       "model_q_source": "advanced_ensemble_smoothed",
+      "model_q": 0.8195,
       "live_real_q": true,
       "enhanced_edge": 0.1845,
       "bandit_arm": "explore"
@@ -487,6 +503,7 @@
       "settled_at": "2026-07-19T17:16:03.259207Z",
       "entry_source": "enhanced_mispricing",
       "model_q_source": "advanced_ensemble_smoothed",
+      "model_q": 0.5826917113850653,
       "live_real_q": true,
       "enhanced_edge": 0.24231,
       "bandit_arm": "exploit"
@@ -503,6 +520,7 @@
       "settled_at": "2026-07-19T17:16:05.733480Z",
       "entry_source": "enhanced_mispricing",
       "model_q_source": "barrier_cex_open",
+      "model_q": 0.6629367888977236,
       "live_real_q": true,
       "enhanced_edge": 0.16206,
       "bandit_arm": "exploit"
@@ -519,6 +537,7 @@
       "settled_at": "2026-07-19T17:31:50.187194Z",
       "entry_source": "enhanced_mispricing",
       "model_q_source": "barrier_cex_open",
+      "model_q": 0.4448184870065708,
       "live_real_q": true,
       "enhanced_edge": 0.19982,
       "bandit_arm": "explore"
@@ -535,6 +554,7 @@
       "settled_at": "2026-07-19T17:31:57.654477Z",
       "entry_source": "enhanced_mispricing",
       "model_q_source": "barrier_cex_open",
+      "model_q": 0.4504390871491129,
       "live_real_q": true,
       "enhanced_edge": 0.20544,
       "bandit_arm": "exploit"
@@ -551,6 +571,7 @@
       "settled_at": "2026-07-19T17:31:58.658444Z",
       "entry_source": "enhanced_mispricing",
       "model_q_source": "barrier_cex_open",
+      "model_q": 0.45692089425979177,
       "live_real_q": true,
       "enhanced_edge": 0.21192,
       "bandit_arm": "explore"
@@ -567,6 +588,7 @@
       "settled_at": "2026-07-19T17:31:58.875451Z",
       "entry_source": "enhanced_mispricing",
       "model_q_source": "barrier_cex_open",
+      "model_q": 0.4835119329146277,
       "live_real_q": true,
       "enhanced_edge": 0.23851,
       "bandit_arm": "exploit"
@@ -583,6 +605,7 @@
       "settled_at": "2026-07-19T17:32:06.739478Z",
       "entry_source": "enhanced_mispricing",
       "model_q_source": "barrier_cex_open",
+      "model_q": 0.4747029309187158,
       "live_real_q": true,
       "enhanced_edge": 0.2897,
       "bandit_arm": "explore"
@@ -599,6 +622,7 @@
       "settled_at": "2026-07-19T17:32:09.284466Z",
       "entry_source": "enhanced_mispricing",
       "model_q_source": "barrier_cex_open",
+      "model_q": 0.36802442073853087,
       "live_real_q": true,
       "enhanced_edge": 0.17302,
       "bandit_arm": "exploit"
@@ -615,6 +639,7 @@
       "settled_at": "2026-07-19T17:47:26.113433Z",
       "entry_source": "enhanced_mispricing",
       "model_q_source": "advanced_ensemble_smoothed",
+      "model_q": 0.5745945330627372,
       "live_real_q": true,
       "enhanced_edge": 0.19041,
       "bandit_arm": "explore"
@@ -631,6 +656,7 @@
       "settled_at": "2026-07-19T17:47:44.890203Z",
       "entry_source": "enhanced_mispricing",
       "model_q_source": "barrier_cex_open",
+      "model_q": 0.7181359445319335,
       "live_real_q": true,
       "enhanced_edge": 0.09686,
       "bandit_arm": "exploit"
@@ -647,6 +673,7 @@
       "settled_at": "2026-07-19T17:47:46.341460Z",
       "entry_source": "enhanced_mispricing",
       "model_q_source": "barrier_cex_open",
+      "model_q": 0.7183508344288693,
       "live_real_q": true,
       "enhanced_edge": 0.09665,
       "bandit_arm": "explore"
@@ -663,6 +690,7 @@
       "settled_at": "2026-07-19T17:47:53.645007Z",
       "entry_source": "enhanced_mispricing",
       "model_q_source": "barrier_cex_open",
+      "model_q": 0.5358136187977587,
       "live_real_q": true,
       "enhanced_edge": 0.27919,
       "bandit_arm": "explore"
@@ -679,6 +707,7 @@
       "settled_at": "2026-07-19T17:47:56.561442Z",
       "entry_source": "enhanced_mispricing",
       "model_q_source": "barrier_cex_open",
+      "model_q": 0.6875157882645835,
       "live_real_q": true,
       "enhanced_edge": 0.11748,
       "bandit_arm": "exploit"
@@ -695,6 +724,7 @@
       "settled_at": "2026-07-19T17:48:04.528423Z",
       "entry_source": "enhanced_mispricing",
       "model_q_source": "advanced_ensemble_smoothed",
+      "model_q": 0.5315000000000001,
       "live_real_q": true,
       "enhanced_edge": 0.2235,
       "bandit_arm": "explore"
@@ -711,6 +741,7 @@
       "settled_at": "2026-07-19T17:48:12.286458Z",
       "entry_source": "enhanced_mispricing",
       "model_q_source": "advanced_ensemble_smoothed",
+      "model_q": 0.5765,
       "live_real_q": true,
       "enhanced_edge": 0.2285,
       "bandit_arm": "exploit"

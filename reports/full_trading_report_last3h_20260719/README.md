@@ -1,6 +1,6 @@
 # Full Trading Report — last 3 hours (2026-07-19)
 
-Pulled from VPS paper fleet (`207.246.96.45`). Window: settlements with `settled_at` ≥ `2026-07-19T14:50:57.314160+00:00`.
+Pulled from VPS paper fleet (`207.246.96.45`). Window: settlements with `settled_at` ≥ `2026-07-19T14:51:04.554462+00:00`.
 
 ## Summary
 
@@ -12,7 +12,7 @@ Pulled from VPS paper fleet (`207.246.96.45`). Window: settlements with `settled
 | Window PnL | $+895.46 |
 | Fleet equity (lifetime) | $20,895.46 / $20,000 |
 | Fleet lifetime PnL | $+895.46 |
-| Commit at pull | `775b4f8` |
+| Commit at pull | `6559071` |
 
 ## Per lane (window)
 
