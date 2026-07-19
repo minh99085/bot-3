@@ -224,8 +224,13 @@ def enhance_from_hermes_mispricing(
             pass
 
     # Use live CEX-implied P(UP) directly as model q.
-    # Light shrink toward 0.5 for calibration only — NEVER force 0.97/0.03 on dislocation.
-    if not active:
+    # Barrier q (P(close>open | spot, time, vol)) is already calibrated —
+    # shrinking it toward 0.5 would recreate a fade bias against stretched
+    # markets. Ensemble/momentum q keeps the light shrink.
+    is_barrier = adv.get("barrier_q") is not None
+    if is_barrier:
+        q = q_raw
+    elif not active:
         # Inactive setups: shrink harder so they rarely clear extreme_q gates
         q = 0.5 + 0.25 * (q_raw - 0.5)
     else:
@@ -250,7 +255,9 @@ def enhance_from_hermes_mispricing(
             pass
 
     q_source = "cex_implied_up_smoothed"
-    if adv.get("advanced_used_fallback") == 0.0:
+    if is_barrier:
+        q_source = "barrier_cex_open"
+    elif adv.get("advanced_used_fallback") == 0.0:
         q_source = "advanced_ensemble_smoothed"
     elif adv.get("advanced_q") is not None:
         q_source = "advanced_fallback_smoothed"

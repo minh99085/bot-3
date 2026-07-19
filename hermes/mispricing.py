@@ -259,6 +259,11 @@ def compute_cex_implied_up(
         features["barrier_strike"] = float(strike)
         q_out = q_barrier
         q_source = "barrier_cex_open"
+        # CRITICAL: downstream (enhance_from_hermes_mispricing) prefers
+        # features['advanced_q'] over the returned q — it must carry the
+        # barrier, or the ensemble silently clobbers it (live-ledger bug).
+        features["ensemble_q"] = float(result.q)
+        features["advanced_q"] = float(q_out)
     else:
         q_source = "advanced_ensemble" if not result.used_fallback else "momentum_fallback"
 
