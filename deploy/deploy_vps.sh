@@ -86,10 +86,14 @@ grep -q '^HERMES_SCOPE_BTC_UPDOWN_ONLY=' .env || echo 'HERMES_SCOPE_BTC_UPDOWN_O
 grep -q '^HERMES_BTC_UPDOWN_SLUGS=' .env || echo 'HERMES_BTC_UPDOWN_SLUGS=btc-updown-15m-1784113200,btc-updown-5m-1784113500' >> .env
 sed -i 's/^HERMES_SCOPE_BTC_UPDOWN_ONLY=.*/HERMES_SCOPE_BTC_UPDOWN_ONLY=1/' .env || true
 
-mkdir -p data/paper/{btc5,btc15,eth5,sol5,rotator} \
-         data/handoff/{btc5,btc15,eth5,sol5,rotator} \
-         data/live logs/{btc5,btc15,eth5,sol5,rotator} \
-         artifacts/{btc5,btc15,eth5,sol5,rotator} knowledge
+LANES=(
+  lane01_baseline lane02_chainlink lane03_favorite lane04_longshot lane05_late
+  lane06_garch lane07_marketsigma lane08_legacy lane09_random lane10_depth
+)
+for lane in "${LANES[@]}"; do
+  mkdir -p "data/paper/${lane}" "data/handoff/${lane}" "logs/${lane}" "artifacts/${lane}"
+done
+mkdir -p data/live knowledge
 chown -R 10001:10001 logs data knowledge artifacts 2>/dev/null || true
 touch data/paper/.gitkeep logs/.gitkeep
 # remove obsolete single-bot container name if present
