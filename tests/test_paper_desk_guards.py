@@ -95,11 +95,11 @@ def test_settlement_uses_asset_cex_and_caps_pnl(monkeypatch, tmp_path):
 
     calls: list[str] = []
 
-    def fake_mid(asset: str, *, force_rest: bool = False) -> float:
+    def fake_close(asset: str, ts: int) -> float:
         calls.append(asset)
         return 3410.0 if asset == "ETH" else 65000.0
 
-    monkeypatch.setattr(stl_mod, "get_asset_mid", fake_mid)
+    monkeypatch.setattr(stl_mod, "_close_price_at", fake_close)
     # Window-open reference below the exit → UP resolves as a win (close>open).
     monkeypatch.setattr(stl_mod, "_open_price_at", lambda asset, ts: 3400.0)
 
@@ -146,11 +146,11 @@ def test_settlement_rejects_btc_cex_on_sol_slug(monkeypatch, tmp_path):
 
     calls: list[str] = []
 
-    def fake_mid(asset: str, *, force_rest: bool = False) -> float:
+    def fake_close(asset: str, ts: int) -> float:
         calls.append(asset)
         return 148.5 if asset == "SOL" else 65000.0
 
-    monkeypatch.setattr(stl_mod, "get_asset_mid", fake_mid)
+    monkeypatch.setattr(stl_mod, "_close_price_at", fake_close)
     # Open reference must be resolved for the SAME (SOL) asset, not BTC.
     open_calls: list[str] = []
 

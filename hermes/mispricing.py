@@ -46,6 +46,33 @@ STRONG_DISLOCATION = 0.10
 # The open price is fixed per window, so we look it up once.
 _OPEN_STRIKE_CACHE: dict[tuple[str, int], float] = {}
 
+# --- σ-ratio self-calibration (invented from the 10-lane report data) ---
+# The first live barrier trades showed OUR realized σ persistently above the
+# σ the market implies, which drags barrier q toward 0.5 and turns every
+# trade into a fade of market confidence. Rather than trust either side
+# blindly, learn the ratio online: EWMA of (market-implied σ / realized σ)
+# across windows where both identify. market_implied lanes then use
+# σ* = ratio_ewma × realized σ — market-consistent vol, so only genuine
+# spot-freshness gaps remain as signal.
+_SIGMA_RATIO_EWMA: dict[str, float] = {}
+_SIGMA_RATIO_ALPHA = 0.05
+
+
+def update_sigma_ratio(asset: str, implied: float, realized: float) -> float:
+    """Update + return the per-asset EWMA of implied/realized σ."""
+    if implied <= 0 or realized <= 0:
+        return _SIGMA_RATIO_EWMA.get(asset.upper(), 1.0)
+    ratio = float(min(5.0, max(0.2, implied / realized)))
+    key = asset.upper()
+    prev = _SIGMA_RATIO_EWMA.get(key)
+    cur = ratio if prev is None else (1 - _SIGMA_RATIO_ALPHA) * prev + _SIGMA_RATIO_ALPHA * ratio
+    _SIGMA_RATIO_EWMA[key] = float(cur)
+    return float(cur)
+
+
+def sigma_ratio(asset: str) -> float:
+    return _SIGMA_RATIO_EWMA.get(asset.upper(), 1.0)
+
 
 def resolve_open_strike(asset: str, window_ts: int) -> float:
     """CEX price at the window-open epoch = the resolution strike (cached).
@@ -260,22 +287,36 @@ def compute_cex_implied_up(
         q_source = "random_null"
         features["ensemble_q"] = float(result.q)
         features["advanced_q"] = float(q_out)
+        features["random_null"] = 1.0  # label must survive the wrapper
     elif spec.q_mode != "legacy_ensemble" and strike and strike > 0 and spot and spot > 0:
         sample_sec = _median_sample_sec(times)
+        realized = realized_sigma_ann(prices, sample_sec=sample_sec)
+        # Keep the implied/realized ratio learning on EVERY window where both
+        # identify — all lanes contribute observations; only market_implied
+        # lanes consume the calibrated σ.
+        from strategy.advanced_signals import implied_sigma_ann
+
+        implied = implied_sigma_ann(pm_implied_up, spot, strike, seconds_to_resolution)
+        if implied and realized:
+            update_sigma_ratio(asset, implied, realized)
         if spec.sigma_kind == "garch":
             from strategy.advanced_signals import garch_sigma_ann
 
             sigma_ann = garch_sigma_ann(prices, sample_sec=sample_sec) or DEFAULT_SIGMA_ANN
         elif spec.sigma_kind == "market_implied":
-            from strategy.advanced_signals import implied_sigma_ann
-
-            sigma_ann = (
-                implied_sigma_ann(pm_implied_up, spot, strike, seconds_to_resolution)
-                or realized_sigma_ann(prices, sample_sec=sample_sec)
-                or DEFAULT_SIGMA_ANN
-            )
+            # Market-consistent σ: cross-window calibrated ratio × realized,
+            # falling back to this window's implied, then raw realized.
+            if realized:
+                sigma_ann = sigma_ratio(asset) * realized
+            else:
+                sigma_ann = implied or DEFAULT_SIGMA_ANN
         else:
-            sigma_ann = realized_sigma_ann(prices, sample_sec=sample_sec) or DEFAULT_SIGMA_ANN
+            sigma_ann = realized or DEFAULT_SIGMA_ANN
+        if realized:
+            features["sigma_realized_ann"] = float(realized)
+        if implied:
+            features["sigma_implied_ann"] = float(implied)
+        features["sigma_ratio_ewma"] = float(sigma_ratio(asset))
         q_barrier = barrier_implied_up(spot, strike, sigma_ann, seconds_to_resolution)
         features["barrier_q"] = float(q_barrier)
         features["barrier_sigma_ann"] = float(sigma_ann)

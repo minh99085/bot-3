@@ -255,7 +255,9 @@ def enhance_from_hermes_mispricing(
             pass
 
     q_source = "cex_implied_up_smoothed"
-    if is_barrier:
+    if adv.get("random_null"):
+        q_source = "random_null"
+    elif is_barrier:
         q_source = "barrier_cex_open"
     elif adv.get("advanced_used_fallback") == 0.0:
         q_source = "advanced_ensemble_smoothed"

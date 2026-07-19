@@ -105,6 +105,21 @@ def build_board(trades_by_lane: dict[str, list[RealTrade]]) -> LaneBoard:
             )
         board.lanes.append(s)
 
+    # SETTLEMENT CONSISTENCY INVARIANT — same window + same direction must
+    # yield the same outcome in every lane. A violation means the harness is
+    # mismeasuring (caught live: post-close drift used as exit reference).
+    by_window_dir: dict[tuple[int, str], set[bool]] = {}
+    for lane, trades in trades_by_lane.items():
+        for t in trades:
+            by_window_dir.setdefault((t.window_ts, t.direction.upper()), set()).add(t.won)
+    bad = [k for k, outcomes in by_window_dir.items() if len(outcomes) > 1]
+    if bad:
+        board.notes.append(
+            f"CRITICAL settlement inconsistency: {len(bad)} window/direction "
+            f"groups with conflicting outcomes (e.g. {bad[:3]}) — harness is "
+            "mismeasuring; fix before trusting ANY lane ranking."
+        )
+
     if null_lane is None:
         board.notes.append(
             "no random_null lane found — paired comparison unavailable"

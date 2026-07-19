@@ -89,8 +89,9 @@ def test_legacy_lane_skips_barrier_even_with_strike(monkeypatch):
     assert "barrier_q" not in features
 
 
-def test_market_sigma_lane_uses_implied_sigma(monkeypatch):
+def test_market_sigma_lane_uses_calibrated_sigma(monkeypatch):
     monkeypatch.setenv(ENV_VAR, "market_sigma_gap")
+    mp._SIGMA_RATIO_EWMA.clear()
     _hist(monkeypatch, [64000.0 + i for i in range(30)])
     from strategy.advanced_signals import implied_sigma_ann
 
@@ -102,10 +103,23 @@ def test_market_sigma_lane_uses_implied_sigma(monkeypatch):
         slug="btc-updown-15m-1784000002",
     )
     assert meta["model_q_source"] == "barrier_cex_open"
+    # First observation: ratio EWMA seeds at implied/realized, so
+    # σ* = ratio × realized == this window's implied σ exactly.
     assert features["barrier_sigma_ann"] == pytest.approx(expected_sigma, rel=1e-6)
-    # With the market's own σ and the same spot, the barrier ≈ the market:
+    # With market-consistent σ and the same spot, the barrier ≈ the market:
     # any residual gap comes only from spot/strike freshness.
     assert abs(q - pm) < 0.02
+
+
+def test_sigma_ratio_ewma_learns_across_windows(monkeypatch):
+    mp._SIGMA_RATIO_EWMA.clear()
+    r1 = mp.update_sigma_ratio("BTC", implied=1.2, realized=0.6)  # ratio 2.0 seeds
+    assert r1 == pytest.approx(2.0)
+    r2 = mp.update_sigma_ratio("BTC", implied=0.6, realized=0.6)  # ratio 1.0 obs
+    assert r2 == pytest.approx(0.95 * 2.0 + 0.05 * 1.0)
+    # Bad inputs don't move it
+    assert mp.update_sigma_ratio("BTC", implied=0.0, realized=0.6) == pytest.approx(r2)
+    assert mp.sigma_ratio("ETH") == 1.0  # unseen asset → neutral
 
 
 def test_garch_lane_uses_garch_sigma(monkeypatch):

@@ -47,6 +47,28 @@ def test_legacy_beating_null_raises_harness_warning():
     assert any("distrust the harness" in n for n in board.notes)
 
 
+def test_settlement_inconsistency_detected():
+    """Same window + same direction with different outcomes = harness bug.
+
+    This exact signature appeared live (btc-updown-15m-1784475900: six lanes,
+    same side, different results) — the board must scream, not rank."""
+    lanes = {
+        "lane01_baseline": [_t(1784475900, True, 100)],
+        "lane02_chainlink": [_t(1784475900, False, -100)],  # same window+dir, flipped
+    }
+    board = build_board(lanes)
+    assert any("CRITICAL settlement inconsistency" in n for n in board.notes)
+
+
+def test_consistent_outcomes_no_alert():
+    lanes = {
+        "lane01_baseline": [_t(1000, True, 100)],
+        "lane02_chainlink": [_t(1000, True, 80)],
+    }
+    board = build_board(lanes)
+    assert not any("CRITICAL" in n for n in board.notes)
+
+
 def test_board_from_ledgers_reads_lane_dirs(tmp_path):
     for lane, won in (("lane01_baseline", True), ("lane09_random", False)):
         d = tmp_path / lane

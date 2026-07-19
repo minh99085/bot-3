@@ -65,7 +65,7 @@ def test_win_resolved_on_close_vs_open_not_entry(monkeypatch, tmp_path):
     # Entry mid 64500, but window OPEN was 64000; close 64200 → up vs open.
     _open_pos(ledger, slug=slug, direction="UP", mid=64500.0)
     monkeypatch.setattr(stl_mod, "_open_price_at", lambda asset, ts: 64000.0)
-    monkeypatch.setattr(stl_mod, "get_asset_mid", lambda a, *, force_rest=False: 64200.0)
+    monkeypatch.setattr(stl_mod, "_close_price_at", lambda a, ts: 64200.0)
     out = stl_mod.settle_expired_paper_positions(paper=True)
     assert len(out) == 1
     # close (64200) > open (64000) → UP wins, even though close < entry (64500)
@@ -78,7 +78,7 @@ def test_down_wins_when_close_below_open(monkeypatch, tmp_path):
     slug = _slug()
     _open_pos(ledger, slug=slug, direction="DOWN", mid=64500.0)
     monkeypatch.setattr(stl_mod, "_open_price_at", lambda asset, ts: 64000.0)
-    monkeypatch.setattr(stl_mod, "get_asset_mid", lambda a, *, force_rest=False: 63900.0)
+    monkeypatch.setattr(stl_mod, "_close_price_at", lambda a, ts: 63900.0)
     out = stl_mod.settle_expired_paper_positions(paper=True)
     assert len(out) == 1
     assert out[0].won is True  # close 63900 < open 64000 → DOWN wins
@@ -90,17 +90,17 @@ def test_no_open_reference_is_not_settled_no_fabrication(monkeypatch, tmp_path):
     slug = _slug()
     _open_pos(ledger, slug=slug, direction="UP", mid=64500.0)
     monkeypatch.setattr(stl_mod, "_open_price_at", lambda asset, ts: 0.0)  # unavailable
-    monkeypatch.setattr(stl_mod, "get_asset_mid", lambda a, *, force_rest=False: 64200.0)
+    monkeypatch.setattr(stl_mod, "_close_price_at", lambda a, ts: 64200.0)
     out = stl_mod.settle_expired_paper_positions(paper=True)
     assert out == []  # left open, not fabricated
 
 
-def test_no_exit_price_is_not_settled(monkeypatch, tmp_path):
+def test_no_close_price_is_not_settled(monkeypatch, tmp_path):
     ledger = _setup(monkeypatch, tmp_path)
     slug = _slug()
     _open_pos(ledger, slug=slug, direction="DOWN", mid=64500.0)
     monkeypatch.setattr(stl_mod, "_open_price_at", lambda asset, ts: 64000.0)
-    monkeypatch.setattr(stl_mod, "get_asset_mid", lambda a, *, force_rest=False: 0.0)
+    monkeypatch.setattr(stl_mod, "_close_price_at", lambda a, ts: 0.0)
     out = stl_mod.settle_expired_paper_positions(paper=True)
     assert out == []
 

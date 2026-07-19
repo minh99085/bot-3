@@ -89,6 +89,22 @@ def _open_price_at(asset: str, window_ts: int) -> float:
         return 0.0
 
 
+def _close_price_at(asset: str, close_ts: int) -> float:
+    """CEX price AT the window close — the price the market resolves on.
+
+    Settlement runs minutes after close (grace + loop cadence); sampling the
+    LIVE mid there lets post-close drift flip outcomes — proven live when six
+    lanes settled the same window seconds apart with different results.
+    """
+    try:
+        from connectors.cex_realtime import price_at_timestamp
+
+        return float(price_at_timestamp(asset, int(close_ts)) or 0.0)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("close price lookup failed asset=%s ts=%s: %s", asset, close_ts, exc)
+        return 0.0
+
+
 def settle_expired_paper_positions(paper: bool = True) -> list[Settlement]:
     """Settle positions whose up/down window has ended (+ grace)."""
     now = time.time()
@@ -143,13 +159,15 @@ def settle_expired_paper_positions(paper: bool = True) -> list[Settlement]:
             open_ref = 0.0
         if not _cex_plausible(entry_asset, open_ref) and sm is not None:
             open_ref = _open_price_at(entry_asset, sm.window_ts)
-        exit_cex = get_asset_mid(entry_asset, force_rest=True)
+        # Exit = price AT the window close (what the market resolves on), not
+        # the live mid at settle time — post-close drift must not flip outcomes.
+        exit_cex = _close_price_at(entry_asset, int(window_end)) if window_end else 0.0
 
         # No reliable open/close reference → do NOT settle and NEVER fabricate.
         # Leave the position open for a later retry / manual review.
         if not (_cex_plausible(entry_asset, open_ref) and _cex_plausible(entry_asset, exit_cex)):
             logger.warning(
-                "skip settle %s: no reliable open/exit ref (open=%.4f exit=%.4f)",
+                "skip settle %s: no reliable open/close ref (open=%.4f close=%.4f)",
                 slug,
                 open_ref,
                 exit_cex,
