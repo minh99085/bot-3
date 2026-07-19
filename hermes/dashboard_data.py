@@ -317,12 +317,25 @@ def fleet_summary() -> dict[str, Any]:
 
 def lane_scoreboard() -> dict[str, Any]:
     """Paired scoreboard vs random_null for the 10-lane BTC15 experiment."""
-    from backtest.lane_compare import board_from_ledgers
+    from backtest.lane_compare import build_board
+    from backtest.paper_ledger import load_trades
 
-    board = board_from_ledgers(paper_dir())
+    root = paper_dir()
+    allowed = set(INSTANCE_IDS)
+    trades_by_lane: dict[str, list] = {}
+    for iid in INSTANCE_IDS:
+        ledger = root / iid / "trade_ledger.jsonl"
+        if ledger.is_file():
+            trades_by_lane[iid] = load_trades([ledger])
+        else:
+            trades_by_lane[iid] = []
+
+    board = build_board(trades_by_lane)
     meta_by_id = {m["id"]: m for m in INSTANCE_METAS}
     rows: list[dict[str, Any]] = []
     for s in sorted(board.lanes, key=lambda x: (-x.paired_pnl_diff, -x.pnl)):
+        if s.lane not in allowed:
+            continue
         meta = meta_by_id.get(s.lane, {})
         rows.append(
             {
