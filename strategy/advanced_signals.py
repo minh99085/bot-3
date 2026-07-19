@@ -253,6 +253,50 @@ def realized_sigma_ann(
     return float(min(ceil, max(floor, ann)))
 
 
+def garch_sigma_ann(
+    prices: Sequence[float],
+    *,
+    sample_sec: float = 1.0,
+    floor: float = 0.40,
+    ceil: float = 2.5,
+) -> Optional[float]:
+    """Annualized GARCH(1,1) one-step vol from a price series."""
+    p = _as_float_array(prices)
+    if p.size < 10:
+        return None
+    rets = np.diff(p) / np.maximum(p[:-1], 1e-12)
+    sig = estimate_garch11(rets)
+    if sig <= 0:
+        return None
+    ann = sig * math.sqrt(SEC_PER_YEAR / max(1e-6, float(sample_sec)))
+    return float(min(ceil, max(floor, ann)))
+
+
+def implied_sigma_ann(
+    p_up: float,
+    spot: float,
+    strike: float,
+    seconds_to_resolution: float,
+) -> Optional[float]:
+    """Invert the barrier at a market price → the σ the market is pricing.
+
+    p ≈ Φ(ln(S/K)/(σ√T)) → σ = ln(S/K) / (z·√T). None when unidentified
+    (market at ~0.5 or spot at strike).
+    """
+    if spot <= 0 or strike <= 0 or seconds_to_resolution <= 0:
+        return None
+    p = min(1 - 1e-9, max(1e-9, float(p_up)))
+    z = float(norm.ppf(p))
+    if abs(z) < 1e-6:
+        return None
+    lr = math.log(spot / strike)
+    if abs(lr) < 1e-9:
+        return None
+    T = float(seconds_to_resolution) / SEC_PER_YEAR
+    sig = lr / (z * math.sqrt(T))
+    return float(sig) if sig > 0 else None
+
+
 def barrier_implied_up(
     spot: float,
     strike: float,

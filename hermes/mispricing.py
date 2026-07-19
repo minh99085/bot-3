@@ -200,8 +200,9 @@ def compute_cex_implied_up(
     asset: str = "BTC",
     seconds_to_resolution: float = 300.0,
     strike: Optional[float] = None,
+    slug: str = "",
 ) -> tuple[float, dict[str, float], dict[str, Any]]:
-    """Return (q, features, meta) from advanced ensemble or toy fallback."""
+    """Return (q, features, meta); lane variant controls q source and σ kind."""
     adv_cfg = _fusion_weights_override(_load_advanced_cfg())
     enabled = _advanced_enabled() and bool(adv_cfg.get("enabled", True))
 
@@ -244,15 +245,37 @@ def compute_cex_implied_up(
         features["advanced_regime_mr"] = 1.0 if result.regime == "mean_reversion" else 0.0
         features["advanced_regime_mom"] = 1.0 if result.regime == "momentum" else 0.0
 
-    # --- Barrier price is PRIMARY when we know the window-open strike ---
-    # q = P(close > open | fresh spot, time-left, realized vol). This prices
-    # the actual contract instead of guessing direction from momentum, so it
-    # AGREES with an efficient market and only shows edge when our CEX spot/vol
-    # is fresher than Polymarket's price.
+    # --- Lane-variant q source ---
+    # Default (barrier): q = P(close > open | fresh spot, time-left, vol) —
+    # prices the actual contract; agrees with an efficient market and shows
+    # edge only when our CEX spot/vol is fresher than Polymarket's price.
+    # legacy_ensemble lane keeps the old momentum ensemble (negative control);
+    # random lane emits a deterministic no-information q (null control).
+    from hermes.lane_variants import active_spec, random_q_for
+
+    spec = active_spec()
     q_out = float(result.q)
-    if strike and strike > 0 and spot and spot > 0:
+    if spec.q_mode == "random" and slug:
+        q_out = random_q_for(slug, float(pm_implied_up))
+        q_source = "random_null"
+        features["ensemble_q"] = float(result.q)
+        features["advanced_q"] = float(q_out)
+    elif spec.q_mode != "legacy_ensemble" and strike and strike > 0 and spot and spot > 0:
         sample_sec = _median_sample_sec(times)
-        sigma_ann = realized_sigma_ann(prices, sample_sec=sample_sec) or DEFAULT_SIGMA_ANN
+        if spec.sigma_kind == "garch":
+            from strategy.advanced_signals import garch_sigma_ann
+
+            sigma_ann = garch_sigma_ann(prices, sample_sec=sample_sec) or DEFAULT_SIGMA_ANN
+        elif spec.sigma_kind == "market_implied":
+            from strategy.advanced_signals import implied_sigma_ann
+
+            sigma_ann = (
+                implied_sigma_ann(pm_implied_up, spot, strike, seconds_to_resolution)
+                or realized_sigma_ann(prices, sample_sec=sample_sec)
+                or DEFAULT_SIGMA_ANN
+            )
+        else:
+            sigma_ann = realized_sigma_ann(prices, sample_sec=sample_sec) or DEFAULT_SIGMA_ANN
         q_barrier = barrier_implied_up(spot, strike, sigma_ann, seconds_to_resolution)
         features["barrier_q"] = float(q_barrier)
         features["barrier_sigma_ann"] = float(sigma_ann)
@@ -266,6 +289,8 @@ def compute_cex_implied_up(
         features["advanced_q"] = float(q_out)
     else:
         q_source = "advanced_ensemble" if not result.used_fallback else "momentum_fallback"
+        if spec.q_mode == "legacy_ensemble":
+            q_source = "legacy_" + q_source
 
     meta: dict[str, Any] = {
         **(result.meta or {}),
@@ -334,14 +359,31 @@ def detect_mispricing(
             if open_px > 0:
                 strike = open_px
 
+    # Lane variant may source spot from the resolution oracle (Chainlink)
+    # instead of the CEX mid; falls back to CEX when the oracle is stale.
+    from hermes.lane_variants import active_spec as _lane_spec
+
+    spec = _lane_spec()
+    spot_px = float(snap.mid)
+    if spec.spot_source == "chainlink":
+        try:
+            from connectors.chainlink import ChainlinkClient
+
+            op = ChainlinkClient().get_price(asset)
+            if op and getattr(op, "price", 0) and op.price > 0:
+                spot_px = float(op.price)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("chainlink spot unavailable (%s); using CEX mid", exc)
+
     cex_up, adv_features, adv_meta = compute_cex_implied_up(
         momentum=snap.momentum,
         timeframe=tf,
         pm_implied_up=pm_up,
-        spot=float(snap.mid),
+        spot=spot_px,
         asset=asset,
         seconds_to_resolution=sec_res,
         strike=strike,
+        slug=str(candidate.slug or ""),
     )
     out.cex_implied_up = cex_up
     dislocation = cex_up - pm_up  # + means CEX says more UP than PM prices
@@ -364,6 +406,10 @@ def detect_mispricing(
     out.features["advanced_component_count"] = float(
         len(adv_meta.get("advanced_components") or {})
     )
+    out.features["spot_source_chainlink"] = (
+        1.0 if (spec.spot_source == "chainlink" and spot_px != float(snap.mid)) else 0.0
+    )
+    out.features["lane_variant_spot"] = spot_px
 
     # Require sources roughly agree when Bybit present
     if snap.bybit and not snap.sources_agree and abs(dislocation) < STRONG_DISLOCATION:
@@ -403,6 +449,21 @@ def detect_mispricing(
             toy_q,
             adv_meta.get("advanced_regime"),
         )
+
+    # Lane entry gate — ON TOP of the frozen gates, never looser. Uses the
+    # price of the MODEL's side, remaining window time, and book liquidity.
+    from hermes.lane_variants import entry_allows
+
+    side_price = pm_up if direction == Direction.UP else (1.0 - pm_up)
+    allowed, gate_reason = entry_allows(
+        side_price=side_price,
+        seconds_remaining=float(sec_res),
+        liquidity_usd=float(candidate.liquidity or 0.0),
+        spec=spec,
+    )
+    if not allowed:
+        out.reason = gate_reason
+        return out
 
     out.active = True
     out.direction = direction

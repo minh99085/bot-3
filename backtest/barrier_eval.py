@@ -83,19 +83,10 @@ def _wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
 
 
 def _implied_sigma_ann(market_p_up: float, spot: float, strike: float, tau_sec: float) -> Optional[float]:
-    """Invert the barrier at the market price → the σ the market is pricing."""
-    if spot <= 0 or strike <= 0 or tau_sec <= 0:
-        return None
-    z = _ppf(market_p_up)
-    if abs(z) < 1e-6:
-        return None  # market at ~0.5 → σ unidentified
-    lr = math.log(spot / strike)
-    if abs(lr) < 1e-9:
-        return None  # spot at strike → σ unidentified
-    T = tau_sec / SEC_PER_YEAR
-    # p ≈ Φ(ln(S/K)/(σ√T)) → σ = ln(S/K) / (z · √T)
-    sig = lr / (z * math.sqrt(T))
-    return float(sig) if sig > 0 else None
+    """Invert the barrier at the market price (shared impl in advanced_signals)."""
+    from strategy.advanced_signals import implied_sigma_ann
+
+    return implied_sigma_ann(market_p_up, spot, strike, tau_sec)
 
 
 @dataclass

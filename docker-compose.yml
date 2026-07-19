@@ -1,12 +1,9 @@
-# Hermes v2 Paper — 5 isolated instances × $2k (= $10k fleet) + shared dashboard
-# Dashboard: http://<VPS_IP>/dashboard  (nginx → streamlit; 8501 not public)
-#
-# Instances:
-#   hermes-btc5     MARKET_FILTER=btc5     → BTC 5m Up/Down only
-#   hermes-btc15    MARKET_FILTER=btc15    → BTC 15m Up/Down only
-#   hermes-eth5     MARKET_FILTER=eth5     → ETH 5m Up/Down only
-#   hermes-sol5     MARKET_FILTER=sol5     → SOL 5m Up/Down only
-#   hermes-rotator  MARKET_FILTER=rotator  → scans all four; 1 highest-conviction trade
+# Hermes v2 Paper — 10-lane btc-updown-15m experiment (paired A/B design)
+# All lanes trade the SAME market (BTC 15m Up/Down), one strategy variant per
+# lane, so every window is a paired sample: lane-vs-lane differences are pure
+# strategy signal. Controls: lane08 legacy ensemble (must lose), lane09
+# deterministic random side (venue cost baseline every lane must beat).
+# $2,000 paper per lane (config bankroll) = $20k paper fleet. Scoreboard: scripts/lane_scoreboard.py
 #
 # Start everything:
 #   docker compose up -d --build
@@ -37,119 +34,244 @@ x-bot-common: &bot-common
       max-file: "5"
 
 services:
-  hermes-btc5:
+  hermes-lane01_baseline:
     <<: *bot-common
-    container_name: hermes-btc5
+    container_name: hermes-lane01_baseline
     environment:
       HERMES_PAPER_ONLY: "1"
       HERMES_LIVE: "0"
       HERMES_CAPITAL: "2000"
       HERMES_INTERVAL: "${HERMES_INTERVAL:-300}"
-      HERMES_INSTANCE_ID: btc5
-      MARKET_FILTER: btc5
-      HERMES_LOG_DIR: /app/logs/btc5
-      HERMES_PAPER_DIR: /app/data/paper/btc5
-      HERMES_HANDOFF_DIR: /app/data/handoff/btc5
-      HERMES_HEALTH_PORT: "8080"
-      HERMES_FORCE_SYNTHETIC: "${HERMES_FORCE_SYNTHETIC:-0}"
-      HERMES_SCOPE_BTC_UPDOWN_ONLY: "1"
-    volumes:
-      - ./knowledge:/app/knowledge
-      - ./data:/app/data
-      - ./logs/btc5:/app/logs/btc5
-      - ./artifacts/btc5:/app/artifacts/btc5
-      - ./config:/app/config:ro
-
-  hermes-btc15:
-    <<: *bot-common
-    container_name: hermes-btc15
-    environment:
-      HERMES_PAPER_ONLY: "1"
-      HERMES_LIVE: "0"
-      HERMES_CAPITAL: "2000"
-      HERMES_INTERVAL: "${HERMES_INTERVAL:-300}"
-      HERMES_INSTANCE_ID: btc15
+      HERMES_INSTANCE_ID: lane01_baseline
       MARKET_FILTER: btc15
-      HERMES_LOG_DIR: /app/logs/btc15
-      HERMES_PAPER_DIR: /app/data/paper/btc15
-      HERMES_HANDOFF_DIR: /app/data/handoff/btc15
+      HERMES_STRATEGY_VARIANT: baseline
+      HERMES_LOG_DIR: /app/logs/lane01_baseline
+      HERMES_PAPER_DIR: /app/data/paper/lane01_baseline
+      HERMES_HANDOFF_DIR: /app/data/handoff/lane01_baseline
       HERMES_HEALTH_PORT: "8080"
       HERMES_FORCE_SYNTHETIC: "${HERMES_FORCE_SYNTHETIC:-0}"
       HERMES_SCOPE_BTC_UPDOWN_ONLY: "1"
     volumes:
       - ./knowledge:/app/knowledge
       - ./data:/app/data
-      - ./logs/btc15:/app/logs/btc15
-      - ./artifacts/btc15:/app/artifacts/btc15
+      - ./logs/lane01_baseline:/app/logs/lane01_baseline
+      - ./artifacts/lane01_baseline:/app/artifacts/lane01_baseline
       - ./config:/app/config:ro
 
-  hermes-eth5:
+  hermes-lane02_chainlink:
     <<: *bot-common
-    container_name: hermes-eth5
+    container_name: hermes-lane02_chainlink
     environment:
       HERMES_PAPER_ONLY: "1"
       HERMES_LIVE: "0"
       HERMES_CAPITAL: "2000"
       HERMES_INTERVAL: "${HERMES_INTERVAL:-300}"
-      HERMES_INSTANCE_ID: eth5
-      MARKET_FILTER: eth5
-      HERMES_LOG_DIR: /app/logs/eth5
-      HERMES_PAPER_DIR: /app/data/paper/eth5
-      HERMES_HANDOFF_DIR: /app/data/handoff/eth5
+      HERMES_INSTANCE_ID: lane02_chainlink
+      MARKET_FILTER: btc15
+      HERMES_STRATEGY_VARIANT: chainlink_ref
+      HERMES_LOG_DIR: /app/logs/lane02_chainlink
+      HERMES_PAPER_DIR: /app/data/paper/lane02_chainlink
+      HERMES_HANDOFF_DIR: /app/data/handoff/lane02_chainlink
       HERMES_HEALTH_PORT: "8080"
       HERMES_FORCE_SYNTHETIC: "${HERMES_FORCE_SYNTHETIC:-0}"
       HERMES_SCOPE_BTC_UPDOWN_ONLY: "1"
     volumes:
       - ./knowledge:/app/knowledge
       - ./data:/app/data
-      - ./logs/eth5:/app/logs/eth5
-      - ./artifacts/eth5:/app/artifacts/eth5
+      - ./logs/lane02_chainlink:/app/logs/lane02_chainlink
+      - ./artifacts/lane02_chainlink:/app/artifacts/lane02_chainlink
       - ./config:/app/config:ro
 
-  hermes-sol5:
+  hermes-lane03_favorite:
     <<: *bot-common
-    container_name: hermes-sol5
+    container_name: hermes-lane03_favorite
     environment:
       HERMES_PAPER_ONLY: "1"
       HERMES_LIVE: "0"
       HERMES_CAPITAL: "2000"
       HERMES_INTERVAL: "${HERMES_INTERVAL:-300}"
-      HERMES_INSTANCE_ID: sol5
-      MARKET_FILTER: sol5
-      HERMES_LOG_DIR: /app/logs/sol5
-      HERMES_PAPER_DIR: /app/data/paper/sol5
-      HERMES_HANDOFF_DIR: /app/data/handoff/sol5
+      HERMES_INSTANCE_ID: lane03_favorite
+      MARKET_FILTER: btc15
+      HERMES_STRATEGY_VARIANT: favorite_only
+      HERMES_LOG_DIR: /app/logs/lane03_favorite
+      HERMES_PAPER_DIR: /app/data/paper/lane03_favorite
+      HERMES_HANDOFF_DIR: /app/data/handoff/lane03_favorite
       HERMES_HEALTH_PORT: "8080"
       HERMES_FORCE_SYNTHETIC: "${HERMES_FORCE_SYNTHETIC:-0}"
       HERMES_SCOPE_BTC_UPDOWN_ONLY: "1"
     volumes:
       - ./knowledge:/app/knowledge
       - ./data:/app/data
-      - ./logs/sol5:/app/logs/sol5
-      - ./artifacts/sol5:/app/artifacts/sol5
+      - ./logs/lane03_favorite:/app/logs/lane03_favorite
+      - ./artifacts/lane03_favorite:/app/artifacts/lane03_favorite
       - ./config:/app/config:ro
 
-  hermes-rotator:
+  hermes-lane04_longshot:
     <<: *bot-common
-    container_name: hermes-rotator
+    container_name: hermes-lane04_longshot
     environment:
       HERMES_PAPER_ONLY: "1"
       HERMES_LIVE: "0"
       HERMES_CAPITAL: "2000"
       HERMES_INTERVAL: "${HERMES_INTERVAL:-300}"
-      HERMES_INSTANCE_ID: rotator
-      MARKET_FILTER: rotator
-      HERMES_LOG_DIR: /app/logs/rotator
-      HERMES_PAPER_DIR: /app/data/paper/rotator
-      HERMES_HANDOFF_DIR: /app/data/handoff/rotator
+      HERMES_INSTANCE_ID: lane04_longshot
+      MARKET_FILTER: btc15
+      HERMES_STRATEGY_VARIANT: longshot_only
+      HERMES_LOG_DIR: /app/logs/lane04_longshot
+      HERMES_PAPER_DIR: /app/data/paper/lane04_longshot
+      HERMES_HANDOFF_DIR: /app/data/handoff/lane04_longshot
       HERMES_HEALTH_PORT: "8080"
       HERMES_FORCE_SYNTHETIC: "${HERMES_FORCE_SYNTHETIC:-0}"
       HERMES_SCOPE_BTC_UPDOWN_ONLY: "1"
     volumes:
       - ./knowledge:/app/knowledge
       - ./data:/app/data
-      - ./logs/rotator:/app/logs/rotator
-      - ./artifacts/rotator:/app/artifacts/rotator
+      - ./logs/lane04_longshot:/app/logs/lane04_longshot
+      - ./artifacts/lane04_longshot:/app/artifacts/lane04_longshot
+      - ./config:/app/config:ro
+
+  hermes-lane05_late:
+    <<: *bot-common
+    container_name: hermes-lane05_late
+    environment:
+      HERMES_PAPER_ONLY: "1"
+      HERMES_LIVE: "0"
+      HERMES_CAPITAL: "2000"
+      HERMES_INTERVAL: "${HERMES_INTERVAL:-300}"
+      HERMES_INSTANCE_ID: lane05_late
+      MARKET_FILTER: btc15
+      HERMES_STRATEGY_VARIANT: late_window
+      HERMES_LOG_DIR: /app/logs/lane05_late
+      HERMES_PAPER_DIR: /app/data/paper/lane05_late
+      HERMES_HANDOFF_DIR: /app/data/handoff/lane05_late
+      HERMES_HEALTH_PORT: "8080"
+      HERMES_FORCE_SYNTHETIC: "${HERMES_FORCE_SYNTHETIC:-0}"
+      HERMES_SCOPE_BTC_UPDOWN_ONLY: "1"
+    volumes:
+      - ./knowledge:/app/knowledge
+      - ./data:/app/data
+      - ./logs/lane05_late:/app/logs/lane05_late
+      - ./artifacts/lane05_late:/app/artifacts/lane05_late
+      - ./config:/app/config:ro
+
+  hermes-lane06_garch:
+    <<: *bot-common
+    container_name: hermes-lane06_garch
+    environment:
+      HERMES_PAPER_ONLY: "1"
+      HERMES_LIVE: "0"
+      HERMES_CAPITAL: "2000"
+      HERMES_INTERVAL: "${HERMES_INTERVAL:-300}"
+      HERMES_INSTANCE_ID: lane06_garch
+      MARKET_FILTER: btc15
+      HERMES_STRATEGY_VARIANT: garch_sigma
+      HERMES_LOG_DIR: /app/logs/lane06_garch
+      HERMES_PAPER_DIR: /app/data/paper/lane06_garch
+      HERMES_HANDOFF_DIR: /app/data/handoff/lane06_garch
+      HERMES_HEALTH_PORT: "8080"
+      HERMES_FORCE_SYNTHETIC: "${HERMES_FORCE_SYNTHETIC:-0}"
+      HERMES_SCOPE_BTC_UPDOWN_ONLY: "1"
+    volumes:
+      - ./knowledge:/app/knowledge
+      - ./data:/app/data
+      - ./logs/lane06_garch:/app/logs/lane06_garch
+      - ./artifacts/lane06_garch:/app/artifacts/lane06_garch
+      - ./config:/app/config:ro
+
+  hermes-lane07_marketsigma:
+    <<: *bot-common
+    container_name: hermes-lane07_marketsigma
+    environment:
+      HERMES_PAPER_ONLY: "1"
+      HERMES_LIVE: "0"
+      HERMES_CAPITAL: "2000"
+      HERMES_INTERVAL: "${HERMES_INTERVAL:-300}"
+      HERMES_INSTANCE_ID: lane07_marketsigma
+      MARKET_FILTER: btc15
+      HERMES_STRATEGY_VARIANT: market_sigma_gap
+      HERMES_LOG_DIR: /app/logs/lane07_marketsigma
+      HERMES_PAPER_DIR: /app/data/paper/lane07_marketsigma
+      HERMES_HANDOFF_DIR: /app/data/handoff/lane07_marketsigma
+      HERMES_HEALTH_PORT: "8080"
+      HERMES_FORCE_SYNTHETIC: "${HERMES_FORCE_SYNTHETIC:-0}"
+      HERMES_SCOPE_BTC_UPDOWN_ONLY: "1"
+    volumes:
+      - ./knowledge:/app/knowledge
+      - ./data:/app/data
+      - ./logs/lane07_marketsigma:/app/logs/lane07_marketsigma
+      - ./artifacts/lane07_marketsigma:/app/artifacts/lane07_marketsigma
+      - ./config:/app/config:ro
+
+  hermes-lane08_legacy:
+    <<: *bot-common
+    container_name: hermes-lane08_legacy
+    environment:
+      HERMES_PAPER_ONLY: "1"
+      HERMES_LIVE: "0"
+      HERMES_CAPITAL: "2000"
+      HERMES_INTERVAL: "${HERMES_INTERVAL:-300}"
+      HERMES_INSTANCE_ID: lane08_legacy
+      MARKET_FILTER: btc15
+      HERMES_STRATEGY_VARIANT: legacy_ensemble
+      HERMES_LOG_DIR: /app/logs/lane08_legacy
+      HERMES_PAPER_DIR: /app/data/paper/lane08_legacy
+      HERMES_HANDOFF_DIR: /app/data/handoff/lane08_legacy
+      HERMES_HEALTH_PORT: "8080"
+      HERMES_FORCE_SYNTHETIC: "${HERMES_FORCE_SYNTHETIC:-0}"
+      HERMES_SCOPE_BTC_UPDOWN_ONLY: "1"
+    volumes:
+      - ./knowledge:/app/knowledge
+      - ./data:/app/data
+      - ./logs/lane08_legacy:/app/logs/lane08_legacy
+      - ./artifacts/lane08_legacy:/app/artifacts/lane08_legacy
+      - ./config:/app/config:ro
+
+  hermes-lane09_random:
+    <<: *bot-common
+    container_name: hermes-lane09_random
+    environment:
+      HERMES_PAPER_ONLY: "1"
+      HERMES_LIVE: "0"
+      HERMES_CAPITAL: "2000"
+      HERMES_INTERVAL: "${HERMES_INTERVAL:-300}"
+      HERMES_INSTANCE_ID: lane09_random
+      MARKET_FILTER: btc15
+      HERMES_STRATEGY_VARIANT: random_null
+      HERMES_LOG_DIR: /app/logs/lane09_random
+      HERMES_PAPER_DIR: /app/data/paper/lane09_random
+      HERMES_HANDOFF_DIR: /app/data/handoff/lane09_random
+      HERMES_HEALTH_PORT: "8080"
+      HERMES_FORCE_SYNTHETIC: "${HERMES_FORCE_SYNTHETIC:-0}"
+      HERMES_SCOPE_BTC_UPDOWN_ONLY: "1"
+    volumes:
+      - ./knowledge:/app/knowledge
+      - ./data:/app/data
+      - ./logs/lane09_random:/app/logs/lane09_random
+      - ./artifacts/lane09_random:/app/artifacts/lane09_random
+      - ./config:/app/config:ro
+
+  hermes-lane10_depth:
+    <<: *bot-common
+    container_name: hermes-lane10_depth
+    environment:
+      HERMES_PAPER_ONLY: "1"
+      HERMES_LIVE: "0"
+      HERMES_CAPITAL: "2000"
+      HERMES_INTERVAL: "${HERMES_INTERVAL:-300}"
+      HERMES_INSTANCE_ID: lane10_depth
+      MARKET_FILTER: btc15
+      HERMES_STRATEGY_VARIANT: depth_aware
+      HERMES_LOG_DIR: /app/logs/lane10_depth
+      HERMES_PAPER_DIR: /app/data/paper/lane10_depth
+      HERMES_HANDOFF_DIR: /app/data/handoff/lane10_depth
+      HERMES_HEALTH_PORT: "8080"
+      HERMES_FORCE_SYNTHETIC: "${HERMES_FORCE_SYNTHETIC:-0}"
+      HERMES_SCOPE_BTC_UPDOWN_ONLY: "1"
+    volumes:
+      - ./knowledge:/app/knowledge
+      - ./data:/app/data
+      - ./logs/lane10_depth:/app/logs/lane10_depth
+      - ./artifacts/lane10_depth:/app/artifacts/lane10_depth
       - ./config:/app/config:ro
 
   dashboard:
@@ -191,15 +313,25 @@ services:
       retries: 3
       start_period: 45s
     depends_on:
-      hermes-btc5:
+      hermes-lane01_baseline:
         condition: service_started
-      hermes-btc15:
+      hermes-lane02_chainlink:
         condition: service_started
-      hermes-eth5:
+      hermes-lane03_favorite:
         condition: service_started
-      hermes-sol5:
+      hermes-lane04_longshot:
         condition: service_started
-      hermes-rotator:
+      hermes-lane05_late:
+        condition: service_started
+      hermes-lane06_garch:
+        condition: service_started
+      hermes-lane07_marketsigma:
+        condition: service_started
+      hermes-lane08_legacy:
+        condition: service_started
+      hermes-lane09_random:
+        condition: service_started
+      hermes-lane10_depth:
         condition: service_started
     networks:
       - hermes
