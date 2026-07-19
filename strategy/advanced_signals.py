@@ -435,6 +435,21 @@ def momentum_to_q(momentum: float, timeframe: str = "5m") -> float:
     return _clamp01(0.5 + float(momentum) * scale)
 
 
+# Fallback confidence: when the ensemble lacks history it has little real
+# signal, so its q is pulled toward the market (the best available estimate)
+# and keeps only a damped momentum tilt. 0 = trust market fully, 1 = trust
+# the toy momentum map fully. Kept low on purpose — a fallback that fires
+# because data is thin must not assert a large edge.
+FALLBACK_MOMENTUM_TRUST = 0.30
+
+
+def anchor_fallback_q(baseline: float, p_market: float) -> float:
+    """Blend the toy-momentum baseline toward the market for the fallback path."""
+    p = float(p_market)
+    tilt = float(baseline) - 0.5  # signed momentum tilt around neutral
+    return _clamp01(p + FALLBACK_MOMENTUM_TRUST * tilt)
+
+
 # ---------------------------------------------------------------------------
 # Main ensemble
 # ---------------------------------------------------------------------------
@@ -462,13 +477,13 @@ def ensemble_cex_implied_up(
     Falls back to ``momentum_to_q`` when history is too short or ``enabled=False``.
     """
     baseline = momentum_to_q(momentum, timeframe)
+    p_mkt = float(pm_implied_up)
     if not enabled:
         return AdvancedSignalResult(
-            q=baseline, used_fallback=True, reason="advanced_disabled",
-            components={"momentum": baseline},
+            q=anchor_fallback_q(baseline, p_mkt), used_fallback=True,
+            reason="advanced_disabled", components={"momentum": baseline},
         )
 
-    p_mkt = float(pm_implied_up)
     features: dict[str, float] = {}
     components: dict[str, float] = {"momentum": baseline}
     weights: dict[str, float] = {"momentum": 0.25}
@@ -547,7 +562,7 @@ def ensemble_cex_implied_up(
     non_mom = {k: v for k, v in components.items() if k != "momentum"}
     if not non_mom:
         return AdvancedSignalResult(
-            q=baseline,
+            q=anchor_fallback_q(baseline, p_mkt),
             used_fallback=True,
             reason="insufficient_history",
             components=components,

@@ -167,7 +167,13 @@ def test_ensemble_fallback_thin_history():
         enabled=True,
     )
     assert r.used_fallback
-    assert abs(r.q - momentum_to_q(0.5, "5m")) < 1e-9
+    # Anchored fallback: q is pulled toward the market (0.45) with a damped
+    # momentum tilt, NOT the raw momentum_to_q(0.5)=0.675 (that was the
+    # no-anchor hallucination). tilt = 0.30 * (0.675 - 0.5).
+    from strategy.advanced_signals import anchor_fallback_q
+
+    assert abs(r.q - anchor_fallback_q(momentum_to_q(0.5, "5m"), 0.45)) < 1e-9
+    assert abs(r.q - 0.45) < abs(momentum_to_q(0.5, "5m") - 0.45)  # closer to market
 
 
 def test_ensemble_disabled_uses_momentum():
