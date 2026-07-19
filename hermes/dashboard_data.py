@@ -20,58 +20,68 @@ from hermes.state_io import (
 
 STARTING_BANKROLL = 2000.0
 PER_INSTANCE_BANKROLL = STARTING_BANKROLL
-FLEET_INSTANCE_COUNT = 5
-FLEET_BANKROLL = STARTING_BANKROLL * FLEET_INSTANCE_COUNT  # $10,000
-INSTANCE_IDS = ("btc5", "btc15", "eth5", "sol5", "rotator")
+FLEET_INSTANCE_COUNT = 10
+FLEET_BANKROLL = STARTING_BANKROLL * FLEET_INSTANCE_COUNT  # $20,000
 
-# Display metadata for each docker instance (order = dashboard columns)
-INSTANCE_METAS: list[dict[str, Any]] = [
-    {
-        "id": "btc5",
-        "label": "BTC 5m",
-        "subtitle": "BTC Up/Down · 5-minute",
-        "filter": "btc5",
-        "accent": "#f59e0b",
-        "series": ["btc_updown_5m"],
-    },
-    {
-        "id": "btc15",
-        "label": "BTC 15m",
-        "subtitle": "BTC Up/Down · 15-minute",
-        "filter": "btc15",
-        "accent": "#eab308",
-        "series": ["btc_updown_15m"],
-    },
-    {
-        "id": "eth5",
-        "label": "ETH 5m",
-        "subtitle": "ETH Up/Down · 5-minute",
-        "filter": "eth5",
-        "accent": "#818cf8",
-        "series": ["eth_updown_5m"],
-    },
-    {
-        "id": "sol5",
-        "label": "SOL 5m",
-        "subtitle": "SOL Up/Down · 5-minute",
-        "filter": "sol5",
-        "accent": "#34d399",
-        "series": ["sol_updown_5m"],
-    },
-    {
-        "id": "rotator",
-        "label": "Rotator",
-        "subtitle": "Top conviction · all 4 lanes",
-        "filter": "rotator",
-        "accent": "#f472b6",
-        "series": [
-            "btc_updown_5m",
-            "btc_updown_15m",
-            "eth_updown_5m",
-            "sol_updown_5m",
-        ],
-    },
-]
+# Compose instance_id → strategy variant (must match docker-compose.yml)
+COMPOSE_LANES: tuple[tuple[str, str], ...] = (
+    ("lane01_baseline", "baseline"),
+    ("lane02_chainlink", "chainlink_ref"),
+    ("lane03_favorite", "favorite_only"),
+    ("lane04_longshot", "longshot_only"),
+    ("lane05_late", "late_window"),
+    ("lane06_garch", "garch_sigma"),
+    ("lane07_marketsigma", "market_sigma_gap"),
+    ("lane08_legacy", "legacy_ensemble"),
+    ("lane09_random", "random_null"),
+    ("lane10_depth", "depth_aware"),
+)
+
+INSTANCE_IDS = tuple(iid for iid, _ in COMPOSE_LANES)
+
+_LANE_ACCENTS = (
+    "#38bdf8",  # baseline
+    "#22d3ee",  # chainlink
+    "#4ade80",  # favorite
+    "#fbbf24",  # longshot
+    "#fb923c",  # late
+    "#a78bfa",  # garch
+    "#34d399",  # market sigma
+    "#f87171",  # legacy (neg control)
+    "#94a3b8",  # random null
+    "#2dd4bf",  # depth
+)
+
+
+def _build_instance_metas() -> list[dict[str, Any]]:
+    """Lane cards for the 10× BTC15 paired experiment."""
+    from hermes.lane_variants import LANES
+
+    metas: list[dict[str, Any]] = []
+    for i, (iid, variant) in enumerate(COMPOSE_LANES):
+        spec = LANES.get(variant)
+        short = variant.replace("_", " ")
+        role = "null" if "random" in variant else (
+            "neg_control" if "legacy" in variant else (
+                "control" if variant == "baseline" else "experiment"
+            )
+        )
+        metas.append(
+            {
+                "id": iid,
+                "label": f"{i + 1:02d} {short.title()}",
+                "subtitle": (spec.description if spec else variant),
+                "variant": variant,
+                "role": role,
+                "filter": "btc15",
+                "accent": _LANE_ACCENTS[i % len(_LANE_ACCENTS)],
+                "series": ["btc_updown_15m"],
+            }
+        )
+    return metas
+
+
+INSTANCE_METAS: list[dict[str, Any]] = _build_instance_metas()
 
 
 def instance_meta(instance_id: str) -> dict[str, Any]:
@@ -272,7 +282,7 @@ def instance_summary(instance_id: str) -> dict[str, Any]:
 
 
 def instance_cards() -> list[dict[str, Any]]:
-    """One summary card per docker instance (btc5 … rotator)."""
+    """One summary card per BTC15 strategy lane (lane01 … lane10)."""
     return [instance_summary(m["id"]) for m in INSTANCE_METAS]
 
 
@@ -302,6 +312,50 @@ def fleet_summary() -> dict[str, Any]:
         "losses": total_losses,
         "instances_with_data": with_data,
         "instances": cards,
+    }
+
+
+def lane_scoreboard() -> dict[str, Any]:
+    """Paired scoreboard vs random_null for the 10-lane BTC15 experiment."""
+    from backtest.lane_compare import build_board
+    from backtest.paper_ledger import load_trades
+
+    root = paper_dir()
+    allowed = set(INSTANCE_IDS)
+    trades_by_lane: dict[str, list] = {}
+    for iid in INSTANCE_IDS:
+        ledger = root / iid / "trade_ledger.jsonl"
+        if ledger.is_file():
+            trades_by_lane[iid] = load_trades([ledger])
+        else:
+            trades_by_lane[iid] = []
+
+    board = build_board(trades_by_lane)
+    meta_by_id = {m["id"]: m for m in INSTANCE_METAS}
+    rows: list[dict[str, Any]] = []
+    for s in sorted(board.lanes, key=lambda x: (-x.paired_pnl_diff, -x.pnl)):
+        if s.lane not in allowed:
+            continue
+        meta = meta_by_id.get(s.lane, {})
+        rows.append(
+            {
+                "lane": s.lane,
+                "label": meta.get("label", s.lane),
+                "variant": meta.get("variant", s.lane),
+                "role": meta.get("role", "experiment"),
+                "n": s.n,
+                "wr": s.wr,
+                "pnl": round(s.pnl, 2),
+                "avg_entry": round(s.avg_entry, 3),
+                "n_paired": s.n_paired,
+                "delta_vs_null": round(s.paired_pnl_diff, 2),
+            }
+        )
+    return {
+        "null_lane": board.null_lane,
+        "n_shared_windows": board.n_shared_windows,
+        "notes": list(board.notes),
+        "rows": rows,
     }
 
 
