@@ -1,9 +1,9 @@
 """Historical / CSV loader for backtests.
 
 Supports:
-  - real corpus via backtest.gamma_corpus (preferred; cache-first)
-  - Gamma API / cache (best-effort, snapshot-level)
   - CSV stub: market_id, decision_time, p, q, resolution_outcome [, true_q, category, ...]
+  - Gamma API / cache (best-effort, snapshot-level; NOT usable for resolved
+    5m/15m up/down markets — Gamma prunes them; use backtest.paper_ledger)
 
 The old "example historical CSV" writer fabricated q = true_q + noise —
 the exact circular pattern the honest harness forbids — and was removed.
@@ -165,15 +165,14 @@ def load_decisions_from_csv(path: Path | str) -> list[DecisionPoint]:
 def load_historical_decisions(
     csv_path: Optional[Path | str] = None,
 ) -> list[DecisionPoint]:
-    """Prefer explicit CSV, then the real gamma corpus cache, then snapshots."""
+    """Prefer explicit CSV, else snapshot-level Gamma rows.
+
+    The real out-of-sample corpus is the paper fleet ledger
+    (backtest.paper_ledger) — Gamma prunes resolved 5m/15m up/down markets,
+    so no historical pull exists for them.
+    """
     if csv_path:
         return load_decisions_from_csv(csv_path)
-    from backtest.gamma_corpus import DEFAULT_CACHE_DIR, load_corpus
-
-    if (Path(DEFAULT_CACHE_DIR) / "pages").is_dir():
-        corpus = load_corpus()
-        if corpus.decisions:
-            return corpus.decisions
     snaps = load_historical(limit=200)
     decisions: list[DecisionPoint] = []
     for i, m in enumerate(snaps):

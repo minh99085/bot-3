@@ -1,8 +1,7 @@
 """backtest package — engine + honest data harnesses.
 
-Imports are lazy (PEP 562) so dependency-light consumers — notably
-scripts/pull_gamma_corpus.py, which needs only httpx — can import
-``backtest.gamma_corpus`` on a box without numpy/scipy/pydantic installed.
+Imports are lazy (PEP 562) so dependency-light consumers can import
+submodules on a box without numpy/scipy/pydantic installed.
 """
 
 from typing import Any

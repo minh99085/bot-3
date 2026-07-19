@@ -539,23 +539,3 @@ def run_backtest(
         suggested_stricter=suggestions,
         engine=er,
     )
-
-
-def ensure_target_or_tighten(
-    *,
-    config: Optional[EnhancedMispriceConfig] = None,
-    max_rounds: int = 3,  # kept for signature compat; tuning loop removed
-) -> BacktestResult:
-    """DEPRECATED tuning loop — now a single sanity run.
-
-    The old behavior mutated gates until the SYNTHETIC win rate met target,
-    which is tuning the model to flatter itself on fake data. Synthetic
-    results are a plumbing sanity check only; parameters may only be chosen
-    on real, strictly-past data (walk-forward). This now runs once and
-    returns whatever honestly happened.
-    """
-    logger.warning(
-        "ensure_target_or_tighten: refusing to tune gates against synthetic "
-        "results (sanity-only data). Running a single pass."
-    )
-    return run_backtest(config=config, use_synthetic=True)

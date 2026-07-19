@@ -170,14 +170,13 @@ def run_pipeline(args: argparse.Namespace, argv: list[str]) -> int:
             from backtest.historical import load_historical_decisions
 
             progress.advance(task)
-            # No fabricated fallback data: use a real CSV or the pulled
-            # gamma corpus cache (scripts/pull_gamma_corpus.py).
+            # No fabricated fallback data: real corpus = the paper ledger.
             decisions = load_historical_decisions(args.csv)
             progress.advance(task)
             if len(decisions) < 20:
                 console.print(
-                    "[red]Historical mode needs real data: pass --csv or pull "
-                    "the corpus with scripts/pull_gamma_corpus.py "
+                    "[red]Historical mode needs real data: pass --csv, or use "
+                    "the paper-ledger report (scripts/real_report.py) "
                     f"(found {len(decisions)} decisions).[/]"
                 )
                 return 2

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from backtest.engine import ensure_target_or_tighten, run_backtest
+from backtest.engine import run_backtest
 from models.config import load_enhanced_config
 from risk.portfolio_risk import risk_unit
 from strategy.enhanced_misprice import evaluate_market
