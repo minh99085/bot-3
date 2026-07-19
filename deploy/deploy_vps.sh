@@ -90,8 +90,8 @@ LANES=(
   lane01_baseline lane02_chainlink lane03_favorite lane04_longshot lane05_late
   lane06_garch lane07_marketsigma lane08_legacy lane09_random lane10_depth
 )
-for lane in "${LANES[@]}"; do
-  mkdir -p "data/paper/${lane}" "data/handoff/${lane}" "logs/${lane}" "artifacts/${lane}"
+for lane in "\${LANES[@]}"; do
+  mkdir -p "data/paper/\${lane}" "data/handoff/\${lane}" "logs/\${lane}" "artifacts/\${lane}"
 done
 mkdir -p data/live knowledge
 chown -R 10001:10001 logs data knowledge artifacts 2>/dev/null || true
