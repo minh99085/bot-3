@@ -1,0 +1,28 @@
+Bot 3 — Full Trading Report (last 3 hours)
+Generated: 2026-07-19T13:11:16.907995+00:00
+Window start (UTC): 2026-07-19T10:11:16.901660+00:00
+VPS: 207.246.96.45 | main @ 6e7f3b4
+
+=== A) Live paper fleet — last 3 hours ===
+Settled trades: 5 | W/L: 2/3 | WR: 40.0%
+Window PnL: $+1,274.19
+Fleet equity (lifetime): $11,154.19 / $10,000.00 bankroll
+Fleet lifetime PnL: $+1,154.19
+
+  btc5      window_settled= 1  pnl=$ -300.00  wr=0.0%   equity=$1,700.00  turns=35  orders=1
+  btc15     window_settled= 0  pnl=$   +0.00  wr=n/a    equity=$1,880.00  turns=35  orders=0
+  eth5      window_settled= 0  pnl=$   +0.00  wr=n/a    equity=$2,000.00  turns=35  orders=0
+  sol5      window_settled= 0  pnl=$   +0.00  wr=n/a    equity=$2,000.00  turns=36  orders=0
+  rotator   window_settled= 4  pnl=$+1574.19  wr=50.0%  equity=$3,574.19  turns=33  orders=4
+
+=== Settled trades (last 3h) ===
+  2026-07-19T11:21:30.559583Z  btc5      DOWN  pnl=$ -300.00  won=False  size=$300  q=0.5966564626746751  src=advanced_ensemble_smoothed  btc-updown-5m-1784459700
+  2026-07-19T11:37:09.869130Z  rotator   DOWN  pnl=$ -300.00  won=False  size=$300  q=0.577005938721504  src=advanced_ensemble_smoothed  btc-updown-5m-1784460600
+  2026-07-19T11:53:22.992406Z  rotator   DOWN  pnl=$+1004.35  won=True  size=$300  q=0.5840153419002092  src=advanced_ensemble_smoothed  btc-updown-5m-1784461500
+  2026-07-19T12:04:08.667478Z  rotator   UP    pnl=$ -300.00  won=False  size=$300  q=0.43268513339039993  src=advanced_ensemble_smoothed  btc-updown-5m-1784462100
+  2026-07-19T13:03:26.072771Z  rotator   DOWN  pnl=$+1169.84  won=True  size=$300  q=0.5846207535778873  src=advanced_ensemble_smoothed  btc-updown-5m-1784465700
+
+=== Notes ===
+Source: VPS data/paper/* ledgers (rsync read-only pull).
+Window filter: settlement.settled_at >= now-3h UTC.
+Equity/lifetime PnL include all settlements since last fleet reset.
