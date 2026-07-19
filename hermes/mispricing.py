@@ -28,13 +28,56 @@ from connectors.cex_realtime import (
     get_feed,
 )
 from hermes.models import Direction, MarketCandidate
-from strategy.advanced_signals import ensemble_cex_implied_up, momentum_to_q
+from strategy.advanced_signals import (
+    DEFAULT_SIGMA_ANN,
+    barrier_implied_up,
+    ensemble_cex_implied_up,
+    momentum_to_q,
+    realized_sigma_ann,
+)
 
 logger = logging.getLogger(__name__)
 
 # Minimum absolute dislocation (prob points) to flag a setup
 MIN_DISLOCATION = 0.04
 STRONG_DISLOCATION = 0.10
+
+# Window-open CEX price (barrier strike) cache, keyed by (asset, window_ts).
+# The open price is fixed per window, so we look it up once.
+_OPEN_STRIKE_CACHE: dict[tuple[str, int], float] = {}
+
+
+def resolve_open_strike(asset: str, window_ts: int) -> float:
+    """CEX price at the window-open epoch = the resolution strike (cached).
+
+    Returns 0.0 when unavailable so callers fall back to the ensemble rather
+    than pricing a barrier off a bad strike. Needs a CEX klines endpoint
+    reachable at call time (VPS); not available in restricted sandboxes.
+    """
+    key = (str(asset).upper(), int(window_ts))
+    cached = _OPEN_STRIKE_CACHE.get(key)
+    if cached is not None:
+        return cached
+    px = 0.0
+    try:
+        from connectors.cex_realtime import price_at_timestamp
+
+        px = float(price_at_timestamp(asset, int(window_ts)) or 0.0)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("open strike lookup failed asset=%s ts=%s: %s", asset, window_ts, exc)
+    if px > 0:
+        _OPEN_STRIKE_CACHE[key] = px
+    return px
+
+
+def _median_sample_sec(times) -> float:
+    if not times or len(times) < 2:
+        return 1.0
+    diffs = [float(times[i + 1]) - float(times[i]) for i in range(len(times) - 1)]
+    diffs = sorted(d for d in diffs if d > 0)
+    if not diffs:
+        return 1.0
+    return float(diffs[len(diffs) // 2])
 
 
 @dataclass
@@ -201,16 +244,33 @@ def compute_cex_implied_up(
         features["advanced_regime_mr"] = 1.0 if result.regime == "mean_reversion" else 0.0
         features["advanced_regime_mom"] = 1.0 if result.regime == "momentum" else 0.0
 
+    # --- Barrier price is PRIMARY when we know the window-open strike ---
+    # q = P(close > open | fresh spot, time-left, realized vol). This prices
+    # the actual contract instead of guessing direction from momentum, so it
+    # AGREES with an efficient market and only shows edge when our CEX spot/vol
+    # is fresher than Polymarket's price.
+    q_out = float(result.q)
+    if strike and strike > 0 and spot and spot > 0:
+        sample_sec = _median_sample_sec(times)
+        sigma_ann = realized_sigma_ann(prices, sample_sec=sample_sec) or DEFAULT_SIGMA_ANN
+        q_barrier = barrier_implied_up(spot, strike, sigma_ann, seconds_to_resolution)
+        features["barrier_q"] = float(q_barrier)
+        features["barrier_sigma_ann"] = float(sigma_ann)
+        features["barrier_strike"] = float(strike)
+        q_out = q_barrier
+        q_source = "barrier_cex_open"
+    else:
+        q_source = "advanced_ensemble" if not result.used_fallback else "momentum_fallback"
+
     meta: dict[str, Any] = {
-        "model_q_source": (
-            "advanced_ensemble" if not result.used_fallback else "momentum_fallback"
-        ),
+        **(result.meta or {}),
+        "model_q_source": q_source,  # explicit — must win over ensemble meta
         "advanced_regime": result.regime,
         "advanced_components": dict(result.components),
         "advanced_reason": result.reason,
-        **(result.meta or {}),
+        "ensemble_q": float(result.q),
     }
-    return float(result.q), features, meta
+    return float(q_out), features, meta
 
 
 def detect_mispricing(
@@ -222,7 +282,7 @@ def detect_mispricing(
     """Core detector — safe to call every turn for scoped BTC up/down markets."""
     tf = candidate.timeframe or (candidate.raw or {}).get("timeframe") or "5m"
     pm_up = float(candidate.yes_price)
-    from hermes.market_scope import resolve_asset, window_remaining_seconds
+    from hermes.market_scope import parse_slug, resolve_asset, window_remaining_seconds
 
     raw = candidate.raw or {}
     asset = resolve_asset(candidate.slug or "", meta=raw)
@@ -260,6 +320,14 @@ def detect_mispricing(
             strike = float(raw["price_to_beat"])
     except (TypeError, ValueError):
         strike = None
+    # No strike from the market feed → reconstruct the window-open CEX price
+    # (the resolution reference) so q can price the real barrier.
+    if (strike is None or strike <= 0) and candidate.slug:
+        sm_open = parse_slug(candidate.slug)
+        if sm_open is not None:
+            open_px = resolve_open_strike(asset, sm_open.window_ts)
+            if open_px > 0:
+                strike = open_px
 
     cex_up, adv_features, adv_meta = compute_cex_implied_up(
         momentum=snap.momentum,

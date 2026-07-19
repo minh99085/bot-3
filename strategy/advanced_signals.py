@@ -28,6 +28,14 @@ from scipy.stats import norm
 
 logger = logging.getLogger(__name__)
 
+SEC_PER_YEAR = 31_536_000.0  # crypto trades 24/7
+# Cold-start annualized-vol prior. Short-horizon (5–15m) BTC realized vol is
+# high — a market pricing a +0.2% move at ~0.79 implies σ≈1.1. Realized σ
+# from live history dominates this; the prior only covers thin history.
+# NOTE: σ calibration is the make-or-break for barrier edge and must be
+# validated against real moves — flagged, not assumed.
+DEFAULT_SIGMA_ANN = 1.00
+
 # Default multi-TF windows (seconds) — longer windows preferred
 DEFAULT_TF_WINDOWS = (30.0, 60.0, 120.0, 240.0)
 DEFAULT_TF_WEIGHTS = (0.15, 0.20, 0.30, 0.35)
@@ -218,6 +226,62 @@ def estimate_garch11(
     for rt in r:
         var_t = omega + alpha * float(rt) ** 2 + beta * var_t
     return float(math.sqrt(max(var_t, 1e-16)))
+
+
+def realized_sigma_ann(
+    prices: Sequence[float],
+    *,
+    sample_sec: float = 1.0,
+    floor: float = 0.40,  # short-horizon crypto vol rarely below ~40% annualized
+    ceil: float = 2.5,
+) -> Optional[float]:
+    """Annualized volatility from a price series (std of log returns).
+
+    ``sample_sec`` is the spacing between samples so we can annualize. Returns
+    None when history is too thin to estimate; caller falls back to a prior.
+    """
+    p = _as_float_array(prices)
+    if p.size < 6:
+        return None
+    rets = np.diff(np.log(np.maximum(p, 1e-12)))
+    if rets.size < 5:
+        return None
+    sd = float(np.std(rets))
+    if sd <= 0:
+        return None
+    ann = sd * math.sqrt(SEC_PER_YEAR / max(1e-6, float(sample_sec)))
+    return float(min(ceil, max(floor, ann)))
+
+
+def barrier_implied_up(
+    spot: float,
+    strike: float,
+    sigma_ann: float,
+    seconds_to_resolution: float,
+) -> float:
+    """Calibrated P(S_close > strike) — the price of the up/down contract.
+
+    Log-normal barrier probability with ~zero real-world drift over the short
+    horizon: q = Φ( (ln(S/K) − ½σ²T) / (σ√T) ). ``strike`` is the window-OPEN
+    CEX price (the resolution reference). This is what the market itself
+    prices; feeding a FRESH spot is where any latency edge over Polymarket
+    comes from. Clamped to [0.05, 0.95].
+    """
+    S = float(spot)
+    K = float(strike)
+    if S <= 0 or K <= 0:
+        return 0.5
+    T = max(1.0, float(seconds_to_resolution)) / SEC_PER_YEAR
+    sig = max(0.05, float(sigma_ann))
+    denom = sig * math.sqrt(T)
+    if denom <= 1e-12:
+        if S > K:
+            return 0.95
+        if S < K:
+            return 0.05
+        return 0.5
+    d = (math.log(S / K) - 0.5 * sig * sig * T) / denom
+    return _clamp01(float(norm.cdf(d)))
 
 
 def lognormal_cex_prob(
