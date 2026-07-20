@@ -197,9 +197,11 @@ def build_report(
     hours: float,
     vps_host: str,
     main_commit: str,
+    full: bool = False,
 ) -> dict[str, Any]:
     now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(hours=hours)
+    # Full/lifetime: include every settlement since epoch
+    cutoff = datetime(1970, 1, 1, tzinfo=timezone.utc) if full else (now - timedelta(hours=hours))
     instances = [instance_window_stats(paper_dir, iid, cutoff) for iid in INSTANCE_IDS]
     trades: list[dict[str, Any]] = []
     for iid in INSTANCE_IDS:
@@ -216,7 +218,8 @@ def build_report(
 
     section = {
         "cutoff_utc": cutoff.isoformat(),
-        "window_hours": hours,
+        "window_hours": None if full else hours,
+        "full_lifetime": full,
         "fleet_bankroll_usd": FLEET_BANKROLL,
         "fleet_equity_usd": round(fleet_equity, 2),
         "fleet_lifetime_pnl_usd": round(fleet_equity - FLEET_BANKROLL, 2),
@@ -228,7 +231,9 @@ def build_report(
         "instances": instances,
     }
     return {
-        "window": f"last_{int(hours)}_hours" if hours == int(hours) else f"last_{hours}_hours",
+        "window": "lifetime" if full else (
+            f"last_{int(hours)}_hours" if hours == int(hours) else f"last_{hours}_hours"
+        ),
         "cutoff_utc": cutoff.isoformat(),
         "generated_at": now.isoformat(),
         "vps_host": vps_host,
@@ -240,8 +245,14 @@ def build_report(
 
 def render_text(report: dict[str, Any]) -> str:
     s = report["section_a_last_3h"]
-    hours = s["window_hours"]
-    label = f"last {int(hours)} hours" if hours == int(hours) else f"last {hours} hours"
+    hours = s.get("window_hours")
+    full = bool(s.get("full_lifetime") or report.get("window") == "lifetime")
+    if full:
+        label = "lifetime"
+    elif hours is not None and hours == int(hours):
+        label = f"last {int(hours)} hours"
+    else:
+        label = f"last {hours} hours"
     lines = [
         f"Bot 3 — Full Trading Report ({label})",
         f"Generated: {report['generated_at']}",
@@ -277,12 +288,17 @@ def render_text(report: dict[str, Any]) -> str:
             f"src={t.get('entry_source') or t.get('model_q_source') or '?'}  "
             f"{t.get('slug')}"
         )
+    window_note = (
+        "Window filter: all settlements since fleet reset (lifetime)."
+        if full
+        else f"Window filter: settlement.settled_at >= now-{hours}h UTC."
+    )
     lines.extend(
         [
             "",
             "=== Notes ===",
             "Source: VPS data/paper/* ledgers (rsync read-only pull).",
-            f"Window filter: settlement.settled_at >= now-{hours}h UTC.",
+            window_note,
             "Equity/lifetime PnL include all settlements since last fleet reset.",
             f"Fleet: {len(INSTANCE_IDS)}× BTC15 lanes × ${STARTING_BANKROLL:,.0f} = ${FLEET_BANKROLL:,.0f}.",
         ]
@@ -292,8 +308,14 @@ def render_text(report: dict[str, Any]) -> str:
 
 def render_readme(report: dict[str, Any]) -> str:
     s = report["section_a_last_3h"]
-    hours = s["window_hours"]
-    label = f"last {int(hours)} hours" if hours == int(hours) else f"last {hours} hours"
+    hours = s.get("window_hours")
+    full = bool(s.get("full_lifetime") or report.get("window") == "lifetime")
+    if full:
+        label = "lifetime"
+    elif hours is not None and hours == int(hours):
+        label = f"last {int(hours)} hours"
+    else:
+        label = f"last {hours} hours"
     day = report["generated_at"][:10]
     rows = "\n".join(
         f"| {i['instance_id']} | {i['window_settled']} | ${i['window_pnl_usd']:+,.2f} | "
@@ -337,6 +359,11 @@ Pulled from VPS paper fleet (`{report['vps_host']}`). Window: settlements with `
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--hours", type=float, default=3.0)
+    ap.add_argument(
+        "--full",
+        action="store_true",
+        help="Lifetime lifetime report (all settlements since fleet reset)",
+    )
     ap.add_argument("--paper-dir", type=Path, default=ROOT / "data" / "paper_pull")
     ap.add_argument("--out-dir", type=Path, default=None)
     ap.add_argument("--pull", action="store_true")
@@ -361,10 +388,19 @@ def main(argv: list[str] | None = None) -> int:
         hours=args.hours,
         vps_host=args.vps_host,
         main_commit=commit,
+        full=args.full,
     )
     day = datetime.now(timezone.utc).strftime("%Y%m%d")
-    hours_tag = f"last{int(args.hours)}h" if args.hours == int(args.hours) else f"last{args.hours}h"
-    out = args.out_dir or (ROOT / "reports" / f"full_trading_report_{hours_tag}_{day}")
+    if args.full:
+        default_name = f"full_trading_report_{day}"
+    else:
+        hours_tag = (
+            f"last{int(args.hours)}h"
+            if args.hours == int(args.hours)
+            else f"last{args.hours}h"
+        )
+        default_name = f"full_trading_report_{hours_tag}_{day}"
+    out = args.out_dir or (ROOT / "reports" / default_name)
     out.mkdir(parents=True, exist_ok=True)
     (out / "fleet_paper.json").write_text(
         json.dumps(report["section_a_last_3h"], indent=2) + "\n"
