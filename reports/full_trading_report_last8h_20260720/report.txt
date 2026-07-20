@@ -1,0 +1,30 @@
+Bot 3 — Full Trading Report (last 8 hours)
+Generated: 2026-07-20T13:21:52.728851+00:00
+Window start (UTC): 2026-07-20T05:21:52.728851+00:00
+VPS: 207.246.96.45 | main @ e4f9f2d
+
+=== A) Live paper fleet — last 8 hours ===
+Settled trades: 0 | W/L: 0/0 | WR: n/a
+Window PnL: $+0.00
+Fleet equity (lifetime): $20,611.68 / $20,000.00 bankroll
+Fleet lifetime PnL: $+611.68
+
+  lane01_baseline         window_settled=  0  pnl=$   +0.00  wr=n/a     equity=$1,760.00  turns=0  orders=0
+  lane02_chainlink        window_settled=  0  pnl=$   +0.00  wr=n/a     equity=$1,732.73  turns=90  orders=0
+  lane03_favorite         window_settled=  0  pnl=$   +0.00  wr=n/a     equity=$2,000.00  turns=91  orders=0
+  lane04_longshot         window_settled=  0  pnl=$   +0.00  wr=n/a     equity=$2,200.71  turns=91  orders=0
+  lane05_late             window_settled=  0  pnl=$   +0.00  wr=n/a     equity=$2,000.00  turns=91  orders=0
+  lane06_garch            window_settled=  0  pnl=$   +0.00  wr=n/a     equity=$2,075.40  turns=91  orders=0
+  lane07_marketsigma      window_settled=  0  pnl=$   +0.00  wr=n/a     equity=$2,000.00  turns=91  orders=0
+  lane08_legacy           window_settled=  0  pnl=$   +0.00  wr=n/a     equity=$2,151.01  turns=91  orders=0
+  lane09_random           window_settled=  0  pnl=$   +0.00  wr=n/a     equity=$2,498.21  turns=91  orders=0
+  lane10_depth            window_settled=  0  pnl=$   +0.00  wr=n/a     equity=$2,193.62  turns=91  orders=0
+
+=== Settled trades (last 8 hours) ===
+  (none)
+
+=== Notes ===
+Source: VPS data/paper/* ledgers (rsync read-only pull).
+Window filter: settlement.settled_at >= now-8.0h UTC.
+Equity/lifetime PnL include all settlements since last fleet reset.
+Fleet: 10× BTC15 lanes × $2,000 = $20,000.
