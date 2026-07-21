@@ -16,7 +16,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from backtest.paper_ledger import WINDOW_SEC, load_trades, parse_slug_window  # noqa: E402
+from backtest.paper_ledger import load_trades, parse_slug_window  # noqa: E402
+
+WINDOW_SEC = {"5m": 300, "15m": 900}
 
 
 def main(argv: list[str] | None = None) -> int:
