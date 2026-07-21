@@ -11,6 +11,17 @@ import pytest
 import connectors.chainlink as cl
 
 
+@pytest.fixture(autouse=True)
+def _reset_oracle_client():
+    """Reset the cached module client around every test. Several tests here set
+    creds and null the global; without this teardown a credentialed client
+    survives monkeypatch's env restore and leaks streams_enabled=True into other
+    modules (e.g. test_lane_variants q_source labels)."""
+    cl._ORACLE_CLIENT = None
+    yield
+    cl._ORACLE_CLIENT = None
+
+
 # --- A1: Chainlink is the ONLY crypto price authority, hard-fail closed ------
 
 def test_price_at_hard_fails_without_creds(monkeypatch):
