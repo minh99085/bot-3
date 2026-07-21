@@ -26,6 +26,16 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
+
+class OracleUnavailable(RuntimeError):
+    """Chainlink Data Streams is required but unavailable (no creds / fetch failed).
+
+    Crypto lanes HARD-FAIL closed on this — they must NOT silently price or
+    settle off CEX spot, because Polymarket 15m BTC/ETH markets resolve ONLY
+    on the Chainlink data stream (end_price >= start_price).
+    """
+
+
 DATA_STREAMS_HOST = os.environ.get(
     "CHAINLINK_DATA_STREAMS_HOST", "https://api.dataengine.chain.link"
 )
@@ -113,6 +123,59 @@ class ChainlinkClient:
             resp = client.get(url, headers=headers)
             resp.raise_for_status()
             return resp.json()
+
+    def get_report_at(self, feed_id: str, ts_unix: int) -> dict[str, Any]:
+        """Data Streams report valid AT ``ts_unix`` — the window open/close ref.
+
+        This is the price the market actually resolves on. Single HTTP seam so
+        settlement/backtest can reconstruct exact strike/close historically.
+        """
+        path = f"/api/v1/reports?feedID={feed_id}&timestamp={int(ts_unix)}"
+        url = f"{DATA_STREAMS_HOST}{path}"
+        headers = self._hmac_headers("GET", path)
+        with httpx.Client(timeout=self.timeout) as client:
+            resp = client.get(url, headers=headers)
+            resp.raise_for_status()
+            return resp.json()
+
+    def _feed_for(self, asset: str) -> str:
+        return FEED_BTC_USD if asset.upper() == "BTC" else FEED_ETH_USD
+
+    def price_at(self, asset: str, ts_unix: int) -> float:
+        """Chainlink stream price at ``ts_unix``. Raises OracleUnavailable.
+
+        NO fallback to AggregatorV3 or CEX — this feeds settlement/strike and
+        must be the exact stream the market resolves on, or nothing.
+        """
+        asset = asset.upper()
+        if asset not in ("BTC", "ETH"):
+            raise ValueError(f"unsupported oracle asset {asset}")
+        if not self.streams_enabled:
+            raise OracleUnavailable("CHAINLINK_API_KEY/SECRET required for crypto pricing")
+        feed = self._feed_for(asset)
+        try:
+            raw = self.get_report_at(feed, int(ts_unix))
+            return float(self._decode_streams_price(raw, asset, feed).price_usd)
+        except OracleUnavailable:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise OracleUnavailable(f"streams report_at failed: {exc}") from exc
+
+    def spot(self, asset: str) -> OraclePrice:
+        """Latest Chainlink stream price. Raises OracleUnavailable (no fallback)."""
+        asset = asset.upper()
+        if asset not in ("BTC", "ETH"):
+            raise ValueError(f"unsupported oracle asset {asset}")
+        if not self.streams_enabled:
+            raise OracleUnavailable("CHAINLINK_API_KEY/SECRET required for crypto pricing")
+        feed = self._feed_for(asset)
+        try:
+            raw = self.get_latest_streams_report(feed)
+            return self._decode_streams_price(raw, asset, feed)
+        except OracleUnavailable:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise OracleUnavailable(f"streams latest failed: {exc}") from exc
 
     def _decode_streams_price(self, payload: dict[str, Any], asset: str, feed_id: str) -> OraclePrice:
         """Best-effort decode of Data Streams report JSON (schema varies by SDK version)."""
@@ -255,3 +318,52 @@ class ChainlinkClient:
             if dt < 1:
                 return 0.0
         return (now.price_usd - prev.price_usd) / prev.price_usd
+
+
+# ---------------------------------------------------------------------------
+# Module-level oracle helpers — the ONE authority for crypto strike/spot/close.
+# Crypto lanes route here (hard-fail closed); no CEX fallback for these refs.
+# ---------------------------------------------------------------------------
+
+_ORACLE_CLIENT: Optional[ChainlinkClient] = None
+
+
+def _oracle() -> ChainlinkClient:
+    global _ORACLE_CLIENT
+    if _ORACLE_CLIENT is None:
+        _ORACLE_CLIENT = ChainlinkClient()
+    return _ORACLE_CLIENT
+
+
+def oracle_enabled() -> bool:
+    """True only when Data Streams creds are present (crypto lanes may trade)."""
+    return _oracle().streams_enabled
+
+
+def oracle_required() -> bool:
+    """Whether crypto lanes MUST use the oracle (default on; off for backtests)."""
+    return os.environ.get("HERMES_REQUIRE_ORACLE", "1").strip().lower() in ("1", "true", "yes")
+
+
+def oracle_price_at(asset: str, ts_unix: int) -> float:
+    """Chainlink stream price at a timestamp (strike/close). Raises OracleUnavailable."""
+    return _oracle().price_at(asset, int(ts_unix))
+
+
+def oracle_spot(asset: str) -> tuple[float, Optional[datetime]]:
+    """Latest Chainlink stream (price, observed_at). Raises OracleUnavailable."""
+    px = _oracle().spot(asset)
+    return float(px.price_usd), px.observed_at
+
+
+def assert_feeds_configured() -> dict[str, str]:
+    """Return the configured BTC/ETH feed IDs; must be set to Polymarket's streams.
+
+    Startups should log this and operators must confirm the IDs match the
+    btc-usd / eth-usd Data Streams that Polymarket 15m markets resolve on.
+    """
+    feeds = {"BTC": FEED_BTC_USD, "ETH": FEED_ETH_USD}
+    for a, fid in feeds.items():
+        if not fid or not fid.startswith("0x") or len(fid) < 32:
+            raise ValueError(f"Chainlink feed for {a} not configured: {fid!r}")
+    return feeds

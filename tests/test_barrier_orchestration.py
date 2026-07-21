@@ -68,13 +68,13 @@ def test_barrier_agrees_with_efficient_market_gives_small_edge(monkeypatch):
     assert abs(q - pm) < 0.5
 
 
-def test_resolve_open_strike_uses_price_at_timestamp(monkeypatch):
-    import connectors.cex_realtime as cx
+def test_resolve_open_strike_uses_oracle_for_crypto(monkeypatch):
+    import connectors.chainlink as cl
 
-    monkeypatch.setattr(cx, "price_at_timestamp", lambda asset, ts: 63950.0)
+    monkeypatch.setattr(cl, "oracle_price_at", lambda asset, ts: 63950.0)
     mp._OPEN_STRIKE_CACHE.clear()
     px = mp.resolve_open_strike("BTC", 1784420700)
     assert px == 63950.0
-    # cached on second call (no second lookup needed)
-    monkeypatch.setattr(cx, "price_at_timestamp", lambda asset, ts: 0.0)
+    # cached on second call (no second oracle hit needed)
+    monkeypatch.setattr(cl, "oracle_price_at", lambda asset, ts: 0.0)
     assert mp.resolve_open_strike("BTC", 1784420700) == 63950.0

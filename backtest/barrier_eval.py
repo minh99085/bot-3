@@ -159,11 +159,15 @@ def _default_open_price_fn(asset: str, window_ts: int) -> float:
         return 0.0
 
 
+WINDOW_SEC_BY_TF = {"5m": 300, "15m": 900}
+
+
 def evaluate_barrier(
     trades: Sequence,
     *,
     open_price_fn: OpenPriceFn = _default_open_price_fn,
     window_path_fn: Optional[WindowPathFn] = None,
+    close_price_fn: Optional[OpenPriceFn] = None,
     cfg: Optional[BarrierEvalConfig] = None,
 ) -> BarrierEvalReport:
     cfg = cfg or BarrierEvalConfig()
@@ -178,15 +182,17 @@ def evaluate_barrier(
 
     for t in trades:
         spot = t.entry_cex
-        close = t.exit_cex
-        if not spot or not close or spot <= 0 or close <= 0:
-            r.n_excluded += 1
-            continue
-        strike = float(open_price_fn(t.asset.upper(), int(t.window_ts)) or 0.0)
-        if strike <= 0:
-            r.n_excluded += 1
-            continue
         window_sec = WINDOW_SEC.get(t.timeframe, 300)
+        strike = float(open_price_fn(t.asset.upper(), int(t.window_ts)) or 0.0)
+        # Close (outcome) reference: the Chainlink stream close when provided
+        # (A1/A3 — the actual resolution price), else the logged exit.
+        if close_price_fn is not None:
+            close = float(close_price_fn(t.asset.upper(), int(t.window_ts) + window_sec) or 0.0)
+        else:
+            close = t.exit_cex
+        if not spot or not close or spot <= 0 or close <= 0 or strike <= 0:
+            r.n_excluded += 1
+            continue
         tau = max(1.0, window_sec * (1.0 - cfg.entry_frac))
 
         # Realized σ over the window (from klines) or prior fallback.

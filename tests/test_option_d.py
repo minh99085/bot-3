@@ -27,6 +27,9 @@ def _candidate(**kw):
 
 
 def test_mispricing_detects_cex_lead(monkeypatch):
+    # This test exercises the CEX-lead path; disable the crypto oracle gate.
+    monkeypatch.setenv("HERMES_REQUIRE_ORACLE", "0")
+
     class FakeSnap:
         mid = 65000.0
         momentum = 0.8  # strong up

@@ -75,23 +75,32 @@ def sigma_ratio(asset: str) -> float:
 
 
 def resolve_open_strike(asset: str, window_ts: int) -> float:
-    """CEX price at the window-open epoch = the resolution strike (cached).
+    """Resolution strike = Chainlink stream price at window open (crypto).
 
-    Returns 0.0 when unavailable so callers fall back to the ensemble rather
-    than pricing a barrier off a bad strike. Needs a CEX klines endpoint
-    reachable at call time (VPS); not available in restricted sandboxes.
+    Crypto routes to the oracle and HARD-FAILS closed (0.0 → no barrier, and
+    the caller gates the trade off) rather than pricing off CEX spot, since
+    the market resolves on the stream. Cached per window (fixed value).
     """
     key = (str(asset).upper(), int(window_ts))
     cached = _OPEN_STRIKE_CACHE.get(key)
     if cached is not None:
         return cached
     px = 0.0
-    try:
-        from connectors.cex_realtime import price_at_timestamp
+    a = str(asset).upper()
+    if a in ("BTC", "ETH"):
+        try:
+            from connectors.chainlink import oracle_price_at
 
-        px = float(price_at_timestamp(asset, int(window_ts)) or 0.0)
-    except Exception as exc:  # noqa: BLE001
-        logger.debug("open strike lookup failed asset=%s ts=%s: %s", asset, window_ts, exc)
+            px = float(oracle_price_at(a, int(window_ts)) or 0.0)
+        except Exception as exc:  # noqa: BLE001 (incl. OracleUnavailable)
+            logger.warning("oracle strike unavailable asset=%s ts=%s: %s", a, window_ts, exc)
+    else:
+        try:
+            from connectors.cex_realtime import price_at_timestamp
+
+            px = float(price_at_timestamp(a, int(window_ts)) or 0.0)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("cex strike lookup failed asset=%s ts=%s: %s", a, window_ts, exc)
     if px > 0:
         _OPEN_STRIKE_CACHE[key] = px
     return px
@@ -357,6 +366,17 @@ def detect_mispricing(
 
     raw = candidate.raw or {}
     asset = resolve_asset(candidate.slug or "", meta=raw)
+
+    # HARD-FAIL CLOSED: crypto markets resolve ONLY on the Chainlink stream.
+    # Without oracle creds we must NOT price/settle off CEX spot — no trade.
+    if asset.upper() in ("BTC", "ETH"):
+        from connectors.chainlink import oracle_enabled, oracle_required
+
+        if oracle_required() and not oracle_enabled():
+            out = MispricingSignal(pm_implied_up=pm_up, timeframe=tf)
+            out.reason = "oracle_required_unavailable"
+            return out
+
     snap = snapshot
     if snap is None:
         snap = get_asset_snapshot(asset)
@@ -400,21 +420,24 @@ def detect_mispricing(
             if open_px > 0:
                 strike = open_px
 
-    # Lane variant may source spot from the resolution oracle (Chainlink)
-    # instead of the CEX mid; falls back to CEX when the oracle is stale.
+    # Barrier spot: for crypto, use the SAME Chainlink stream as strike/close
+    # so q prices the exact contract the market resolves on. CEX mid is used
+    # only for momentum/σ history, never as the barrier's spot reference.
     from hermes.lane_variants import active_spec as _lane_spec
 
     spec = _lane_spec()
     spot_px = float(snap.mid)
-    if spec.spot_source == "chainlink":
+    oracle_spot_ts = None
+    if asset.upper() in ("BTC", "ETH"):
         try:
-            from connectors.chainlink import ChainlinkClient
+            from connectors.chainlink import oracle_spot
 
-            op = ChainlinkClient().get_price(asset)
-            if op and getattr(op, "price", 0) and op.price > 0:
-                spot_px = float(op.price)
-        except Exception as exc:  # noqa: BLE001
-            logger.debug("chainlink spot unavailable (%s); using CEX mid", exc)
+            osp, osts = oracle_spot(asset)
+            if osp > 0:
+                spot_px = float(osp)
+                oracle_spot_ts = osts
+        except Exception as exc:  # noqa: BLE001 (incl. OracleUnavailable)
+            logger.warning("oracle spot unavailable (%s) — using CEX mid for q", exc)
 
     cex_up, adv_features, adv_meta = compute_cex_implied_up(
         momentum=snap.momentum,
@@ -447,10 +470,29 @@ def detect_mispricing(
     out.features["advanced_component_count"] = float(
         len(adv_meta.get("advanced_components") or {})
     )
-    out.features["spot_source_chainlink"] = (
-        1.0 if (spec.spot_source == "chainlink" and spot_px != float(snap.mid)) else 0.0
+    out.features["spot_source_oracle"] = (
+        1.0 if (oracle_spot_ts is not None and spot_px != float(snap.mid)) else 0.0
     )
-    out.features["lane_variant_spot"] = spot_px
+    out.features["barrier_spot"] = spot_px
+    # --- A2 latency instrumentation: did PM already move to reflect the
+    # oracle/CEX move before our decision? (measure only, no strategy change) ---
+    try:
+        from hermes.latency_probe import record_edge_latency
+
+        record_edge_latency(
+            slug=str(candidate.slug or ""),
+            asset=asset,
+            oracle_spot=spot_px,
+            oracle_ts=oracle_spot_ts,
+            cex_mid=float(snap.mid),
+            cex_ts=getattr(snap, "ts", None),
+            pm_implied_up=pm_up,
+            pm_updated_at=(raw.get("updatedAt") or raw.get("updated_at")),
+            model_q=cex_up,
+            dislocation=dislocation,
+        )
+    except Exception as exc:  # noqa: BLE001 — instrumentation must never block trading
+        logger.debug("latency probe failed: %s", exc)
 
     # Require sources roughly agree when Bybit present
     if snap.bybit and not snap.sources_agree and abs(dislocation) < STRONG_DISLOCATION:

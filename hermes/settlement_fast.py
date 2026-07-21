@@ -73,36 +73,47 @@ def _cex_plausible(asset: str, px: float) -> bool:
     return lo <= px <= hi
 
 
-def _open_price_at(asset: str, window_ts: int) -> float:
-    """CEX price at the window-open epoch (the resolution strike).
+def _resolution_price_at(asset: str, ts: int) -> float:
+    """Resolution price at ``ts`` — the value the market actually settles on.
 
-    Best-effort historical lookup; returns 0.0 when unavailable so the
-    caller skips settlement rather than fabricating an outcome. Kept as a
-    module-level indirection so tests can inject a deterministic reference.
+    Crypto (BTC/ETH) resolves ONLY on the Chainlink data stream, so we route
+    there and HARD-FAIL closed (return 0.0 → caller SKIPS the settlement,
+    never falls back to CEX spot). Non-crypto assets fall through to CEX.
     """
+    a = (asset or "").upper()
+    if a in ("BTC", "ETH"):
+        try:
+            from connectors.chainlink import oracle_price_at
+
+            return float(oracle_price_at(a, int(ts)) or 0.0)
+        except Exception as exc:  # noqa: BLE001 (incl. OracleUnavailable)
+            logger.warning(
+                "oracle price unavailable asset=%s ts=%s: %s — SKIP settle (no CEX fallback)",
+                a, ts, exc,
+            )
+            return 0.0
     try:
         from connectors.cex_realtime import price_at_timestamp
 
-        return float(price_at_timestamp(asset, int(window_ts)) or 0.0)
+        return float(price_at_timestamp(a, int(ts)) or 0.0)
     except Exception as exc:  # noqa: BLE001
-        logger.debug("open price lookup failed asset=%s ts=%s: %s", asset, window_ts, exc)
+        logger.debug("cex price lookup failed asset=%s ts=%s: %s", a, ts, exc)
         return 0.0
+
+
+def _open_price_at(asset: str, window_ts: int) -> float:
+    """Resolution strike = Chainlink stream price at the window-open epoch."""
+    return _resolution_price_at(asset, int(window_ts))
 
 
 def _close_price_at(asset: str, close_ts: int) -> float:
-    """CEX price AT the window close — the price the market resolves on.
+    """Resolution close = Chainlink stream price AT the window close.
 
-    Settlement runs minutes after close (grace + loop cadence); sampling the
-    LIVE mid there lets post-close drift flip outcomes — proven live when six
-    lanes settled the same window seconds apart with different results.
+    Settlement runs minutes after close; sampling any LIVE price there lets
+    post-close drift flip outcomes (proven live when lanes settled the same
+    window with different results). Must be the stream value AT close_ts.
     """
-    try:
-        from connectors.cex_realtime import price_at_timestamp
-
-        return float(price_at_timestamp(asset, int(close_ts)) or 0.0)
-    except Exception as exc:  # noqa: BLE001
-        logger.debug("close price lookup failed asset=%s ts=%s: %s", asset, close_ts, exc)
-        return 0.0
+    return _resolution_price_at(asset, int(close_ts))
 
 
 def settle_expired_paper_positions(paper: bool = True) -> list[Settlement]:
