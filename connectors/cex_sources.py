@@ -226,9 +226,21 @@ _HEALTH_LOCK = threading.Lock()
 
 
 def source_order() -> list[str]:
-    raw = os.environ.get("HERMES_CEX_SOURCES", ",".join(DEFAULT_ORDER))
-    names = [n.strip().lower() for n in raw.split(",") if n.strip()]
-    return [n for n in names if n in _MID_FNS] or list(DEFAULT_ORDER)
+    raw = os.environ.get("HERMES_CEX_SOURCES", "")
+    if raw.strip():
+        names = [n.strip().lower() for n in raw.split(",") if n.strip()]
+        picked = [n for n in names if n in _MID_FNS]
+        if picked:
+            return picked
+    # No explicit order: rotate the default by instance id so 10 containers
+    # on one IP spread across 4 venues instead of all hammering the first
+    # (Kraken's public limit is ~1 req/s — a shared-IP fleet WILL 429 it).
+    inst = os.environ.get("HERMES_INSTANCE_ID", "")
+    if inst:
+        off = sum(ord(c) for c in inst) % len(DEFAULT_ORDER)
+        order = list(DEFAULT_ORDER)
+        return order[off:] + order[:off]
+    return list(DEFAULT_ORDER)
 
 
 def _health(name: str) -> SourceHealth:

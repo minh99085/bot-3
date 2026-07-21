@@ -130,7 +130,11 @@ class RealtimeBtcFeed:
             return (latest - older) / older
 
     def _refresh_rest(self) -> None:
-        quotes = cex_sources.get_mid_multi("BTC", k=2)
+        # Secondary-confirm only every 3rd refresh: halves fleet-wide venue
+        # load; the agreement check tolerates a slightly older secondary.
+        self._refresh_count = getattr(self, "_refresh_count", 0) + 1
+        k = 2 if self._refresh_count % 3 == 1 else 1
+        quotes = cex_sources.get_mid_multi("BTC", k=k)
         now = datetime.now(timezone.utc)
         with self._lock:
             if quotes:

@@ -31,9 +31,11 @@ logger = logging.getLogger(__name__)
 
 MAX_DRAWDOWN_PCT = 0.08
 MAX_DAILY_LOSS_PCT = 0.03
-MAX_CONSECUTIVE_LOSSES = 4
-MIN_ROLLING_WR_20 = 0.55  # soft pause if rolling WR collapses
-MIN_ROLLING_PF_20 = 1.2
+MAX_CONSECUTIVE_LOSSES = 4  # favorite-priced books (avg entry >= 0.45)
+MAX_CONSECUTIVE_LOSSES_LONGSHOT = 10  # longshot books: streaks are routine
+MIN_ROLLING_WR_20 = 0.55  # legacy raw floor (superseded by breakeven floor)
+MIN_ROLLING_PF_20 = 0.85  # negative-expectancy book → pause (was 1.2:
+# that paused any near-breakeven longshot book; 0.85 = genuinely bleeding)
 MAX_OPEN_EXPOSURE_PCT = 0.20
 
 
@@ -84,6 +86,33 @@ def _rolling_stats(settles: list[dict]) -> tuple[float, float, int]:
     return wr, pf, consec
 
 
+def _breakeven_wr(settles: list[dict], margin: float = 0.05) -> float:
+    """WR floor implied by the book's own entry prices + a small margin.
+
+    Raw-WR floors are breakeven-blind: a longshot book (avg entry 0.20)
+    breaks even at 20% WR — judging it against 55% pauses a possibly
+    profitable book, while a favorite book (avg entry 0.80) can bleed at
+    60% WR without tripping. The honest floor is avg entry price + margin.
+    """
+    prices = [
+        float(s.get("entry_price") or 0)
+        for s in settles
+        if float(s.get("entry_price") or 0) > 0
+    ]
+    if not prices:
+        return 0.50
+    return min(0.95, max(0.05, sum(prices) / len(prices) + margin))
+
+
+def _avg_entry(settles: list[dict]) -> float:
+    prices = [
+        float(s.get("entry_price") or 0)
+        for s in settles
+        if float(s.get("entry_price") or 0) > 0
+    ]
+    return sum(prices) / len(prices) if prices else 0.5
+
+
 def compute_risk_snapshot(state: Optional[dict] = None, paper: bool = True) -> RiskSnapshot:
     state = state if state is not None else parse_state_fields(read_state_md())
     capital = float(state.get("capital_usd", state.get("capital", 10_000)) or 10_000)
@@ -103,19 +132,30 @@ def compute_risk_snapshot(state: Optional[dict] = None, paper: bool = True) -> R
     if daily_pnl <= -capital * MAX_DAILY_LOSS_PCT:
         trip = True
         reasons.append(f"daily_loss={daily_pnl:.2f}")
-    if consec >= MAX_CONSECUTIVE_LOSSES:
+    # Consecutive losses are EXPECTED on a longshot book (avg entry 0.20 →
+    # losing streaks of 4+ are routine even when +EV). Only trip the raw
+    # streak gate on favorite-priced books; longshot books trip on a
+    # catastrophic streak instead.
+    avg_entry = _avg_entry(settles)
+    consec_limit = (
+        MAX_CONSECUTIVE_LOSSES if avg_entry >= 0.45 else MAX_CONSECUTIVE_LOSSES_LONGSHOT
+    )
+    if consec >= consec_limit:
         trip = True
-        reasons.append(f"consecutive_losses={consec}")
+        reasons.append(f"consecutive_losses={consec} (limit={consec_limit})")
     if open_exp > capital * MAX_OPEN_EXPOSURE_PCT:
         trip = True
         reasons.append(f"open_exposure={open_exp:.2f}")
 
     pause = trip
-    # Soft performance gates (Hermes weakness fix)
-    if len(settles) >= 10 and wr < MIN_ROLLING_WR_20:
+    # Soft performance gates — breakeven-relative, not raw-WR (a 30% WR at
+    # avg entry 0.20 is PROFITABLE; the old 55% floor paused any longshot
+    # book unconditionally).
+    be_wr = _breakeven_wr(settles)
+    if len(settles) >= 12 and wr < max(0.0, be_wr - 0.05):
         pause = True
-        reasons.append(f"rolling_wr_20={wr:.2%}<{MIN_ROLLING_WR_20:.0%}")
-    if len(settles) >= 10 and pf < MIN_ROLLING_PF_20:
+        reasons.append(f"rolling_wr_20={wr:.2%}<breakeven{be_wr:.0%}-5pp")
+    if len(settles) >= 12 and pf < MIN_ROLLING_PF_20:
         pause = True
         reasons.append(f"rolling_pf_20={pf:.2f}<{MIN_ROLLING_PF_20}")
 

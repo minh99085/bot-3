@@ -23,8 +23,11 @@ from hermes.models import (
 def infer_market_series(market_id: str, slug: str = "", question: str = "") -> str:
     """Map Polymarket BTC/ETH/SOL up-down (incl. 5m/15m) into series labels."""
     blob = f"{market_id} {slug} {question}".lower()
-    tf = "5m" if re.search(r"\b5\s*m\b|5min|5m-", blob) else (
-        "15m" if re.search(r"\b15\s*m\b|15min|15m-", blob) else ""
+    # 15m MUST be checked before 5m: the '5m-' pattern substring-matches
+    # inside '15m-', which mislabeled every 15m window as a 5m series and
+    # poisoned per-series lessons/bandit stats.
+    tf = "15m" if re.search(r"\b15\s*m\b|15min|15m-", blob) else (
+        "5m" if re.search(r"\b5\s*m\b|5min|(?<!1)5m-", blob) else ""
     )
     if re.search(r"\bbtc\b|bitcoin", blob):
         if tf or re.search(r"up.?down|hourly", blob):

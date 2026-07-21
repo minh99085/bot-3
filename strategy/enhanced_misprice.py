@@ -37,6 +37,7 @@ def evaluate_market(
     guard: Optional[GuardState] = None,
     bankroll: Optional[float] = None,
     live_real_q: bool = False,
+    q_calibrated: bool = False,
 ) -> TradeOpportunity:
     """Run enhanced filters + Kelly sizing on one market snapshot.
 
@@ -98,6 +99,7 @@ def evaluate_market(
         extreme_p_high=getattr(cfg, "extreme_p_high", None),
         extreme_p_low=getattr(cfg, "extreme_p_low", None),
         net_edge=net_edge,
+        calibrated_q=q_calibrated,
     )
 
     liq = liquidity_score(market.liquidity_usd, market.volume_24h)
@@ -329,6 +331,9 @@ def enhance_from_hermes_mispricing(
         bankroll=bankroll if bankroll is not None else rm.state.bankroll,
         # Live Hermes path: real cex_implied_up never hits q≥0.85 — use PM p stretch.
         live_real_q=True,
+        # Barrier / null q price the actual contract: gate on net edge, not
+        # market stretch (the stretch filter blocked all ranging-market trades).
+        q_calibrated=bool(is_barrier or adv.get("random_null")),
     )
     # Attach guard snapshot for dashboard / verifier meta
     opp.meta["kappa"] = guard.kappa

@@ -88,6 +88,7 @@ def passes_hard_entry_filter(
     extreme_p_high: float | None = None,
     extreme_p_low: float | None = None,
     net_edge: float | None = None,
+    calibrated_q: bool = False,
 ) -> tuple[bool, list[str]]:
     """Hard entry filter.
 
@@ -116,6 +117,14 @@ def passes_hard_entry_filter(
     p_lo = float(extreme_p_low if extreme_p_low is not None else extreme_q_low)
     p_ext = p >= p_hi or p <= p_lo
     anchor = (extreme_anchor or "q").strip().lower()
+
+    # Calibrated q (barrier price / null control): the model prices the
+    # actual contract, so the trade signal is the |q-p| gap itself — the
+    # market being stretched is irrelevant. The stretch requirement was a
+    # fade-era filter that blocked ALL trading in ranging markets (p~0.5-0.7)
+    # even at 0.20+ net edges. Edge + conviction gates above still apply.
+    if calibrated_q:
+        return (len(reasons) == 0), reasons
 
     # Live real-q: mid CEX q → require stretched Polymarket p (fade path).
     if live_real_q and not q_ext:

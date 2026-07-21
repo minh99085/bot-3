@@ -161,14 +161,32 @@ def lesson_from_settlement(stl: Settlement) -> Lesson:
             except Exception:  # noqa: BLE001
                 n_rows = 0
 
+            # Breakeven-relative gating: raw WR is meaningless for longshot
+            # books (30% WR at avg entry 0.20 is PROFITABLE). AVOID only when
+            # the series is genuinely bleeding: enough samples, WR below its
+            # own breakeven, AND negative dollar expectancy.
+            series_be = 0.50
+            series_ev = 0.0
+            if rows:
+                prices = [
+                    float(r.get("entry_price") or 0)
+                    for r in rows
+                    if float(r.get("entry_price") or 0) > 0
+                ]
+                if prices:
+                    series_be = min(0.95, sum(prices) / len(prices) + 0.05)
+                series_ev = sum(float(r.get("pnl_usd") or 0) for r in rows) / max(
+                    1, n_rows
+                )
             # Single loss → sleeve-scoped REDUCE, not fleet-wide AVOID.
-            if n_rows >= 5 and series_wr < 0.55:
+            if n_rows >= 8 and series_wr < max(0.0, series_be - 0.05) and series_ev < 0:
                 rule = (
                     f"AVOID:{mode} on `{series}` after series WR={series_wr:.0%} "
-                    f"n={n_rows} (pnl=${stl.pnl_usd:.2f}). Skip until WR>65%."
+                    f"< breakeven {series_be:.0%} with EV=${series_ev:.2f}/trade "
+                    f"n={n_rows}. Skip until WR>=breakeven or EV>=0."
                 )
                 severity = "high"
-            elif hour_n >= 3 and hour_wr < 0.50:
+            elif hour_n >= 5 and hour_wr < 0.35 and series_ev < 0:
                 rule = (
                     f"SKIP:`{series}` hour={hour} ({tf}) after hour WR={hour_wr:.0%} "
                     f"n={hour_n} (last pnl=${stl.pnl_usd:.2f})."

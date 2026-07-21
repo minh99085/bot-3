@@ -14,6 +14,7 @@ All decisions are logged to the paper ledger for the dashboard.
 from __future__ import annotations
 
 import logging
+import os
 import re
 from typing import Optional
 
@@ -399,6 +400,14 @@ def analyze_signal(
                 f"size_pct={size_pct:.2%} max={max_pct:.2%} edge_scale={edge_scale:.2f} "
                 f"conf_scale={conf_scale:.2f} ({ev_note})"
             )
+
+    # HARD per-trade cap — no multiplier path (ladder boosts, bandit exploit
+    # scaling, kelly path) may exceed it. Oversized tickets ($300 = 15% of a
+    # $2k lane) turned routine longshot streaks into instant hard-DD lockouts.
+    hard_cap = float(os.environ.get("HERMES_MAX_TRADE_PCT", "0.02"))
+    if size_pct > hard_cap:
+        reasons.append(f"hard_cap {size_pct:.2%}→{hard_cap:.2%}")
+        size_pct = hard_cap
 
     size_usd = round(bankroll * size_pct, 2) if not skip else 0.0
     if not skip and size_usd < MIN_TICKET_USD:
