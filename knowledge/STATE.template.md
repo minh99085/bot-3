@@ -80,8 +80,3 @@ _None — 5× $2k paper instances at boot._
 ## Notes
 
 **Fleet:** btc5 / btc15 / eth5 / sol5 / rotator — each $2,000 paper bankroll.
-- **Autonomy WR**: 0.0%
-- **Autonomy DD**: 20.0%
-- **Autonomy Soft κ**: 0.40
-- **Autonomy Size×**: 0.35
-- **Autonomy Resolved**: 20

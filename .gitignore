@@ -44,3 +44,7 @@ artifacts/backtest_runs/*
 !artifacts/backtest_runs/.gitkeep
 data/models/
 data/parquet/
+
+# Runtime memory (regenerated from knowledge/*.template.md on fresh checkout)
+knowledge/STATE.md
+knowledge/LESSONS.md

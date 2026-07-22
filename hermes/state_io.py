@@ -87,8 +87,24 @@ def ensure_dirs() -> None:
         p.mkdir(parents=True, exist_ok=True)
 
 
+_SEEDED_FROM_TEMPLATE = {"STATE.md", "LESSONS.md"}
+
+
 def knowledge_path(name: str) -> Path:
-    return KNOWLEDGE / name
+    path = KNOWLEDGE / name
+    # STATE.md / LESSONS.md are runtime files (updated every turn / appended to)
+    # and are gitignored. Seed the curated baseline — snapshot skeleton + seed
+    # lessons — from the committed <stem>.template.md on a fresh checkout so a
+    # clone doesn't silently lose the seed AVOID rules or state keys.
+    if name in _SEEDED_FROM_TEMPLATE and not path.exists():
+        tmpl = KNOWLEDGE / f"{Path(name).stem}.template.md"
+        if tmpl.exists():
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(tmpl.read_text(encoding="utf-8"), encoding="utf-8")
+            except OSError as exc:  # shared-fs races must not kill the loop
+                logger.warning("seed %s from template failed: %s", name, exc)
+    return path
 
 
 def read_text(path: Path) -> str:
