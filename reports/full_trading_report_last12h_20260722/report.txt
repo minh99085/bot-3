@@ -1,0 +1,38 @@
+Bot 3 — Full Trading Report (last 12 hours)
+Generated: 2026-07-22T04:41:39.582634+00:00
+Window start (UTC): 2026-07-21T16:41:39.582634+00:00
+VPS: 207.246.96.45 | main @ f922fdc
+
+=== A) Live paper fleet — last 12 hours ===
+Settled trades: 9 | W/L: 6/3 | WR: 66.7%
+Window PnL: $+68.83
+Fleet equity (lifetime): $20,890.62 / $20,000.00 bankroll
+Fleet lifetime PnL: $+890.62
+
+  lane01_baseline         window_settled=  0  pnl=$   +0.00  wr=n/a     equity=$1,754.31  turns=143  orders=0
+  lane02_chainlink        window_settled=  0  pnl=$   +0.00  wr=n/a     equity=$1,683.01  turns=143  orders=0
+  lane03_favorite         window_settled=  5  pnl=$   +4.44  wr=80.0%   equity=$2,004.44  turns=143  orders=5
+  lane04_longshot         window_settled=  1  pnl=$  -40.00  wr=0.0%    equity=$2,245.10  turns=143  orders=1
+  lane05_late             window_settled=  2  pnl=$ +144.39  wr=100.0%  equity=$2,214.67  turns=143  orders=2
+  lane06_garch            window_settled=  0  pnl=$   +0.00  wr=n/a     equity=$2,137.70  turns=143  orders=0
+  lane07_marketsigma      window_settled=  0  pnl=$   +0.00  wr=n/a     equity=$2,259.10  turns=143  orders=0
+  lane08_legacy           window_settled=  0  pnl=$   +0.00  wr=n/a     equity=$2,044.92  turns=143  orders=0
+  lane09_random           window_settled=  0  pnl=$   +0.00  wr=n/a     equity=$2,299.84  turns=0  orders=0
+  lane10_depth            window_settled=  1  pnl=$  -40.00  wr=0.0%    equity=$2,247.53  turns=143  orders=1
+
+=== Settled trades (last 12 hours) ===
+  2026-07-21T21:49:35.213570Z  lane04_longshot         DOWN  pnl=$  -40.00  won=False  size=$40.0  q=0.1433  src=enhanced_mispricing  btc-updown-15m-1784669400
+  2026-07-21T21:49:41.525829Z  lane10_depth            DOWN  pnl=$  -40.00  won=False  size=$40.0  q=0.1417  src=enhanced_mispricing  btc-updown-15m-1784669400
+  2026-07-22T00:15:58.210331Z  lane05_late             UP    pnl=$   +7.75  won=True  size=$40.0  q=0.9500  src=enhanced_mispricing  btc-updown-15m-1784678400
+  2026-07-22T00:45:54.593328Z  lane03_favorite         UP    pnl=$  +12.63  won=True  size=$40.0  q=0.9500  src=enhanced_mispricing  btc-updown-15m-1784680200
+  2026-07-22T01:31:20.454272Z  lane03_favorite         DOWN  pnl=$  -40.00  won=False  size=$40.0  q=0.0500  src=enhanced_mispricing  btc-updown-15m-1784682900
+  2026-07-22T02:16:47.763994Z  lane03_favorite         UP    pnl=$  +10.63  won=True  size=$40.0  q=0.9500  src=enhanced_mispricing  btc-updown-15m-1784685600
+  2026-07-22T04:03:00.171319Z  lane05_late             UP    pnl=$ +136.64  won=True  size=$40.0  q=0.5130  src=enhanced_mispricing  btc-updown-15m-1784691900
+  2026-07-22T04:32:55.016058Z  lane03_favorite         UP    pnl=$  +11.95  won=True  size=$40.0  q=0.8856  src=enhanced_mispricing  btc-updown-15m-1784693700
+  2026-07-22T04:33:00.823488Z  lane03_favorite         UP    pnl=$   +9.23  won=True  size=$40.0  q=0.9500  src=enhanced_mispricing  btc-updown-15m-1784693700
+
+=== Notes ===
+Source: VPS data/paper/* ledgers (rsync read-only pull).
+Window filter: settlement.settled_at >= now-12.0h UTC.
+Equity/lifetime PnL include all settlements since last fleet reset.
+Fleet: 10× BTC15 lanes × $2,000 = $20,000.
