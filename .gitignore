@@ -27,6 +27,7 @@ data/paper/*
 data/live/*
 !data/live/.gitkeep
 data/handoff/*
+data/warm/
 !data/handoff/.gitkeep
 logs/*
 !logs/.gitkeep
