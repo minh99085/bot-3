@@ -285,6 +285,11 @@ class RealReport:
             lines.append(f"By series:        {self.by_series}")
         for n in self.notes:
             lines.append(f"NOTE: {n}")
+        # C2 — NON-NEGOTIABLE: paper results are never presented without the
+        # adverse-selection caveat. Do not remove; do not make conditional.
+        from hermes.fill_model import PAPER_CAVEAT
+
+        lines += ["", f"*** {PAPER_CAVEAT} ***"]
         return "\n".join(lines)
 
 

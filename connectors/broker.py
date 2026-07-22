@@ -71,17 +71,29 @@ class BrokerClient:
             except Exception as exc:  # noqa: BLE001
                 logger.debug("oracle context skipped: %s", exc)
 
-        # Walk orderbook when token_id known
+        # Walk orderbook when token_id known — through the CONSERVATIVE fill
+        # model (C2): ≤25% of near-touch depth, extra slippage near the money.
+        # Paper must be a pessimistic bound, not an optimistic replay.
+        size_usd = intent.size_usd
         if token_id:
             try:
                 from connectors.polymarket import PolymarketClient
+                from hermes.fill_model import conservative_paper_fill
 
                 pm = PolymarketClient()
-                if direction in ("YES", "UP"):
+                book = pm.get_orderbook(token_id)
+                asks = [(lvl.price, lvl.size) for lvl in book.asks]
+                filled, px, slip_bps, note = conservative_paper_fill(
+                    asks, intent.size_usd, intent.limit_price, mid=book.mid
+                )
+                if note == "no_book":
+                    # Book unavailable → legacy vwap sim path
                     fill_price, slip_bps = pm.simulate_buy_vwap(token_id, intent.size_usd)
                 else:
-                    # Buying NO token if available; else sell-side walk on YES as proxy
-                    fill_price, slip_bps = pm.simulate_buy_vwap(token_id, intent.size_usd)
+                    fill_price = px
+                    size_usd = filled if filled > 0 else intent.size_usd
+                    if note:
+                        oracle_note += f" {note}"
                 # Respect limit: no fill worse than limit for paper aggressor
                 if direction in ("YES", "UP"):
                     fill_price = min(0.99, max(fill_price, intent.limit_price))
@@ -102,12 +114,12 @@ class BrokerClient:
             else:
                 fill_price = max(0.01, intent.limit_price - slip)
 
-        fees = intent.size_usd * 0.01
+        fees = size_usd * 0.01
         logger.info(
             "PAPER FILL %s %s $%.2f @ %.4f slip=%.1fbps%s",
             direction,
             intent.market_id,
-            intent.size_usd,
+            size_usd,
             fill_price,
             slip_bps,
             oracle_note,
@@ -117,7 +129,7 @@ class BrokerClient:
             signal_id=intent.signal_id,
             market_id=intent.market_id,
             direction=intent.direction,
-            size_usd=intent.size_usd,
+            size_usd=size_usd,
             fill_price=fill_price,
             fees_usd=fees,
             slippage_bps=float(slip_bps),
