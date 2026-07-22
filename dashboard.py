@@ -6,10 +6,13 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+
+PACIFIC = ZoneInfo("America/Los_Angeles")
 
 ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
@@ -59,6 +62,13 @@ ROLE_PILL = {
 st.markdown(
     """
 <style>
+    /* ~50% larger text across the whole dashboard */
+    html { font-size: 150% !important; }
+    .stApp, .stApp p, .stApp span, .stApp label, .stApp li,
+    .stMarkdown, .stCaption, .stText, [data-testid="stExpander"],
+    [data-testid="stDataFrame"], [data-testid="stMetricLabel"] {
+        font-size: inherit;
+    }
     .main-header { font-size: 2.0rem; font-weight: 700; margin-bottom: 0.25rem; }
     .sub-header { color: #888; font-size: 1rem; margin-bottom: 1.25rem; }
     .fleet-pill {
@@ -101,7 +111,9 @@ st.markdown(
     .positive { color: #00c853; }
     .negative { color: #ff5252; }
     .neutral { color: #888; }
-    div[data-testid="stMetricValue"] { font-size: 1.25rem; }
+    div[data-testid="stMetricValue"] { font-size: 1.35rem; }
+    div[data-testid="stMetricLabel"] { font-size: 0.95rem; }
+    section[data-testid="stSidebar"] { font-size: 1em; }
 </style>
 """,
     unsafe_allow_html=True,
@@ -132,6 +144,27 @@ def pnl_class(value: float) -> str:
 def fmt_pnl(value: float) -> str:
     sign = "+" if value >= 0 else ""
     return f"{sign}${value:,.2f}"
+
+
+def fmt_pacific(ts: object) -> str:
+    """UTC/ISO timestamp → simple Pacific time, e.g. 'Jul 22 7:30 AM'."""
+    if ts is None or ts == "" or ts == "—":
+        return "—"
+    s = str(ts).strip()
+    if not s:
+        return "—"
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(s)
+    except ValueError:
+        return str(ts)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    local = dt.astimezone(PACIFIC)
+    hour12 = local.hour % 12 or 12
+    ampm = "AM" if local.hour < 12 else "PM"
+    return f"{local.strftime('%b')} {local.day} {hour12}:{local.strftime('%M')} {ampm}"
 
 
 def render_lane_card(card: dict) -> None:
@@ -232,31 +265,43 @@ def main() -> None:
 
     recent = data.get("recent_trades") or []
     st.markdown("---")
-    with st.expander(f"Last 50 trades ({len(recent)})", expanded=False):
+    with st.expander(f"Last 50 trades ({len(recent)}) · Pacific time", expanded=False):
         if recent:
             df_recent = pd.DataFrame(recent)
+            df_recent["time"] = df_recent["time"].map(fmt_pacific)
+            # Keep the table light — drop noisy source column from the quick view
             show_cols = [
                 c
                 for c in (
                     "time",
                     "lane",
-                    "slug",
                     "direction",
                     "size",
                     "entry",
-                    "exit",
                     "won",
                     "pnl",
                     "status",
-                    "entry_source",
+                    "slug",
                 )
                 if c in df_recent.columns
             ]
+            rename = {
+                "time": "Time (PT)",
+                "lane": "Lane",
+                "direction": "Side",
+                "size": "Size $",
+                "entry": "Entry",
+                "won": "Won",
+                "pnl": "PnL $",
+                "status": "Status",
+                "slug": "Market",
+            }
+            display = df_recent[show_cols].rename(columns=rename)
             st.dataframe(
-                df_recent[show_cols],
+                display,
                 use_container_width=True,
                 hide_index=True,
-                height=min(420, 48 + 28 * len(df_recent)),
+                height=min(560, 64 + 36 * len(display)),
             )
         else:
             st.info("No trades yet across the fleet.")
