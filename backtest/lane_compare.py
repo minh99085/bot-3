@@ -34,6 +34,9 @@ class LaneStats:
     # paired-vs-null on common windows
     n_paired: int = 0
     paired_pnl_diff: float = 0.0  # this lane minus null, same windows
+    # B3 pre-registered stats (sign test vs null, Holm-corrected)
+    p_value: Optional[float] = None
+    significant_holm: Optional[bool] = None
 
     @property
     def wr(self) -> float:
@@ -46,19 +49,32 @@ class LaneBoard:
     null_lane: Optional[str] = None
     n_shared_windows: int = 0
     notes: list[str] = field(default_factory=list)
+    # B3 — verdicts are blocked until the pre-registered horizon is met.
+    verdict_allowed: bool = False
+    verdict_msg: str = ""
 
     def text(self) -> str:
         lines = [
             "=== LANE SCOREBOARD — paired on shared btc15 windows ===",
             f"shared windows (all-lane intersection): {self.n_shared_windows}",
+        ]
+        if self.verdict_msg:
+            lines.append(f"*** {self.verdict_msg} ***")
+        lines += [
             "",
             f"{'lane':22s} {'n':>4s} {'WR':>7s} {'PnL$':>10s} {'avg_entry':>9s} "
-            f"{'n_pair':>6s} {'Δpnl vs null':>12s}",
+            f"{'n_pair':>6s} {'Δpnl vs null':>12s} {'p(sign)':>8s} {'Holm':>5s}",
         ]
         for s in sorted(self.lanes, key=lambda x: -x.paired_pnl_diff):
+            p_txt = f"{s.p_value:.3f}" if s.p_value is not None else "—"
+            sig_txt = (
+                "—" if s.significant_holm is None
+                else ("SIG" if s.significant_holm else "ns")
+            )
             lines.append(
                 f"{s.lane:22s} {s.n:>4d} {s.wr:>6.1%} {s.pnl:>10.2f} "
-                f"{s.avg_entry:>9.3f} {s.n_paired:>6d} {s.paired_pnl_diff:>+12.2f}"
+                f"{s.avg_entry:>9.3f} {s.n_paired:>6d} {s.paired_pnl_diff:>+12.2f} "
+                f"{p_txt:>8s} {sig_txt:>5s}"
             )
         for n in self.notes:
             lines.append(f"NOTE: {n}")
@@ -88,6 +104,7 @@ def build_board(trades_by_lane: dict[str, list[RealTrade]]) -> LaneBoard:
         len(set.intersection(*window_sets)) if len(window_sets) > 1 else 0
     )
 
+    paired_diffs_by_lane: dict[str, list[float]] = {}
     for lane, trades in sorted(trades_by_lane.items()):
         s = LaneStats(lane=lane)
         s.n = len(trades)
@@ -100,10 +117,48 @@ def build_board(trades_by_lane: dict[str, list[RealTrade]]) -> LaneBoard:
             mine = _by_window(trades)
             common = set(mine) & set(null_windows)
             s.n_paired = len(common)
-            s.paired_pnl_diff = sum(
-                mine[w].pnl_usd - null_windows[w].pnl_usd for w in common
-            )
+            diffs = [mine[w].pnl_usd - null_windows[w].pnl_usd for w in common]
+            s.paired_pnl_diff = sum(diffs)
+            paired_diffs_by_lane[lane] = diffs
         board.lanes.append(s)
+
+    # ── B3 pre-registered statistics ────────────────────────────────────────
+    from backtest.prereg import (
+        PRIMARY_LANE_HINT,
+        holm_bonferroni,
+        paired_sign_pvalue,
+        regime_shift_flag,
+        verdict_gate,
+    )
+
+    pvals: dict[str, float] = {}
+    for lane, diffs in paired_diffs_by_lane.items():
+        p = paired_sign_pvalue(diffs)
+        if p is not None:
+            pvals[lane] = p
+    sig = holm_bonferroni(pvals) if pvals else {}
+    for s in board.lanes:
+        if s.lane in pvals:
+            s.p_value = pvals[s.lane]
+            s.significant_holm = sig.get(s.lane)
+
+    # Verdict gate keys off the PRIMARY lane's pre-registered horizon.
+    primary = next(
+        (s for s in board.lanes if PRIMARY_LANE_HINT in s.lane.lower()), None
+    )
+    board.verdict_allowed, board.verdict_msg = verdict_gate(
+        primary.n if primary else 0, primary.n_paired if primary else 0
+    )
+
+    # Non-stationarity: pooled realized |window move| early vs late.
+    moves: list[tuple[int, float]] = []
+    for trades in trades_by_lane.values():
+        for t in trades:
+            if t.entry_cex and t.exit_cex and t.entry_cex > 0:
+                moves.append((t.window_ts, abs(t.exit_cex / t.entry_cex - 1.0)))
+    flag = regime_shift_flag(moves)
+    if flag:
+        board.notes.append(flag)
 
     # SETTLEMENT CONSISTENCY INVARIANT — same window + same direction must
     # yield the same outcome in every lane. A violation means the harness is
