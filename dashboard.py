@@ -62,100 +62,143 @@ ROLE_PILL = {
 st.markdown(
     """
 <style>
-    /* Fluid type scale — readable on phone, comfortable on desktop */
+    /*
+      Dense fluid type scale for a multi-lane trading dashboard.
+      Root px stays modest on desktop/laptop; slightly larger on phones.
+    */
     html {
-        font-size: clamp(14px, 0.35vw + 13px, 16px) !important;
+        font-size: clamp(12px, 0.55vw + 10.5px, 14px) !important;
     }
     @media (max-width: 768px) {
-        html { font-size: clamp(15px, 2.8vw, 17px) !important; }
-    }
-    @media (min-width: 1400px) {
-        html { font-size: 16px !important; }
+        html { font-size: clamp(13px, 3.1vw, 15px) !important; }
     }
 
-    .stApp {
-        line-height: 1.45;
+    .stApp,
+    [data-testid="stAppViewContainer"],
+    [data-testid="stMarkdownContainer"],
+    [data-testid="stExpander"] {
+        font-size: 1rem !important;
+        line-height: 1.4;
+    }
+
+    /* Slightly tighter page chrome so cards fit more viewports */
+    .block-container {
+        max-width: min(1480px, 98vw) !important;
+        padding-top: 1rem !important;
+        padding-left: clamp(0.6rem, 1.5vw, 2rem) !important;
+        padding-right: clamp(0.6rem, 1.5vw, 2rem) !important;
+    }
+
+    h1, h2, h3,
+    [data-testid="stMarkdownContainer"] h1,
+    [data-testid="stMarkdownContainer"] h2,
+    [data-testid="stMarkdownContainer"] h3 {
+        line-height: 1.25 !important;
+    }
+    [data-testid="stMarkdownContainer"] p {
+        font-size: 0.95rem;
     }
 
     .main-header {
-        font-size: clamp(1.35rem, 1.1rem + 1.2vw, 1.85rem);
+        font-size: clamp(1.15rem, 1rem + 0.7vw, 1.45rem);
         font-weight: 700;
-        margin-bottom: 0.25rem;
+        margin-bottom: 0.2rem;
         line-height: 1.2;
     }
     .sub-header {
         color: #888;
-        font-size: clamp(0.85rem, 0.8rem + 0.3vw, 1rem);
-        margin-bottom: 1rem;
+        font-size: clamp(0.75rem, 0.7rem + 0.2vw, 0.88rem);
+        margin-bottom: 0.75rem;
     }
     .fleet-pill {
         display: inline-block;
         background: #1a1a2e;
         border: 1px solid #333;
-        border-radius: 8px;
-        padding: 0.3rem 0.65rem;
-        margin-right: 0.45rem;
-        margin-bottom: 0.3rem;
-        font-size: 0.8rem;
+        border-radius: 6px;
+        padding: 0.2rem 0.5rem;
+        margin-right: 0.35rem;
+        margin-bottom: 0.25rem;
+        font-size: 0.72rem;
     }
     .instance-card {
         background: #1a1a2e;
         border: 1px solid #333;
         border-left: 3px solid var(--accent, #38bdf8);
-        border-radius: 12px;
-        padding: 0.75rem 0.85rem;
-        margin-bottom: 0.55rem;
+        border-radius: 10px;
+        padding: 0.55rem 0.65rem;
+        margin-bottom: 0.45rem;
         height: 100%;
+        overflow-wrap: anywhere;
     }
     .instance-title {
-        font-size: clamp(0.85rem, 0.8rem + 0.25vw, 0.95rem);
+        font-size: clamp(0.72rem, 0.68rem + 0.2vw, 0.85rem);
         font-weight: 600;
-        margin-bottom: 0.1rem;
+        margin-bottom: 0.05rem;
     }
     .instance-sub {
         color: #888;
-        font-size: clamp(0.68rem, 0.65rem + 0.2vw, 0.75rem);
-        margin-bottom: 0.4rem;
+        font-size: clamp(0.6rem, 0.58rem + 0.12vw, 0.68rem);
+        margin-bottom: 0.3rem;
         line-height: 1.25;
-        min-height: 2.1em;
+        min-height: 2em;
     }
     .role-pill {
         display: inline-block;
-        font-size: 0.62rem;
+        font-size: 0.55rem;
         text-transform: uppercase;
-        letter-spacing: 0.04em;
+        letter-spacing: 0.03em;
         border-radius: 4px;
-        padding: 0.1rem 0.35rem;
-        margin-bottom: 0.3rem;
+        padding: 0.08rem 0.3rem;
+        margin-bottom: 0.25rem;
         border: 1px solid;
     }
     .metric-row {
         display: flex;
         justify-content: space-between;
-        font-size: clamp(0.75rem, 0.72rem + 0.2vw, 0.85rem);
-        margin: 0.12rem 0;
+        gap: 0.35rem;
+        font-size: clamp(0.65rem, 0.62rem + 0.15vw, 0.75rem);
+        margin: 0.08rem 0;
     }
     .metric-label { color: #aaa; }
-    .metric-value { font-weight: 600; }
+    .metric-value { font-weight: 600; white-space: nowrap; }
     .positive { color: #00c853; }
     .negative { color: #ff5252; }
     .neutral { color: #888; }
 
+    /* Streamlit metric widgets — keep compact on wide monitors */
     div[data-testid="stMetricValue"] {
-        font-size: clamp(1.05rem, 0.95rem + 0.6vw, 1.35rem) !important;
+        font-size: clamp(0.95rem, 0.85rem + 0.35vw, 1.15rem) !important;
     }
     div[data-testid="stMetricLabel"] {
-        font-size: clamp(0.75rem, 0.7rem + 0.25vw, 0.9rem) !important;
+        font-size: clamp(0.65rem, 0.62rem + 0.15vw, 0.78rem) !important;
+    }
+    div[data-testid="stMetricDelta"] {
+        font-size: clamp(0.65rem, 0.62rem + 0.15vw, 0.78rem) !important;
     }
 
-    /* Keep data tables readable without dominating the page */
-    [data-testid="stDataFrame"] {
-        font-size: 0.9rem;
+    [data-testid="stDataFrame"],
+    [data-testid="stDataFrame"] * {
+        font-size: 0.78rem !important;
+    }
+    [data-testid="stExpander"] summary,
+    [data-testid="stExpander"] details summary {
+        font-size: 0.85rem !important;
+    }
+
+    /* Mid-width: 5 lane cards get cramped — shrink further */
+    @media (max-width: 1280px) {
+        .instance-card { padding: 0.45rem 0.5rem; }
+        .instance-title { font-size: 0.7rem; }
+        .instance-sub { font-size: 0.58rem; min-height: 0; }
+        .metric-row { font-size: 0.62rem; }
+        div[data-testid="stMetricValue"] { font-size: 1rem !important; }
     }
     @media (max-width: 768px) {
-        [data-testid="stDataFrame"] { font-size: 0.85rem; }
+        [data-testid="stDataFrame"],
+        [data-testid="stDataFrame"] * { font-size: 0.72rem !important; }
         .instance-sub { min-height: 0; }
-        div[data-testid="stHorizontalBlock"] { gap: 0.4rem; }
+        div[data-testid="stHorizontalBlock"] { gap: 0.35rem; }
+        .main-header { font-size: 1.2rem; }
     }
 </style>
 """,
