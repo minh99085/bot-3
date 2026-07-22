@@ -6,10 +6,13 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+
+PACIFIC = ZoneInfo("America/Los_Angeles")
 
 ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
@@ -29,6 +32,7 @@ from hermes.dashboard_data import (
     bandit_states_all,
     fleet_equity_curve,
     fleet_summary,
+    fleet_trade_history,
     instance_cards,
     instance_trade_history,
     lane_scoreboard,
@@ -58,49 +62,144 @@ ROLE_PILL = {
 st.markdown(
     """
 <style>
-    .main-header { font-size: 2.0rem; font-weight: 700; margin-bottom: 0.25rem; }
-    .sub-header { color: #888; font-size: 1rem; margin-bottom: 1.25rem; }
+    /*
+      Dense fluid type scale for a multi-lane trading dashboard.
+      Root px stays modest on desktop/laptop; slightly larger on phones.
+    */
+    html {
+        font-size: clamp(12px, 0.55vw + 10.5px, 14px) !important;
+    }
+    @media (max-width: 768px) {
+        html { font-size: clamp(13px, 3.1vw, 15px) !important; }
+    }
+
+    .stApp,
+    [data-testid="stAppViewContainer"],
+    [data-testid="stMarkdownContainer"],
+    [data-testid="stExpander"] {
+        font-size: 1rem !important;
+        line-height: 1.4;
+    }
+
+    /* Slightly tighter page chrome so cards fit more viewports */
+    .block-container {
+        max-width: min(1480px, 98vw) !important;
+        padding-top: 1rem !important;
+        padding-left: clamp(0.6rem, 1.5vw, 2rem) !important;
+        padding-right: clamp(0.6rem, 1.5vw, 2rem) !important;
+    }
+
+    h1, h2, h3,
+    [data-testid="stMarkdownContainer"] h1,
+    [data-testid="stMarkdownContainer"] h2,
+    [data-testid="stMarkdownContainer"] h3 {
+        line-height: 1.25 !important;
+    }
+    [data-testid="stMarkdownContainer"] p {
+        font-size: 0.95rem;
+    }
+
+    .main-header {
+        font-size: clamp(1.15rem, 1rem + 0.7vw, 1.45rem);
+        font-weight: 700;
+        margin-bottom: 0.2rem;
+        line-height: 1.2;
+    }
+    .sub-header {
+        color: #888;
+        font-size: clamp(0.75rem, 0.7rem + 0.2vw, 0.88rem);
+        margin-bottom: 0.75rem;
+    }
     .fleet-pill {
         display: inline-block;
         background: #1a1a2e;
         border: 1px solid #333;
-        border-radius: 8px;
-        padding: 0.35rem 0.75rem;
-        margin-right: 0.5rem;
-        margin-bottom: 0.35rem;
-        font-size: 0.85rem;
+        border-radius: 6px;
+        padding: 0.2rem 0.5rem;
+        margin-right: 0.35rem;
+        margin-bottom: 0.25rem;
+        font-size: 0.72rem;
     }
     .instance-card {
         background: #1a1a2e;
         border: 1px solid #333;
         border-left: 3px solid var(--accent, #38bdf8);
-        border-radius: 12px;
-        padding: 0.85rem 0.95rem;
-        margin-bottom: 0.65rem;
+        border-radius: 10px;
+        padding: 0.55rem 0.65rem;
+        margin-bottom: 0.45rem;
         height: 100%;
+        overflow-wrap: anywhere;
     }
-    .instance-title { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.1rem; }
+    .instance-title {
+        font-size: clamp(0.72rem, 0.68rem + 0.2vw, 0.85rem);
+        font-weight: 600;
+        margin-bottom: 0.05rem;
+    }
     .instance-sub {
-        color: #888; font-size: 0.72rem; margin-bottom: 0.45rem;
-        line-height: 1.25; min-height: 2.1em;
+        color: #888;
+        font-size: clamp(0.6rem, 0.58rem + 0.12vw, 0.68rem);
+        margin-bottom: 0.3rem;
+        line-height: 1.25;
+        min-height: 2em;
     }
     .role-pill {
         display: inline-block;
-        font-size: 0.65rem;
+        font-size: 0.55rem;
         text-transform: uppercase;
-        letter-spacing: 0.04em;
+        letter-spacing: 0.03em;
         border-radius: 4px;
-        padding: 0.1rem 0.4rem;
-        margin-bottom: 0.35rem;
+        padding: 0.08rem 0.3rem;
+        margin-bottom: 0.25rem;
         border: 1px solid;
     }
-    .metric-row { display: flex; justify-content: space-between; font-size: 0.82rem; margin: 0.15rem 0; }
+    .metric-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.35rem;
+        font-size: clamp(0.65rem, 0.62rem + 0.15vw, 0.75rem);
+        margin: 0.08rem 0;
+    }
     .metric-label { color: #aaa; }
-    .metric-value { font-weight: 600; }
+    .metric-value { font-weight: 600; white-space: nowrap; }
     .positive { color: #00c853; }
     .negative { color: #ff5252; }
     .neutral { color: #888; }
-    div[data-testid="stMetricValue"] { font-size: 1.25rem; }
+
+    /* Streamlit metric widgets — keep compact on wide monitors */
+    div[data-testid="stMetricValue"] {
+        font-size: clamp(0.95rem, 0.85rem + 0.35vw, 1.15rem) !important;
+    }
+    div[data-testid="stMetricLabel"] {
+        font-size: clamp(0.65rem, 0.62rem + 0.15vw, 0.78rem) !important;
+    }
+    div[data-testid="stMetricDelta"] {
+        font-size: clamp(0.65rem, 0.62rem + 0.15vw, 0.78rem) !important;
+    }
+
+    [data-testid="stDataFrame"],
+    [data-testid="stDataFrame"] * {
+        font-size: 0.78rem !important;
+    }
+    [data-testid="stExpander"] summary,
+    [data-testid="stExpander"] details summary {
+        font-size: 0.85rem !important;
+    }
+
+    /* Mid-width: 5 lane cards get cramped — shrink further */
+    @media (max-width: 1280px) {
+        .instance-card { padding: 0.45rem 0.5rem; }
+        .instance-title { font-size: 0.7rem; }
+        .instance-sub { font-size: 0.58rem; min-height: 0; }
+        .metric-row { font-size: 0.62rem; }
+        div[data-testid="stMetricValue"] { font-size: 1rem !important; }
+    }
+    @media (max-width: 768px) {
+        [data-testid="stDataFrame"],
+        [data-testid="stDataFrame"] * { font-size: 0.72rem !important; }
+        .instance-sub { min-height: 0; }
+        div[data-testid="stHorizontalBlock"] { gap: 0.35rem; }
+        .main-header { font-size: 1.2rem; }
+    }
 </style>
 """,
     unsafe_allow_html=True,
@@ -115,6 +214,7 @@ def cached_fleet():
         "instances": instance_cards(),
         "scoreboard": lane_scoreboard(),
         "equity": fleet_equity_curve(),
+        "recent_trades": fleet_trade_history(50),
         "bandits": bandit_states_all(),
     }
 
@@ -130,6 +230,27 @@ def pnl_class(value: float) -> str:
 def fmt_pnl(value: float) -> str:
     sign = "+" if value >= 0 else ""
     return f"{sign}${value:,.2f}"
+
+
+def fmt_pacific(ts: object) -> str:
+    """UTC/ISO timestamp → simple Pacific time, e.g. 'Jul 22 7:30 AM'."""
+    if ts is None or ts == "" or ts == "—":
+        return "—"
+    s = str(ts).strip()
+    if not s:
+        return "—"
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(s)
+    except ValueError:
+        return str(ts)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    local = dt.astimezone(PACIFIC)
+    hour12 = local.hour % 12 or 12
+    ampm = "AM" if local.hour < 12 else "PM"
+    return f"{local.strftime('%b')} {local.day} {hour12}:{local.strftime('%M')} {ampm}"
 
 
 def render_lane_card(card: dict) -> None:
@@ -228,7 +349,49 @@ def main() -> None:
         unsafe_allow_html=True,
     )
 
+    recent = data.get("recent_trades") or []
     st.markdown("---")
+    with st.expander(f"Last 50 trades ({len(recent)}) · Pacific time", expanded=False):
+        if recent:
+            df_recent = pd.DataFrame(recent)
+            df_recent["time"] = df_recent["time"].map(fmt_pacific)
+            # Keep the table light — drop noisy source column from the quick view
+            show_cols = [
+                c
+                for c in (
+                    "time",
+                    "lane",
+                    "direction",
+                    "size",
+                    "entry",
+                    "won",
+                    "pnl",
+                    "status",
+                    "slug",
+                )
+                if c in df_recent.columns
+            ]
+            rename = {
+                "time": "Time (PT)",
+                "lane": "Lane",
+                "direction": "Side",
+                "size": "Size $",
+                "entry": "Entry",
+                "won": "Won",
+                "pnl": "PnL $",
+                "status": "Status",
+                "slug": "Market",
+            }
+            display = df_recent[show_cols].rename(columns=rename)
+            st.dataframe(
+                display,
+                use_container_width=True,
+                hide_index=True,
+                height=min(560, 64 + 36 * len(display)),
+            )
+        else:
+            st.info("No trades yet across the fleet.")
+
     st.subheader("Fleet equity ($20,000 baseline)")
     if len(fleet_eq) > 1:
         fig = go.Figure()
