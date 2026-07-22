@@ -25,6 +25,7 @@ from hermes.state_io import (
     ensure_dirs,
     ledger_path,
     parse_state_fields,
+    read_jsonl,
     read_state_md,
     write_handoff,
 )
@@ -104,6 +105,46 @@ def open_position(fill: Fill) -> Position:
     )
 
 
+def _allow_same_slug() -> bool:
+    """Opt-in to legacy pyramiding (multiple entries per market window)."""
+    return os.environ.get("HERMES_ALLOW_SAME_SLUG", "0").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+
+def open_slugs(paper: bool) -> set[str]:
+    """Slugs with an unsettled open position in this lane's ledger.
+
+    A window is "open" if a ``position_open`` was recorded and no matching
+    ``settlement`` exists yet. Used to keep one position per market window
+    per lane (no same-window pyramiding).
+    """
+    try:
+        rows = read_jsonl(ledger_path(paper=paper))
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("open_slugs ledger read failed: %s", exc)
+        return set()
+    settled = {
+        r.get("signal_id") or r.get("position_id")
+        for r in rows
+        if r.get("event") == "settlement"
+    }
+    slugs: set[str] = set()
+    for r in rows:
+        if r.get("event") != "position_open":
+            continue
+        sid = r.get("signal_id")
+        if sid and sid in settled:
+            continue
+        slug = r.get("slug") or (r.get("meta") or {}).get("slug")
+        if slug:
+            slugs.add(str(slug))
+    return slugs
+
+
 @loop(interval="5m", name="executor")
 def executor_tick(
     signals: Optional[list[Signal]] = None,
@@ -123,6 +164,12 @@ def executor_tick(
     fills: list[Fill] = []
     positions: list[Position] = []
 
+    # One position per market window per lane: seed with slugs already open in
+    # the ledger, then track slugs opened during this tick so a single loop
+    # pass cannot pyramid the same window either.
+    allow_same_slug = _allow_same_slug()
+    held_slugs: set[str] = set() if allow_same_slug else open_slugs(paper=paper)
+
     for report in reports:
         if report.decision != VerifierDecision.PASS:
             continue
@@ -138,11 +185,21 @@ def executor_tick(
                 (meta.get("enhanced_reasons") or [])[:2],
             )
             continue
+        slug = signal.slug or ""
+        if not allow_same_slug and slug and slug in held_slugs:
+            logger.info(
+                "executor skip %s: position already open for %s (one per window)",
+                signal.signal_id,
+                slug,
+            )
+            continue
         intent = build_intent(signal, report, paper=paper)
         fill = execute_intent(intent, signal=signal)
         pos = open_position(fill)
         fills.append(fill)
         positions.append(pos)
+        if slug:
+            held_slugs.add(slug)
         append_jsonl(ledger_path(paper=paper), {
             "event": "fill",
             **fill.model_dump(mode="json"),
