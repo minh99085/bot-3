@@ -161,6 +161,28 @@ class PolymarketClient:
             logger.debug("slug %s parse failed: %s", slug, exc)
             return None
 
+    def get_market_resolution(self, slug: str) -> Optional[bool]:
+        """Polymarket's ACTUAL resolved outcome — the settlement ground truth.
+
+        Returns True if UP/YES won, False if DOWN/NO won, None if the market is
+        not yet resolved or can't be read. When a market closes, Gamma flips
+        ``outcomePrices`` to [1,0] (YES) or [0,1] (NO); we read that directly, so
+        settlement needs no price feed at all — 'polymarket data' is the truth.
+        """
+        try:
+            c = self.get_market_by_slug(slug)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("resolution fetch %s failed: %s", slug, exc)
+            return None
+        if c is None or not (c.raw or {}).get("closed"):
+            return None
+        y = float(c.yes_price)
+        if y >= 0.99:
+            return True
+        if y <= 0.01:
+            return False
+        return None  # closed but not cleanly resolved → let caller reconstruct
+
     def list_scoped_btc_updown_markets(self) -> list[MarketCandidate]:
         """Scoped discovery — respects MARKET_FILTER (BTC/ETH/SOL lanes).
 

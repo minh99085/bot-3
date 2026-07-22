@@ -75,32 +75,34 @@ def sigma_ratio(asset: str) -> float:
 
 
 def resolve_open_strike(asset: str, window_ts: int) -> float:
-    """Resolution strike = Chainlink stream price at window open (crypto).
+    """Barrier strike = price at the window-open epoch.
 
-    Crypto routes to the oracle and HARD-FAILS closed (0.0 → no barrier, and
-    the caller gates the trade off) rather than pricing off CEX spot, since
-    the market resolves on the stream. Cached per window (fixed value).
+    Uses the CEX price at window open (free AggregatorV3 as a crypto fallback).
+    Returns 0.0 if no source is available → the caller simply skips the barrier
+    for that window. Cached per window (a window's open price is fixed).
     """
     key = (str(asset).upper(), int(window_ts))
     cached = _OPEN_STRIKE_CACHE.get(key)
     if cached is not None:
         return cached
-    px = 0.0
     a = str(asset).upper()
-    if a in ("BTC", "ETH"):
-        try:
-            from connectors.chainlink import oracle_price_at
+    px = 0.0
+    # CEX price at the window-open epoch is the strike reference (a 15m window
+    # does not need a paid Chainlink stream). Free on-chain AggregatorV3 is the
+    # last-resort fallback for crypto if the CEX lookup is unavailable.
+    try:
+        from connectors.cex_realtime import price_at_timestamp
 
-            px = float(oracle_price_at(a, int(window_ts)) or 0.0)
-        except Exception as exc:  # noqa: BLE001 (incl. OracleUnavailable)
-            logger.warning("oracle strike unavailable asset=%s ts=%s: %s", a, window_ts, exc)
-    else:
+        px = float(price_at_timestamp(a, int(window_ts)) or 0.0)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("cex strike lookup failed asset=%s ts=%s: %s", a, window_ts, exc)
+    if px <= 0 and a in ("BTC", "ETH"):
         try:
-            from connectors.cex_realtime import price_at_timestamp
+            from connectors.chainlink import oracle_agg_price_at
 
-            px = float(price_at_timestamp(a, int(window_ts)) or 0.0)
+            px = float(oracle_agg_price_at(a, int(window_ts)) or 0.0)
         except Exception as exc:  # noqa: BLE001
-            logger.debug("cex strike lookup failed asset=%s ts=%s: %s", a, window_ts, exc)
+            logger.debug("aggregatorv3 strike fallback failed asset=%s ts=%s: %s", a, window_ts, exc)
     if px > 0:
         _OPEN_STRIKE_CACHE[key] = px
     return px
@@ -331,16 +333,8 @@ def compute_cex_implied_up(
         features["barrier_sigma_ann"] = float(sigma_ann)
         features["barrier_strike"] = float(strike)
         q_out = q_barrier
-        # Label reflects the STRIKE reference so reports never confuse the exact
-        # Data Streams tier with the coarse free-aggregator tier (or a CEX ref).
+        # q is priced from fresh CEX spot vs the window-open strike.
         q_source = "barrier_cex_open"
-        if asset.upper() in ("BTC", "ETH"):
-            from connectors.chainlink import oracle_agg_allowed, oracle_streams_enabled
-
-            if oracle_streams_enabled():
-                q_source = "barrier_streams_open"
-            elif oracle_agg_allowed():
-                q_source = "barrier_agg_open"
         # CRITICAL: downstream (enhance_from_hermes_mispricing) prefers
         # features['advanced_q'] over the returned q — it must carry the
         # barrier, or the ensemble silently clobbers it (live-ledger bug).
@@ -376,8 +370,10 @@ def detect_mispricing(
     raw = candidate.raw or {}
     asset = resolve_asset(candidate.slug or "", meta=raw)
 
-    # HARD-FAIL CLOSED: crypto markets resolve ONLY on the Chainlink stream.
-    # Without oracle creds we must NOT price/settle off CEX spot — no trade.
+    # Crypto prices on fresh CEX spot + Polymarket strike; settlement uses
+    # Polymarket's actual resolution (see hermes.settlement_fast). A 15m window
+    # does not need a paid Chainlink stream, so there is no hard-fail gate — an
+    # operator can still force one by setting HERMES_REQUIRE_ORACLE=1 + creds.
     if asset.upper() in ("BTC", "ETH"):
         from connectors.chainlink import oracle_enabled, oracle_required
 
@@ -429,12 +425,10 @@ def detect_mispricing(
             if open_px > 0:
                 strike = open_px
 
-    # Barrier spot: prefer the live Data Streams spot (same feed strike/close
-    # resolve on). When only the COARSE aggregator tier is available, oracle_spot
-    # raises and we KEEP the fresh CEX mid as the live spot — the aggregator's
-    # ~1h heartbeat is far too stale to price a 15m barrier, and the fresh CEX
-    # tick is the actual latency-edge input. Strike/close still resolve on
-    # Chainlink (streams or aggregator); only the live spot uses CEX here.
+    # Barrier spot = fresh CEX mid — the live input for q. If an operator has
+    # wired the paid Data Streams feed, prefer that exact spot; otherwise the
+    # CEX tick is the spot (no aggregator here: its ~1h heartbeat is far too
+    # stale to price a 15m barrier).
     from hermes.lane_variants import active_spec as _lane_spec
 
     spec = _lane_spec()
@@ -442,14 +436,15 @@ def detect_mispricing(
     oracle_spot_ts = None
     if asset.upper() in ("BTC", "ETH"):
         try:
-            from connectors.chainlink import oracle_spot
+            from connectors.chainlink import oracle_spot, oracle_streams_enabled
 
-            osp, osts = oracle_spot(asset)
-            if osp > 0:
-                spot_px = float(osp)
-                oracle_spot_ts = osts
+            if oracle_streams_enabled():
+                osp, osts = oracle_spot(asset)
+                if osp > 0:
+                    spot_px = float(osp)
+                    oracle_spot_ts = osts
         except Exception as exc:  # noqa: BLE001 (incl. OracleUnavailable)
-            logger.warning("oracle spot unavailable (%s) — using CEX mid for q", exc)
+            logger.debug("oracle spot unavailable (%s) — using CEX mid for q", exc)
 
     cex_up, adv_features, adv_meta = compute_cex_implied_up(
         momentum=snap.momentum,

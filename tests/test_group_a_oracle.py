@@ -22,64 +22,22 @@ def _reset_oracle_client():
     cl._ORACLE_CLIENT = None
 
 
-# --- A1: Chainlink is the ONLY crypto price authority, hard-fail closed ------
+# --- Settlement: Polymarket resolution + CEX (+ AggregatorV3 fallback) -------
+# A 15m window does not need a paid Chainlink stream. Streams stay available
+# only as an optional operator override / the A3 --source streams check.
 
-def test_price_at_hard_fails_without_creds(monkeypatch):
+def test_price_at_streams_only_raises_without_creds(monkeypatch):
     monkeypatch.delenv("CHAINLINK_API_KEY", raising=False)
     monkeypatch.delenv("CHAINLINK_API_SECRET", raising=False)
     cl._ORACLE_CLIENT = None
     with pytest.raises(cl.OracleUnavailable):
         cl.oracle_price_at("BTC", 1_784_600_000)
-    assert cl.oracle_enabled() is False
+    assert cl.oracle_enabled() is False       # only true with Data Streams creds
 
 
-def test_agg_tier_enables_oracle_without_creds(monkeypatch):
-    """Option 2: the free aggregator tier lets crypto lanes trade, no creds."""
-    monkeypatch.delenv("CHAINLINK_API_KEY", raising=False)
-    monkeypatch.delenv("CHAINLINK_API_SECRET", raising=False)
-    cl._ORACLE_CLIENT = None
-    # Off by default → still hard-fail closed.
-    monkeypatch.delenv("HERMES_ORACLE_ALLOW_AGG", raising=False)
-    assert cl.oracle_streams_enabled() is False
-    assert cl.oracle_agg_allowed() is False
-    assert cl.oracle_enabled() is False
-    # Opt in → oracle_enabled() true so the crypto gate passes.
-    monkeypatch.setenv("HERMES_ORACLE_ALLOW_AGG", "1")
-    assert cl.oracle_agg_allowed() is True
-    assert cl.oracle_streams_enabled() is False   # still no exact tier
-    assert cl.oracle_enabled() is True
-
-
-def test_price_at_uses_aggregator_when_agg_tier_and_no_creds(monkeypatch):
-    monkeypatch.delenv("CHAINLINK_API_KEY", raising=False)
-    monkeypatch.delenv("CHAINLINK_API_SECRET", raising=False)
-    monkeypatch.setenv("HERMES_ORACLE_ALLOW_AGG", "1")
-    cl._ORACLE_CLIENT = None
-    monkeypatch.setattr(cl.ChainlinkClient, "agg_price_at",
-                        lambda self, a, ts, **k: 63_500.0)
-    assert cl.oracle_price_at("BTC", 1_784_600_000) == pytest.approx(63_500.0)
-
-
-def test_price_at_agg_tier_raises_when_no_round(monkeypatch):
-    """Aggregator with no round in effect → OracleUnavailable → caller SKIPS."""
-    monkeypatch.delenv("CHAINLINK_API_KEY", raising=False)
-    monkeypatch.delenv("CHAINLINK_API_SECRET", raising=False)
-    monkeypatch.setenv("HERMES_ORACLE_ALLOW_AGG", "1")
-    cl._ORACLE_CLIENT = None
-    monkeypatch.setattr(cl.ChainlinkClient, "agg_price_at", lambda self, a, ts, **k: 0.0)
-    with pytest.raises(cl.OracleUnavailable):
-        cl.oracle_price_at("BTC", 1_784_600_000)
-
-
-def test_streams_preferred_over_agg_when_both_available(monkeypatch):
-    monkeypatch.setenv("HERMES_ORACLE_ALLOW_AGG", "1")
-    monkeypatch.setenv("CHAINLINK_API_KEY", "k")
-    monkeypatch.setenv("CHAINLINK_API_SECRET", "s")
-    cl._ORACLE_CLIENT = None
-    monkeypatch.setattr(cl.ChainlinkClient, "price_at", lambda self, a, ts: 64_000.0)
-    monkeypatch.setattr(cl.ChainlinkClient, "agg_price_at",
-                        lambda self, a, ts, **k: 1.0)  # must NOT be used
-    assert cl.oracle_price_at("BTC", 1_784_600_000) == pytest.approx(64_000.0)
+def test_oracle_not_required_by_default(monkeypatch):
+    monkeypatch.delenv("HERMES_REQUIRE_ORACLE", raising=False)
+    assert cl.oracle_required() is False       # crypto no longer hard-fails
 
 
 def test_price_at_uses_streams_report_when_credentialed(monkeypatch):
@@ -110,32 +68,66 @@ def test_feeds_configured():
     assert feeds["BTC"].startswith("0x") and feeds["ETH"].startswith("0x")
 
 
-def test_settlement_routes_crypto_to_oracle(monkeypatch):
+def test_settlement_reconstruction_uses_cex_first(monkeypatch):
     import hermes.settlement_fast as stl
+    import connectors.cex_realtime as rt
 
     calls = []
-    monkeypatch.setattr(cl, "oracle_price_at", lambda a, ts: (calls.append((a, ts)) or 64_000.0))
+    monkeypatch.setattr(rt, "price_at_timestamp",
+                        lambda a, ts: (calls.append((a, ts)) or 64_000.0))
     assert stl._open_price_at("BTC", 111) == 64_000.0
     assert stl._close_price_at("BTC", 222) == 64_000.0
     assert calls == [("BTC", 111), ("BTC", 222)]
 
 
-def test_settlement_skips_when_oracle_unavailable(monkeypatch):
+def test_settlement_falls_back_to_aggregator_when_cex_missing(monkeypatch):
     import hermes.settlement_fast as stl
+    import connectors.cex_realtime as rt
 
-    def boom(a, ts):
-        raise cl.OracleUnavailable("no creds")
+    monkeypatch.setattr(rt, "price_at_timestamp", lambda a, ts: 0.0)  # CEX unavailable
+    monkeypatch.setattr(cl, "oracle_agg_price_at", lambda a, ts: 63_900.0)  # free fallback
+    assert stl._open_price_at("BTC", 111) == pytest.approx(63_900.0)
+    # No source at all → 0.0 → caller skips (never fabricates).
+    monkeypatch.setattr(cl, "oracle_agg_price_at", lambda a, ts: 0.0)
+    assert stl._close_price_at("BTC", 222) == 0.0
 
-    monkeypatch.setattr(cl, "oracle_price_at", boom)
-    # returns 0.0 → caller SKIPS (never CEX fallback for crypto)
-    assert stl._open_price_at("BTC", 111) == 0.0
-    assert stl._close_price_at("ETH", 222) == 0.0
+
+def test_polymarket_resolution_is_ground_truth(monkeypatch):
+    """A closed market resolved to YES→UP true, NO→DOWN false, else None."""
+    import connectors.polymarket as pm
+    from hermes.models import MarketCandidate
+
+    def make(closed, yes):
+        c = MarketCandidate(market_id="m", slug="btc-updown-15m-1", question="q",
+                            yes_price=yes, no_price=1 - yes, hourly_bucket=0)
+        c.raw = {"closed": closed}
+        return c
+
+    monkeypatch.setattr(pm.PolymarketClient, "get_market_by_slug",
+                        lambda self, slug: make(True, 1.0))
+    assert pm.PolymarketClient().get_market_resolution("s") is True
+    monkeypatch.setattr(pm.PolymarketClient, "get_market_by_slug",
+                        lambda self, slug: make(True, 0.0))
+    assert pm.PolymarketClient().get_market_resolution("s") is False
+    monkeypatch.setattr(pm.PolymarketClient, "get_market_by_slug",
+                        lambda self, slug: make(False, 0.7))  # still open
+    assert pm.PolymarketClient().get_market_resolution("s") is None
 
 
-def test_detect_mispricing_hard_fails_without_oracle(monkeypatch):
+def test_resolve_open_strike_uses_cex_for_crypto(monkeypatch):
+    import hermes.mispricing as mp
+    import connectors.cex_realtime as rt
+
+    mp._OPEN_STRIKE_CACHE.clear()
+    monkeypatch.setattr(rt, "price_at_timestamp", lambda a, ts: 64_500.0)
+    assert mp.resolve_open_strike("BTC", 1_784_600_000) == pytest.approx(64_500.0)
+
+
+def test_detect_mispricing_hard_fails_only_when_operator_forces_oracle(monkeypatch):
     import hermes.mispricing as mp
     from hermes.models import MarketCandidate
 
+    # Opt-in override: operator forces the paid stream but it isn't wired.
     monkeypatch.setenv("HERMES_REQUIRE_ORACLE", "1")
     monkeypatch.setattr(cl, "oracle_enabled", lambda: False)
     cand = MarketCandidate(

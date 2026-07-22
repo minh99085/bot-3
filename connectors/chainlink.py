@@ -402,51 +402,29 @@ def oracle_streams_enabled() -> bool:
     return _oracle().streams_enabled
 
 
-def oracle_agg_allowed() -> bool:
-    """Whether the FREE on-chain AggregatorV3 may serve as the Chainlink tier.
-
-    Opt-in (default OFF) so enabling the coarse reference is an explicit
-    operator choice, never a silent fallback. Set HERMES_ORACLE_ALLOW_AGG=1 on
-    the VPS to let crypto lanes trade/settle on the aggregator when Data Streams
-    creds are absent. Still Chainlink — NOT a CEX fallback.
-    """
-    return os.environ.get("HERMES_ORACLE_ALLOW_AGG", "0").strip().lower() in ("1", "true", "yes")
-
-
 def oracle_enabled() -> bool:
-    """True when crypto lanes may price/settle on Chainlink — Data Streams creds
-    OR the opt-in free aggregator tier. Gates the crypto hard-fail in mispricing.
-    """
-    return oracle_streams_enabled() or oracle_agg_allowed()
+    """True when the exact Data Streams tier is available. The live crypto path
+    no longer requires it (settles on Polymarket + CEX + AggregatorV3); this
+    only reports whether the paid stream is wired for the A3 streams check."""
+    return oracle_streams_enabled()
 
 
 def oracle_required() -> bool:
-    """Whether crypto lanes MUST use the oracle (default on; off for backtests)."""
-    return os.environ.get("HERMES_REQUIRE_ORACLE", "1").strip().lower() in ("1", "true", "yes")
+    """Deprecated gate. Crypto no longer hard-fails on a missing Chainlink feed
+    (a 15m window is not HFT). Defaults OFF; retained only so an operator can
+    force-require the paid stream by setting HERMES_REQUIRE_ORACLE=1."""
+    return os.environ.get("HERMES_REQUIRE_ORACLE", "0").strip().lower() in ("1", "true", "yes")
 
 
 def oracle_price_at(asset: str, ts_unix: int) -> float:
-    """Chainlink price at a timestamp (strike/close). Raises OracleUnavailable.
+    """Chainlink Data Streams price at a timestamp. Raises OracleUnavailable.
 
-    Tiered, but ALWAYS Chainlink (never CEX):
-      1. Data Streams (exact, the feed Polymarket resolves on) when creds set.
-      2. FREE on-chain AggregatorV3 (coarse ~0.5%/1h) when HERMES_ORACLE_ALLOW_AGG
-         is set and creds are not. This is a COARSE, PRELIMINARY reference — the
-         same on-chain feed family, a lower tier — that lets the fleet trade and
-         run the A3 read without a Data Streams subscription. Trades priced this
-         way are tagged ``barrier_agg_open`` so reports never confuse the two.
-    Raises OracleUnavailable if neither tier yields a price.
+    Streams-only (needs creds). NOT used on the live crypto path anymore —
+    settlement/pricing run on Polymarket + CEX + AggregatorV3 (a 15m window
+    does not need a paid data-stream feed). Kept for the A3 ``--source streams``
+    verification, which requires the exact feed the market resolves on.
     """
-    if oracle_streams_enabled():
-        return _oracle().price_at(asset, int(ts_unix))
-    if oracle_agg_allowed():
-        px = _oracle().agg_price_at(asset, int(ts_unix))
-        if px and px > 0:
-            return float(px)
-        raise OracleUnavailable(
-            f"aggregator returned no round for {asset} at {ts_unix}"
-        )
-    return _oracle().price_at(asset, int(ts_unix))  # raises OracleUnavailable
+    return _oracle().price_at(asset, int(ts_unix))
 
 
 def oracle_agg_price_at(asset: str, ts_unix: int) -> float:

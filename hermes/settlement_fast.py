@@ -74,31 +74,31 @@ def _cex_plausible(asset: str, px: float) -> bool:
 
 
 def _resolution_price_at(asset: str, ts: int) -> float:
-    """Resolution price at ``ts`` — the value the market actually settles on.
+    """Price at ``ts`` for reconstructing an up/down outcome from a strike.
 
-    Crypto (BTC/ETH) resolves ONLY on the Chainlink data stream, so we route
-    there and HARD-FAIL closed (return 0.0 → caller SKIPS the settlement,
-    never falls back to CEX spot). Non-crypto assets fall through to CEX.
+    This is the FALLBACK path — the primary settlement source is Polymarket's
+    actual resolved outcome (see ``_polymarket_resolution``). A 15-minute window
+    does not need a paid Chainlink data stream: use the CEX price at the epoch,
+    and only if that is unavailable fall back to the free on-chain AggregatorV3.
+    Returns 0.0 if no source yields a plausible price (caller then skips).
     """
     a = (asset or "").upper()
-    if a in ("BTC", "ETH"):
-        try:
-            from connectors.chainlink import oracle_price_at
-
-            return float(oracle_price_at(a, int(ts)) or 0.0)
-        except Exception as exc:  # noqa: BLE001 (incl. OracleUnavailable)
-            logger.warning(
-                "oracle price unavailable asset=%s ts=%s: %s — SKIP settle (no CEX fallback)",
-                a, ts, exc,
-            )
-            return 0.0
     try:
         from connectors.cex_realtime import price_at_timestamp
 
-        return float(price_at_timestamp(a, int(ts)) or 0.0)
+        px = float(price_at_timestamp(a, int(ts)) or 0.0)
+        if px > 0:
+            return px
     except Exception as exc:  # noqa: BLE001
         logger.debug("cex price lookup failed asset=%s ts=%s: %s", a, ts, exc)
-        return 0.0
+    if a in ("BTC", "ETH"):
+        try:
+            from connectors.chainlink import oracle_agg_price_at
+
+            return float(oracle_agg_price_at(a, int(ts)) or 0.0)  # free, no creds
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("aggregatorv3 fallback failed asset=%s ts=%s: %s", a, ts, exc)
+    return 0.0
 
 
 def _open_price_at(asset: str, window_ts: int) -> float:
@@ -114,6 +114,21 @@ def _close_price_at(asset: str, close_ts: int) -> float:
     window with different results). Must be the stream value AT close_ts.
     """
     return _resolution_price_at(asset, int(close_ts))
+
+
+def _polymarket_resolution(slug: str) -> Optional[bool]:
+    """Polymarket's actual resolved outcome for ``slug`` (UP=True/DOWN=False),
+    or None if not yet resolved / unavailable. This is the settlement ground
+    truth — the market's own data, no price feed required."""
+    if not slug:
+        return None
+    try:
+        from connectors.polymarket import PolymarketClient
+
+        return PolymarketClient().get_market_resolution(slug)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("polymarket resolution lookup failed %s: %s", slug, exc)
+        return None
 
 
 def settle_expired_paper_positions(paper: bool = True) -> list[Settlement]:
@@ -157,43 +172,46 @@ def settle_expired_paper_positions(paper: bool = True) -> list[Settlement]:
         size = float(pos.get("size_usd") or 0)
         entry_asset = _resolve_asset(slug, meta)
 
-        # Resolve on close-vs-window-OPEN, exactly as Polymarket does.
-        # The open reference is the CEX price at the window-open epoch
-        # (slug window_ts), NOT the entry mid (which is mid-window and
-        # measures a different bet). A recorded strike in meta wins if present.
-        open_ref = 0.0
-        try:
-            strike_meta = meta.get("strike") or meta.get("price_to_beat")
-            if strike_meta is not None:
-                open_ref = float(strike_meta)
-        except (TypeError, ValueError):
+        # PRIMARY settlement: Polymarket's actual resolved outcome — the ground
+        # truth, the market's own data, no price feed needed.
+        resolved_up = _polymarket_resolution(slug)
+        if resolved_up is not None:
+            moved_up = resolved_up
+            ref_note = "settle_polymarket_resolution"
+        else:
+            # FALLBACK: reconstruct up/down from close-vs-window-OPEN, exactly as
+            # Polymarket does. Open reference = recorded strike if present, else
+            # the CEX price at the window-open epoch (NOT the entry mid, which is
+            # mid-window and measures a different bet).
             open_ref = 0.0
-        if not _cex_plausible(entry_asset, open_ref) and sm is not None:
-            open_ref = _open_price_at(entry_asset, sm.window_ts)
-        # Exit = price AT the window close (what the market resolves on), not
-        # the live mid at settle time — post-close drift must not flip outcomes.
-        exit_cex = _close_price_at(entry_asset, int(window_end)) if window_end else 0.0
-
-        # No reliable open/close reference → do NOT settle and NEVER fabricate.
-        # Leave the position open for a later retry / manual review.
-        if not (_cex_plausible(entry_asset, open_ref) and _cex_plausible(entry_asset, exit_cex)):
-            logger.warning(
-                "skip settle %s: no reliable open/close ref (open=%.4f close=%.4f)",
-                slug,
-                open_ref,
-                exit_cex,
-            )
-            continue
-
-        moved_up = exit_cex >= open_ref
+            try:
+                strike_meta = meta.get("strike") or meta.get("price_to_beat")
+                if strike_meta is not None:
+                    open_ref = float(strike_meta)
+            except (TypeError, ValueError):
+                open_ref = 0.0
+            if not _cex_plausible(entry_asset, open_ref) and sm is not None:
+                open_ref = _open_price_at(entry_asset, sm.window_ts)
+            # Exit = price AT the window close (what resolves the market), not the
+            # live mid at settle time — post-close drift must not flip outcomes.
+            exit_cex = _close_price_at(entry_asset, int(window_end)) if window_end else 0.0
+            # No outcome from EITHER source → do NOT settle, never fabricate.
+            # Leave open for a later retry (Polymarket may resolve by then).
+            if not (_cex_plausible(entry_asset, open_ref) and _cex_plausible(entry_asset, exit_cex)):
+                logger.warning(
+                    "skip settle %s: no polymarket resolution and no reliable "
+                    "open/close ref (open=%.4f close=%.4f)", slug, open_ref, exit_cex,
+                )
+                continue
+            moved_up = exit_cex >= open_ref
+            ref_note = f"settle_cex_openref open_cex={open_ref:.4f} exit_cex={exit_cex:.4f}"
         if direction in (Direction.UP, Direction.YES):
             won = moved_up
         else:
             won = not moved_up
         exit_px = 1.0 if won else 0.0
         notes = (
-            f"settle_cex_openref asset={entry_asset} "
-            f"open_cex={open_ref:.4f} exit_cex={exit_cex:.4f} "
+            f"{ref_note} asset={entry_asset} "
             f"bandit_arm={meta.get('bandit_arm')} "
             f"bandit_ctx={meta.get('bandit_context')}"
         )

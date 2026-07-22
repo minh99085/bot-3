@@ -128,3 +128,124 @@
 ## Active Lessons
 
 <!-- lessons_engine appends new dated lessons below -->
+
+## Risk-Guardian Audit
+
+### RGMC 2026-07-22 05:03 UTC
+- **Action**: DD guard soft_kappa=0.55 size=0.50
+- **Rolling WR**: 0.0% (n=9)
+- **DD**: 9.0%
+- **soft_kappa_scale**: 0.55
+- **size_multiplier**: 0.50
+
+### RGMC 2026-07-22 05:03 UTC
+- **Action**: DD guard soft_kappa=0.55 size=0.50
+- **Rolling WR**: 0.0% (n=10)
+- **DD**: 10.0%
+- **soft_kappa_scale**: 0.55
+- **size_multiplier**: 0.50
+
+### RGMC 2026-07-22 05:03 UTC
+- **Action**: DD guard soft_kappa=0.55 size=0.50
+- **Rolling WR**: 0.0% (n=11)
+- **DD**: 11.0%
+- **soft_kappa_scale**: 0.55
+- **size_multiplier**: 0.50
+
+### RGMC 2026-07-22 05:03 UTC
+- **Action**: DD guard soft_kappa=0.55 size=0.50
+- **Rolling WR**: 0.0% (n=12)
+- **DD**: 12.0%
+- **soft_kappa_scale**: 0.55
+- **size_multiplier**: 0.50
+
+### RGMC 2026-07-22 05:03 UTC
+- **Action**: DD guard soft_kappa=0.55 size=0.50
+- **Rolling WR**: 0.0% (n=13)
+- **DD**: 13.0%
+- **soft_kappa_scale**: 0.55
+- **size_multiplier**: 0.50
+
+### RGMC 2026-07-22 05:03 UTC
+- **Action**: DD guard soft_kappa=0.55 size=0.50
+- **Rolling WR**: 0.0% (n=14)
+- **DD**: 14.0%
+- **soft_kappa_scale**: 0.55
+- **size_multiplier**: 0.50
+
+### RGMC 2026-07-22 05:03 UTC
+- **Action**: tighten soft_kappa_scale→0.47 (WR=0.0%)
+- **Rolling WR**: 0.0% (n=15)
+- **DD**: 15.0%
+- **soft_kappa_scale**: 0.47
+- **size_multiplier**: 0.42
+
+### RGMC 2026-07-22 05:03 UTC
+- **Action**: tighten size_multiplier→0.42
+- **Rolling WR**: 0.0% (n=15)
+- **DD**: 15.0%
+- **soft_kappa_scale**: 0.47
+- **size_multiplier**: 0.42
+
+### RGMC 2026-07-22 05:03 UTC
+- **Action**: DD guard soft_kappa=0.47 size=0.42
+- **Rolling WR**: 0.0% (n=15)
+- **DD**: 15.0%
+- **soft_kappa_scale**: 0.47
+- **size_multiplier**: 0.42
+
+### RGMC 2026-07-22 05:03 UTC
+- **Action**: tighten soft_kappa_scale→0.40 (WR=0.0%)
+- **Rolling WR**: 0.0% (n=16)
+- **DD**: 16.0%
+- **soft_kappa_scale**: 0.40
+- **size_multiplier**: 0.36
+
+### RGMC 2026-07-22 05:03 UTC
+- **Action**: tighten size_multiplier→0.36
+- **Rolling WR**: 0.0% (n=16)
+- **DD**: 16.0%
+- **soft_kappa_scale**: 0.40
+- **size_multiplier**: 0.36
+
+### RGMC 2026-07-22 05:03 UTC
+- **Action**: DD guard soft_kappa=0.40 size=0.36
+- **Rolling WR**: 0.0% (n=16)
+- **DD**: 16.0%
+- **soft_kappa_scale**: 0.40
+- **size_multiplier**: 0.36
+
+### RGMC 2026-07-22 05:03 UTC
+- **Action**: tighten size_multiplier→0.35
+- **Rolling WR**: 0.0% (n=17)
+- **DD**: 17.0%
+- **soft_kappa_scale**: 0.40
+- **size_multiplier**: 0.35
+
+### RGMC 2026-07-22 05:03 UTC
+- **Action**: DD guard soft_kappa=0.40 size=0.35
+- **Rolling WR**: 0.0% (n=17)
+- **DD**: 17.0%
+- **soft_kappa_scale**: 0.40
+- **size_multiplier**: 0.35
+
+### RGMC 2026-07-22 05:03 UTC
+- **Action**: DD guard soft_kappa=0.40 size=0.35
+- **Rolling WR**: 0.0% (n=18)
+- **DD**: 18.0%
+- **soft_kappa_scale**: 0.40
+- **size_multiplier**: 0.35
+
+### RGMC 2026-07-22 05:03 UTC
+- **Action**: DD guard soft_kappa=0.40 size=0.35
+- **Rolling WR**: 0.0% (n=19)
+- **DD**: 19.0%
+- **soft_kappa_scale**: 0.40
+- **size_multiplier**: 0.35
+
+### RGMC 2026-07-22 05:03 UTC
+- **Action**: DD guard soft_kappa=0.40 size=0.35
+- **Rolling WR**: 0.0% (n=20)
+- **DD**: 20.0%
+- **soft_kappa_scale**: 0.40
+- **size_multiplier**: 0.35
