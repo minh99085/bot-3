@@ -54,7 +54,7 @@ def test_rotator_allows_all_four(monkeypatch):
     assert is_allowed_slug("btc-updown-15m-1")
     assert is_allowed_slug("eth-updown-5m-1")
     assert is_allowed_slug("sol-updown-5m-1")
-    assert set(active_filter_keys()) == {"btc5", "btc15", "eth5", "sol5"}
+    assert set(active_filter_keys()) == {"btc5", "btc15", "eth5", "eth15", "sol5"}
 
 
 def test_discovery_slugs_respect_filter(monkeypatch):

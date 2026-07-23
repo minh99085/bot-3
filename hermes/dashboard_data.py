@@ -31,9 +31,9 @@ COMPOSE_LANES: tuple[tuple[str, str], ...] = (
     ("lane02_autonomy", "baseline"),  # same q as baseline; full autonomy stack on
     ("lane03_drift", "drift_barrier"),
     ("lane04_favcont70", "fav_cont_70"),
-    ("lane05_favcont80", "fav_cont_80"),
+    ("lane05_favsniper", "fav_sniper"),
     ("lane06_garch", "garch_sigma"),
-    ("lane07_driftgarch", "drift_garch"),
+    ("lane07_ethdrift", "drift_barrier"),  # same drift lane, ETH-15m market
     ("lane08_favdepth", "fav_cont_depth"),
     ("lane09_random", "random_null"),
     ("lane10_favopen", "fav_cont_open"),

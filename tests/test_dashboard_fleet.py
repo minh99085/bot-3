@@ -14,7 +14,7 @@ def test_fleet_constants():
     assert len(dashboard_data.INSTANCE_IDS) == 10
     assert dashboard_data.INSTANCE_IDS[0] == "lane01_baseline"
     assert dashboard_data.INSTANCE_IDS[1] == "lane02_autonomy"
-    assert dashboard_data.INSTANCE_IDS[-1] == "lane10_depth"
+    assert dashboard_data.INSTANCE_IDS[-1] == "lane10_favopen"
 
 
 def test_instance_cards_isolated(monkeypatch, tmp_path):
@@ -150,8 +150,8 @@ def test_fleet_trade_history_newest_first(monkeypatch, tmp_path):
     paper = tmp_path / "paper"
     for iid, ts, pnl in (
         ("lane01_baseline", "2026-07-15T10:00:00Z", 10.0),
-        ("lane03_favorite", "2026-07-15T11:00:00Z", -5.0),
-        ("lane05_late", "2026-07-15T10:30:00Z", 8.0),
+        ("lane03_drift", "2026-07-15T11:00:00Z", -5.0),
+        ("lane05_favsniper", "2026-07-15T10:30:00Z", 8.0),
     ):
         d = paper / iid
         d.mkdir(parents=True)
@@ -174,6 +174,6 @@ def test_fleet_trade_history_newest_first(monkeypatch, tmp_path):
     monkeypatch.setattr(dashboard_data, "paper_dir", lambda: paper)
     hist = dashboard_data.fleet_trade_history(50)
     assert len(hist) == 3
-    assert hist[0]["instance_id"] == "lane03_favorite"
+    assert hist[0]["instance_id"] == "lane03_drift"
     assert hist[0]["lane"]
     assert hist[-1]["instance_id"] == "lane01_baseline"

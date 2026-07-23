@@ -15,7 +15,8 @@ import pytest
 from backtest import paper_ledger as pl
 
 REPO = Path(__file__).parent.parent
-BUNDLE = REPO / "reports" / "full_trading_report_20260716" / "trades.json"
+# The reports/ copy was pruned (fe22ab9); the bundle lives on as a fixture.
+BUNDLE = REPO / "tests" / "fixtures" / "vps_trades_20260716.json"
 
 
 def test_parse_slug_and_cex_notes():
