@@ -24,37 +24,39 @@ FLEET_INSTANCE_COUNT = 10
 FLEET_BANKROLL = STARTING_BANKROLL * FLEET_INSTANCE_COUNT  # $20,000
 
 # Compose instance_id → strategy variant (must match docker-compose.yml)
+# Registry v2 (main @ 3830088): drift-aware barrier + favorite-continuation;
+# fade/longshot/legacy lanes retired.
 COMPOSE_LANES: tuple[tuple[str, str], ...] = (
     ("lane01_baseline", "baseline"),
     ("lane02_autonomy", "baseline"),  # same q as baseline; full autonomy stack on
-    ("lane03_favorite", "favorite_only"),
-    ("lane04_longshot", "longshot_only"),
-    ("lane05_late", "late_window"),
+    ("lane03_drift", "drift_barrier"),
+    ("lane04_favcont70", "fav_cont_70"),
+    ("lane05_favcont80", "fav_cont_80"),
     ("lane06_garch", "garch_sigma"),
-    ("lane07_marketsigma", "market_sigma_gap"),
-    ("lane08_legacy", "legacy_ensemble"),
+    ("lane07_driftgarch", "drift_garch"),
+    ("lane08_favdepth", "fav_cont_depth"),
     ("lane09_random", "random_null"),
-    ("lane10_depth", "depth_aware"),
+    ("lane10_favopen", "fav_cont_open"),
 )
 
 INSTANCE_IDS = tuple(iid for iid, _ in COMPOSE_LANES)
 
 _LANE_ACCENTS = (
     "#38bdf8",  # baseline
-    "#22d3ee",  # chainlink
-    "#4ade80",  # favorite
-    "#fbbf24",  # longshot
-    "#fb923c",  # late
-    "#a78bfa",  # garch
-    "#34d399",  # market sigma
-    "#f87171",  # legacy (neg control)
+    "#22d3ee",  # autonomy
+    "#a78bfa",  # drift
+    "#4ade80",  # fav cont 70
+    "#34d399",  # fav cont 80
+    "#fbbf24",  # garch
+    "#fb923c",  # drift+garch
+    "#2dd4bf",  # fav depth
     "#94a3b8",  # random null
-    "#2dd4bf",  # depth
+    "#60a5fa",  # fav open
 )
 
 
 def _build_instance_metas() -> list[dict[str, Any]]:
-    """Lane cards for the 10× BTC15 paired experiment."""
+    """Lane cards for the 10× BTC15 paired experiment (registry v2)."""
     from hermes.lane_variants import LANES
 
     metas: list[dict[str, Any]] = []
@@ -68,11 +70,12 @@ def _build_instance_metas() -> list[dict[str, Any]]:
         else:
             short = variant.replace("_", " ")
             subtitle = spec.description if spec else variant
-            role = "null" if "random" in variant else (
-                "neg_control" if "legacy" in variant else (
-                    "control" if variant == "baseline" else "experiment"
-                )
-            )
+            if "random" in variant:
+                role = "null"
+            elif variant == "baseline":
+                role = "control"
+            else:
+                role = "experiment"
             display_variant = variant
         metas.append(
             {
