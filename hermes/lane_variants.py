@@ -46,6 +46,19 @@ class LaneSpec:
 # family trades WITH intra-window drift instead of against it. Controls kept:
 # random_null (lane09) and the pure/autonomy baseline pair (lane01/lane02 —
 # the pre-registered H1, untouched).
+# Registry v3 (2026-07-24). The 2026-07-24 scoreboard was decisive on the fav
+# family: lane10 (fav_cont, NO late-window gate) = 10 trades / 90% WR / +$20.70
+# vs null, while every LATE-window lane starved — lane04 (late-450) = 0,
+# lane08 (late-450 + depth) = 3, lane05 (late-180 sniper) = 0. Root cause: the
+# late-window gate conflicts with require_momentum_agree — by the late window
+# CEX momentum has decayed below the floor, so the momentum gate rejects. Fix:
+# the winning momentum-continuation config (favorite + drift + momentum, NO
+# late gate) becomes the base; fav lanes now differentiate by favorite STRENGTH
+# and book depth (dimensions that actually fire). The one deliberate late/theta
+# play (fav_sniper) is kept but made fireable: distance replaces momentum (a
+# far-from-strike favorite late in the window is the theta signal — momentum is
+# the wrong gate there). garch_sigma/drift_garch retired (garch was the worst
+# lane, −$167 vs null); fav_cont_open folded into fav_cont_70.
 LANES: dict[str, LaneSpec] = {
     s.name: s
     for s in (
@@ -54,33 +67,28 @@ LANES: dict[str, LaneSpec] = {
         # unset — the full-autonomy twin of pure lane01 (B1 autonomy A/B).
         LaneSpec("drift_barrier", "drift-adjusted barrier q, realized σ",
                  q_mode="barrier_drift"),
-        LaneSpec("fav_cont_70", "buy the >=0.70 favorite when drift agrees, late half",
-                 q_mode="barrier_drift", min_side_price=0.70,
-                 max_seconds_remaining=450.0, require_momentum_agree=True),
-        # fav_sniper — the theta-convergence play: in the last 3 minutes, buy
-        # the >=0.85 favorite ONLY when spot sits >=2 remaining-vol standard
-        # deviations beyond the strike (d = |ln(S/K)|/(σ√τ_rem) >= 2 means
-        # ~2.3% reversal risk by the math) AND the window hasn't been choppy
-        # (>1 strike-crossings = trendless — the favorite can still flip).
-        # Replaces fav_cont_80, which never fired (0.80 + late + momentum was
-        # strictly narrower than fav_cont_70 with no distinct hypothesis).
-        LaneSpec("fav_sniper", "last-3-min >=0.85 favorite, d>=2σ√τ, no chop",
-                 q_mode="barrier_drift", min_side_price=0.85,
-                 max_seconds_remaining=180.0, require_momentum_agree=True,
-                 min_abs_distance=2.0, max_window_flips=1),
-        LaneSpec("garch_sigma", "barrier q with GARCH(1,1) σ (mid book was +EV)",
-                 sigma_kind="garch"),
-        LaneSpec("drift_garch", "drift-adjusted barrier with GARCH(1,1) σ",
-                 q_mode="barrier_drift", sigma_kind="garch"),
-        LaneSpec("fav_cont_depth", "fav_cont_70 + real book depth only",
-                 q_mode="barrier_drift", min_side_price=0.70,
-                 max_seconds_remaining=450.0, require_momentum_agree=True,
-                 min_liquidity_usd=2000.0),
-        LaneSpec("random_null", "deterministic random side (null control)",
-                 q_mode="random"),
-        LaneSpec("fav_cont_open", "fav_cont_70 without the late-window gate",
+        # Proven winner config: >=0.70 favorite, drift agrees, momentum agrees,
+        # any point in the window. lane10 (frozen) + lane06 (learning twin).
+        LaneSpec("fav_cont_70", "buy the >=0.70 favorite when drift+momentum agree",
                  q_mode="barrier_drift", min_side_price=0.70,
                  require_momentum_agree=True),
+        # Stronger-favorite variant — differentiates by threshold, still fires.
+        LaneSpec("fav_cont_80", "buy the >=0.80 favorite when drift+momentum agree",
+                 q_mode="barrier_drift", min_side_price=0.80,
+                 require_momentum_agree=True),
+        # fav_sniper — the theta-convergence play: in the last 5 minutes, buy
+        # the >=0.80 favorite when spot sits >=1.5 remaining-vol σ beyond the
+        # strike (the move is decided) and the window isn't choppy. NO momentum
+        # gate: late-window momentum has faded, so distance is the right signal.
+        LaneSpec("fav_sniper", "last-5-min >=0.80 favorite, d>=1.5σ√τ, no chop",
+                 q_mode="barrier_drift", min_side_price=0.80,
+                 max_seconds_remaining=300.0, min_abs_distance=1.5,
+                 max_window_flips=1),
+        LaneSpec("fav_cont_depth", "fav_cont_70 into real book depth only",
+                 q_mode="barrier_drift", min_side_price=0.70,
+                 require_momentum_agree=True, min_liquidity_usd=2000.0),
+        LaneSpec("random_null", "deterministic random side (null control)",
+                 q_mode="random"),
     )
 }
 

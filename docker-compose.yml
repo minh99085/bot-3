@@ -79,6 +79,7 @@ services:
       HERMES_CAPITAL: "2000"
       HERMES_INTERVAL: "${HERMES_INTERVAL:-300}"
       HERMES_INSTANCE_ID: lane02_autonomy
+      HERMES_KNOWLEDGE_DIR: /app/data/paper/lane02_autonomy/knowledge
       MARKET_FILTER: btc15
       HERMES_STRATEGY_VARIANT: baseline
       HERMES_LOG_DIR: /app/logs/lane02_autonomy
@@ -119,9 +120,9 @@ services:
       - ./artifacts/lane03_drift:/app/artifacts/lane03_drift
       - ./config:/app/config:ro
 
-  hermes-lane04_favcont70:
+  hermes-lane04_favcont80:
     <<: *bot-common
-    container_name: hermes-lane04_favcont70
+    container_name: hermes-lane04_favcont80
     # Paused 2026-07-22: longshot book ~8% WR / large neg PnL vs random control.
     # Kept in compose (dashboard depends_on) but does not trade: sleep loop.
     restart: "no"
@@ -131,24 +132,24 @@ services:
       HERMES_LIVE: "0"
       HERMES_CAPITAL: "2000"
       HERMES_INTERVAL: "${HERMES_INTERVAL:-300}"
-      HERMES_INSTANCE_ID: lane04_favcont70
+      HERMES_INSTANCE_ID: lane04_favcont80
       HERMES_MAKER_MODE: "1"
       HERMES_PURE_MODE: "1"
       MARKET_FILTER: btc15
-      HERMES_STRATEGY_VARIANT: fav_cont_70
+      HERMES_STRATEGY_VARIANT: fav_cont_80
       HERMES_PAUSE_VARIANTS: longshot_only
       HERMES_MIN_SIDE_PRICE: "0.25"
-      HERMES_LOG_DIR: /app/logs/lane04_favcont70
-      HERMES_PAPER_DIR: /app/data/paper/lane04_favcont70
-      HERMES_HANDOFF_DIR: /app/data/handoff/lane04_favcont70
+      HERMES_LOG_DIR: /app/logs/lane04_favcont80
+      HERMES_PAPER_DIR: /app/data/paper/lane04_favcont80
+      HERMES_HANDOFF_DIR: /app/data/handoff/lane04_favcont80
       HERMES_HEALTH_PORT: "8080"
       HERMES_FORCE_SYNTHETIC: "${HERMES_FORCE_SYNTHETIC:-0}"
       HERMES_SCOPE_BTC_UPDOWN_ONLY: "1"
     volumes:
       - ./knowledge:/app/knowledge
       - ./data:/app/data
-      - ./logs/lane04_favcont70:/app/logs/lane04_favcont70
-      - ./artifacts/lane04_favcont70:/app/artifacts/lane04_favcont70
+      - ./logs/lane04_favcont80:/app/logs/lane04_favcont80
+      - ./artifacts/lane04_favcont80:/app/artifacts/lane04_favcont80
       - ./config:/app/config:ro
 
   hermes-lane05_favsniper:
@@ -177,29 +178,30 @@ services:
       - ./artifacts/lane05_favsniper:/app/artifacts/lane05_favsniper
       - ./config:/app/config:ro
 
-  hermes-lane06_garch:
+  hermes-lane06_favlearn:
     <<: *bot-common
-    container_name: hermes-lane06_garch
+    container_name: hermes-lane06_favlearn
     environment:
       HERMES_PAPER_ONLY: "1"
       HERMES_LIVE: "0"
       HERMES_CAPITAL: "2000"
       HERMES_INTERVAL: "${HERMES_INTERVAL:-300}"
-      HERMES_INSTANCE_ID: lane06_garch
-      HERMES_PURE_MODE: "1"
+      HERMES_INSTANCE_ID: lane06_favlearn
+      HERMES_MAKER_MODE: "1"
+      HERMES_KNOWLEDGE_DIR: /app/data/paper/lane06_favlearn/knowledge
       MARKET_FILTER: btc15
-      HERMES_STRATEGY_VARIANT: garch_sigma
-      HERMES_LOG_DIR: /app/logs/lane06_garch
-      HERMES_PAPER_DIR: /app/data/paper/lane06_garch
-      HERMES_HANDOFF_DIR: /app/data/handoff/lane06_garch
+      HERMES_STRATEGY_VARIANT: fav_cont_70
+      HERMES_LOG_DIR: /app/logs/lane06_favlearn
+      HERMES_PAPER_DIR: /app/data/paper/lane06_favlearn
+      HERMES_HANDOFF_DIR: /app/data/handoff/lane06_favlearn
       HERMES_HEALTH_PORT: "8080"
       HERMES_FORCE_SYNTHETIC: "${HERMES_FORCE_SYNTHETIC:-0}"
       HERMES_SCOPE_BTC_UPDOWN_ONLY: "1"
     volumes:
       - ./knowledge:/app/knowledge
       - ./data:/app/data
-      - ./logs/lane06_garch:/app/logs/lane06_garch
-      - ./artifacts/lane06_garch:/app/artifacts/lane06_garch
+      - ./logs/lane06_favlearn:/app/logs/lane06_favlearn
+      - ./artifacts/lane06_favlearn:/app/artifacts/lane06_favlearn
       - ./config:/app/config:ro
 
   hermes-lane07_ethdrift:
@@ -290,7 +292,7 @@ services:
       HERMES_MAKER_MODE: "1"
       HERMES_PURE_MODE: "1"
       MARKET_FILTER: btc15
-      HERMES_STRATEGY_VARIANT: fav_cont_open
+      HERMES_STRATEGY_VARIANT: fav_cont_70
       HERMES_LOG_DIR: /app/logs/lane10_favopen
       HERMES_PAPER_DIR: /app/data/paper/lane10_favopen
       HERMES_HANDOFF_DIR: /app/data/handoff/lane10_favopen
@@ -349,11 +351,11 @@ services:
         condition: service_started
       hermes-lane03_drift:
         condition: service_started
-      hermes-lane04_favcont70:
+      hermes-lane04_favcont80:
         condition: service_started
       hermes-lane05_favsniper:
         condition: service_started
-      hermes-lane06_garch:
+      hermes-lane06_favlearn:
         condition: service_started
       hermes-lane07_ethdrift:
         condition: service_started

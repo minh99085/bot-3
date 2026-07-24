@@ -14,25 +14,29 @@ from hermes.lane_variants import (
 )
 
 
-def test_registry_v2_variants_and_controls():
-    # 9 variants for 10 lanes: lane01 AND lane02 both run "baseline" —
-    # lane02_autonomy is the full-stack twin (pure mode off), B1 A/B.
-    assert len(LANES) == 9
+def test_registry_v3_variants_and_controls():
+    # 7 variants; lane01/lane02 share "baseline", lane06/lane10 share
+    # "fav_cont_70" (learning vs frozen twins).
+    assert len(LANES) == 7
     assert "random_null" in LANES      # null control (kept, prereg)
     assert LANES["baseline"].q_mode == "barrier"
-    # v2: drift family replaces the proven-loser fade lanes.
-    for name in ("drift_barrier", "fav_cont_70", "fav_sniper",
-                 "fav_cont_depth", "fav_cont_open", "drift_garch"):
+    for name in ("drift_barrier", "fav_cont_70", "fav_cont_80",
+                 "fav_sniper", "fav_cont_depth"):
         assert name in LANES, name
+    # v3: the LATE-WINDOW gate is gone from the fav-continuation lanes (it
+    # starved them by conflicting with the momentum gate). Only the sniper
+    # keeps a late gate, and it uses DISTANCE not momentum.
+    for fav in ("fav_cont_70", "fav_cont_80", "fav_cont_depth"):
+        assert LANES[fav].max_seconds_remaining >= 1e9, fav
+        assert LANES[fav].require_momentum_agree is True
+    assert LANES["fav_cont_80"].min_side_price == pytest.approx(0.80)
     sniper = LANES["fav_sniper"]
-    assert sniper.min_abs_distance == 2.0 and sniper.max_window_flips == 1
-    assert sniper.min_side_price == 0.85 and sniper.max_seconds_remaining == 180.0
-    assert LANES["fav_cont_70"].require_momentum_agree is True
-    assert LANES["fav_cont_70"].min_side_price == pytest.approx(0.70)
-    # retired: anti-signal fades + finished negative control
-    for gone in ("longshot_only", "late_window", "market_sigma_gap",
-                 "depth_aware", "favorite_only", "legacy_ensemble",
-                 "chainlink_ref", "fav_cont_80"):
+    assert sniper.max_seconds_remaining == 300.0
+    assert sniper.min_abs_distance == 1.5 and sniper.max_window_flips == 1
+    assert sniper.require_momentum_agree is False  # distance is the late signal
+    # retired
+    for gone in ("garch_sigma", "drift_garch", "fav_cont_open",
+                 "longshot_only", "late_window", "chainlink_ref"):
         assert gone not in LANES, gone
 
 
@@ -62,10 +66,11 @@ def test_entry_gates_fav_cont():
     bad, reason = entry_allows(side_price=0.25, seconds_remaining=400, liquidity_usd=5000,
                                spec=fav, momentum=0.3, side_is_up=True)
     assert not bad and ("side_price" in reason or "cheap_ticket" in reason)
-    # too early in the window
-    bad, reason = entry_allows(side_price=0.75, seconds_remaining=700, liquidity_usd=5000,
-                               spec=fav, momentum=0.3, side_is_up=True)
-    assert not bad and "too_early" in reason
+    # v3: fav_cont_70 has NO late-window gate — early entry is allowed (this is
+    # the config that actually fires; the late gate starved lane04).
+    ok, _ = entry_allows(side_price=0.75, seconds_remaining=800, liquidity_usd=5000,
+                         spec=fav, momentum=0.3, side_is_up=True)
+    assert ok
 
     depth = LANES["fav_cont_depth"]
     bad, reason = entry_allows(side_price=0.75, seconds_remaining=400, liquidity_usd=100,
@@ -146,26 +151,6 @@ def test_sigma_ratio_ewma_learns_across_windows(monkeypatch):
     # Bad inputs don't move it
     assert mp.update_sigma_ratio("BTC", implied=0.0, realized=0.6) == pytest.approx(r2)
     assert mp.sigma_ratio("ETH") == 1.0  # unseen asset → neutral
-
-
-def test_garch_lane_uses_garch_sigma(monkeypatch):
-    monkeypatch.setenv(ENV_VAR, "garch_sigma")
-    # noisy path so GARCH has variance to chew on
-    import math
-
-    prices = [64000.0 * (1 + 0.0004 * math.sin(i * 1.7)) for i in range(60)]
-    _hist(monkeypatch, prices)
-    q, features, meta = mp.compute_cex_implied_up(
-        momentum=0.3, timeframe="15m", pm_implied_up=0.60, spot=64100.0,
-        asset="ETH", seconds_to_resolution=400, strike=64000.0,
-        slug="btc-updown-15m-1784000003",
-    )
-    assert meta["model_q_source"] == "barrier_cex_open"
-    from strategy.advanced_signals import garch_sigma_ann
-
-    assert features["barrier_sigma_ann"] == pytest.approx(
-        garch_sigma_ann(prices, sample_sec=1.0), rel=1e-6
-    )
 
 
 def test_baseline_unchanged_by_default(monkeypatch):

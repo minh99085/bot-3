@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -90,21 +91,35 @@ def ensure_dirs() -> None:
 _SEEDED_FROM_TEMPLATE = {"STATE.md", "LESSONS.md"}
 
 
+def _runtime_knowledge_dir() -> Path:
+    """Where the per-turn runtime memory (STATE.md/LESSONS.md) lives.
+
+    Defaults to the shared knowledge/ mount, but HERMES_KNOWLEDGE_DIR points a
+    lane at its OWN dir. Two learning lanes (lane02 baseline, lane06 fav) must
+    NOT share one LESSONS.md, or each learns from the other's trades — the same
+    confound PURE mode removes for the frozen lanes. Curated files (SKILL.md,
+    templates) always resolve from the shared knowledge/.
+    """
+    override = os.environ.get("HERMES_KNOWLEDGE_DIR", "").strip()
+    return Path(override) if override else KNOWLEDGE
+
+
 def knowledge_path(name: str) -> Path:
-    path = KNOWLEDGE / name
-    # STATE.md / LESSONS.md are runtime files (updated every turn / appended to)
-    # and are gitignored. Seed the curated baseline — snapshot skeleton + seed
-    # lessons — from the committed <stem>.template.md on a fresh checkout so a
-    # clone doesn't silently lose the seed AVOID rules or state keys.
-    if name in _SEEDED_FROM_TEMPLATE and not path.exists():
-        tmpl = KNOWLEDGE / f"{Path(name).stem}.template.md"
-        if tmpl.exists():
-            try:
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text(tmpl.read_text(encoding="utf-8"), encoding="utf-8")
-            except OSError as exc:  # shared-fs races must not kill the loop
-                logger.warning("seed %s from template failed: %s", name, exc)
-    return path
+    # Runtime files honor the per-instance override; curated files stay shared.
+    if name in _SEEDED_FROM_TEMPLATE:
+        path = _runtime_knowledge_dir() / name
+        # Seed the curated baseline from the committed <stem>.template.md (always
+        # from the SHARED knowledge/) so a fresh dir keeps the seed AVOID rules.
+        if not path.exists():
+            tmpl = KNOWLEDGE / f"{Path(name).stem}.template.md"
+            if tmpl.exists():
+                try:
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text(tmpl.read_text(encoding="utf-8"), encoding="utf-8")
+                except OSError as exc:  # shared-fs races must not kill the loop
+                    logger.warning("seed %s from template failed: %s", name, exc)
+        return path
+    return KNOWLEDGE / name
 
 
 def read_text(path: Path) -> str:

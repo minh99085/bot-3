@@ -228,15 +228,19 @@ def test_lane_registry_chainlink_gone_falls_back_to_baseline(monkeypatch):
 
 
 def test_compose_wiring_pure_flags():
-    """lane02_autonomy = full stack; every other lane runs pure."""
+    """Two LEARNING lanes (02 baseline, 06 fav) have no pure flag and isolated
+    knowledge dirs; all 8 others run pure."""
     text = open("docker-compose.yml").read()
-    assert "lane02_chainlink" not in text
-    lane02 = text.split("hermes-lane02_autonomy:")[2 if False else 1]
-    lane02_env = lane02.split("volumes:")[0]
-    assert "HERMES_PURE_MODE" not in lane02_env
-    assert 'HERMES_STRATEGY_VARIANT: baseline' in lane02_env
-    for lane in ("lane01_baseline", "lane03_drift", "lane04_favcont70",
-                 "lane05_favsniper", "lane06_garch", "lane07_ethdrift",
+    assert "lane02_chainlink" not in text and "lane06_garch" not in text
+    for learn, variant in (("lane02_autonomy", "baseline"),
+                           ("lane06_favlearn", "fav_cont_70")):
+        env = text.split(f"HERMES_INSTANCE_ID: {learn}")[1].split("volumes:")[0]
+        assert "HERMES_PURE_MODE" not in env, learn          # learning ON
+        assert f"HERMES_STRATEGY_VARIANT: {variant}" in env
+        assert "HERMES_KNOWLEDGE_DIR" in env, learn           # isolated lessons
+    for lane in ("lane01_baseline", "lane03_drift", "lane04_favcont80",
+                 "lane05_favsniper", "lane07_ethdrift",
                  "lane08_favdepth", "lane09_random", "lane10_favopen"):
         seg = text.split(f"HERMES_INSTANCE_ID: {lane}")[1].split("volumes:")[0]
         assert 'HERMES_PURE_MODE: "1"' in seg, lane
+        assert "HERMES_KNOWLEDGE_DIR" not in seg, lane        # frozen → shared ok

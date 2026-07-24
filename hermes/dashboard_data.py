@@ -27,15 +27,15 @@ FLEET_BANKROLL = STARTING_BANKROLL * FLEET_INSTANCE_COUNT  # $20,000
 # Registry v2+: drift/fav lanes; lane07 = ETH-15m drift twin of BTC lane03.
 COMPOSE_LANES: tuple[tuple[str, str], ...] = (
     ("lane01_baseline", "baseline"),
-    ("lane02_autonomy", "baseline"),  # same q as baseline; full autonomy stack on
+    ("lane02_autonomy", "baseline"),  # baseline q + full autonomy stack (learning)
     ("lane03_drift", "drift_barrier"),
-    ("lane04_favcont70", "fav_cont_70"),
+    ("lane04_favcont80", "fav_cont_80"),
     ("lane05_favsniper", "fav_sniper"),
-    ("lane06_garch", "garch_sigma"),
+    ("lane06_favlearn", "fav_cont_70"),  # fav_cont_70 q + learning stack ON
     ("lane07_ethdrift", "drift_barrier"),  # same drift lane, ETH-15m market
     ("lane08_favdepth", "fav_cont_depth"),
     ("lane09_random", "random_null"),
-    ("lane10_favopen", "fav_cont_open"),
+    ("lane10_favopen", "fav_cont_70"),  # frozen twin of lane06 (learning A/B)
 )
 
 INSTANCE_IDS = tuple(iid for iid, _ in COMPOSE_LANES)
@@ -75,9 +75,14 @@ def _build_instance_metas() -> list[dict[str, Any]]:
 
         if iid == "lane02_autonomy":
             short = "autonomy"
-            subtitle = "BTC-15m barrier q + full autonomy stack (pure-vs-autonomy A/B)"
+            subtitle = "BTC-15m baseline q + full learning stack (vs lane01 frozen)"
             role = "experiment"
             display_variant = "autonomy"
+        elif iid == "lane06_favlearn":
+            short = "fav learn"
+            subtitle = "BTC-15m fav_cont_70 + full learning stack (vs lane10 frozen)"
+            role = "experiment"
+            display_variant = "fav_cont_70+learn"
         elif iid == "lane07_ethdrift":
             short = "ETH Drift"
             subtitle = (

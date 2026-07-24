@@ -28,38 +28,39 @@ def test_distance_shrinks_with_more_time_and_vol():
     assert d_calm > d_wild   # same gap is LESS decisive in a wild tape
 
 
-# ── sniper gates ─────────────────────────────────────────────────────────────
+# ── sniper gates (v3: 0.80, last-5-min, d>=1.5σ√τ, no chop, NO momentum) ──────
 
-SNIPER = dict(side_price=0.88, seconds_remaining=150, liquidity_usd=5000,
-              spec=LANES["fav_sniper"], momentum=0.3, side_is_up=True)
+SNIPER = dict(side_price=0.85, seconds_remaining=250, liquidity_usd=5000,
+              spec=LANES["fav_sniper"], momentum=0.0, side_is_up=True)
 
 
 def test_sniper_fires_only_when_far_and_clean():
-    ok, _ = entry_allows(**SNIPER, abs_distance=2.5, window_flips=0)
+    # momentum=0.0 must NOT block the sniper (distance is its signal, not mom).
+    ok, _ = entry_allows(**SNIPER, abs_distance=2.0, window_flips=0)
     assert ok
 
 
 def test_sniper_blocks_close_to_strike():
-    bad, reason = entry_allows(**SNIPER, abs_distance=1.2, window_flips=0)
+    bad, reason = entry_allows(**SNIPER, abs_distance=1.0, window_flips=0)
     assert not bad and "too_close" in reason
 
 
 def test_sniper_blocks_choppy_window():
-    bad, reason = entry_allows(**SNIPER, abs_distance=2.5, window_flips=3)
+    bad, reason = entry_allows(**SNIPER, abs_distance=2.0, window_flips=3)
     assert not bad and "choppy" in reason
 
 
 def test_sniper_blocks_unknown_flips():
-    bad, reason = entry_allows(**SNIPER, abs_distance=2.5, window_flips=None)
+    bad, reason = entry_allows(**SNIPER, abs_distance=2.0, window_flips=None)
     assert not bad and "flips_unknown" in reason
 
 
 def test_sniper_late_and_favorite_only():
     bad, reason = entry_allows(**{**SNIPER, "seconds_remaining": 400},
-                               abs_distance=2.5, window_flips=0)
+                               abs_distance=2.0, window_flips=0)
     assert not bad and "too_early" in reason
-    bad, reason = entry_allows(**{**SNIPER, "side_price": 0.80},
-                               abs_distance=2.5, window_flips=0)
+    bad, reason = entry_allows(**{**SNIPER, "side_price": 0.75},
+                               abs_distance=2.0, window_flips=0)
     assert not bad and "side_price" in reason
 
 
@@ -194,10 +195,35 @@ def test_eth15_discovery_slugs(monkeypatch):
 
 def test_compose_new_lanes():
     text = open("docker-compose.yml").read()
-    assert "lane05_favsniper" in text and "lane05_favcont80" not in text
-    assert "lane07_ethdrift" in text and "lane07_driftgarch" not in text
+    assert "lane07_ethdrift" in text
     eth_seg = text.split("HERMES_INSTANCE_ID: lane07_ethdrift")[1].split("volumes:")[0]
     assert "MARKET_FILTER: eth15" in eth_seg
-    for lane in ("lane04_favcont70", "lane05_favsniper", "lane08_favdepth", "lane10_favopen"):
+    # v3: maker mode on all four fav lanes (04 renamed to favcont80, 06→favlearn)
+    for lane in ("lane04_favcont80", "lane05_favsniper", "lane06_favlearn",
+                 "lane08_favdepth", "lane10_favopen"):
         seg = text.split(f"HERMES_INSTANCE_ID: {lane}")[1].split("volumes:")[0]
         assert 'HERMES_MAKER_MODE: "1"' in seg, lane
+
+
+def test_learning_lanes_have_isolated_knowledge_dirs(monkeypatch, tmp_path):
+    """lane02 and lane06 must not share one LESSONS.md (cross-learning confound).
+    knowledge_path honors HERMES_KNOWLEDGE_DIR for runtime files, shared for
+    curated ones."""
+    import hermes.state_io as sio
+
+    shared = tmp_path / "knowledge"
+    shared.mkdir()
+    (shared / "LESSONS.template.md").write_text("SEED\n", encoding="utf-8")
+    (shared / "SKILL.md").write_text("CURATED\n", encoding="utf-8")
+    monkeypatch.setattr(sio, "KNOWLEDGE", shared)
+
+    lane06_dir = tmp_path / "lane06"
+    monkeypatch.setenv("HERMES_KNOWLEDGE_DIR", str(lane06_dir))
+    lessons = sio.knowledge_path("LESSONS.md")
+    assert lessons.parent == lane06_dir              # runtime file isolated
+    assert lessons.read_text(encoding="utf-8") == "SEED\n"  # seeded from shared template
+    # curated files ignore the override — always shared
+    assert sio.knowledge_path("SKILL.md").parent == shared
+
+    monkeypatch.delenv("HERMES_KNOWLEDGE_DIR", raising=False)
+    assert sio.knowledge_path("LESSONS.md").parent == shared  # default shared
