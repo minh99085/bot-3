@@ -167,6 +167,24 @@ def test_eth15_scope_wired():
     assert sm.series == "eth_updown_15m"
 
 
+def test_eth15_filter_key_and_allowed_slug(monkeypatch):
+    """Regression: filter_key_for_scoped was missing eth+15m, so every ETH-15m
+    slug got filter_key='' and is_allowed_slug rejected it — lane07 sat idle
+    while the market existed. This exercises the FULL gate, not just parse."""
+    import hermes.market_scope as ms
+
+    sm = ms.parse_slug("eth-updown-15m-1784861100")
+    assert sm.filter_key == "eth15"  # was "" before the fix
+
+    monkeypatch.setenv("MARKET_FILTER", "eth15")
+    monkeypatch.setenv("HERMES_SCOPE_BTC_UPDOWN_ONLY", "1")  # as compose sets it
+    assert ms.is_allowed_slug("eth-updown-15m-1784861100") is True
+    assert ms.is_allowed_slug("btc-updown-15m-1784861100") is False  # scoped out
+    # rotator / all must include eth15 in the allow-set
+    for mf in ("rotator", "all", ""):
+        assert ms.slug_matches_filter(sm, market_filter=mf) is True
+
+
 def test_eth15_discovery_slugs(monkeypatch):
     import hermes.market_scope as ms
 

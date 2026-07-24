@@ -78,7 +78,7 @@ class ScopedMarket:
     slug: str
     window_ts: int
     asset: str = "btc"  # btc | eth | sol
-    filter_key: str = ""  # btc5 | btc15 | eth5 | sol5
+    filter_key: str = ""  # btc5 | btc15 | eth5 | eth15 | sol5
 
 
 @dataclass(frozen=True)
@@ -145,7 +145,7 @@ def filter_specs() -> dict[str, MarketFilterSpec]:
 def market_filter() -> str:
     """Active MARKET_FILTER from env (default btc5+btc15 legacy → rotator-safe 'legacy').
 
-    Values: btc5 | btc15 | eth5 | sol5 | rotator | all
+    Values: btc5 | btc15 | eth5 | eth15 | sol5 | rotator | all
     Empty / unset with HERMES_SCOPE_BTC_UPDOWN_ONLY=1 → both BTC lanes (legacy).
     """
     raw = os.environ.get("MARKET_FILTER", "").strip().lower()
@@ -192,6 +192,8 @@ def filter_key_for_scoped(sm: ScopedMarket) -> str:
         return "btc15"
     if sm.asset == "eth" and sm.timeframe == "5m":
         return "eth5"
+    if sm.asset == "eth" and sm.timeframe == "15m":
+        return "eth15"
     if sm.asset == "sol" and sm.timeframe == "5m":
         return "sol5"
     return ""
@@ -235,7 +237,7 @@ def slug_matches_filter(
 ) -> bool:
     mf = (market_filter or market_filter_from_env()).strip().lower()
     if mf in ("", "all", "rotator"):
-        return sm.filter_key in ("btc5", "btc15", "eth5", "sol5")
+        return sm.filter_key in ("btc5", "btc15", "eth5", "eth15", "sol5")
     if mf == "legacy_btc":
         return sm.asset == "btc" and sm.timeframe in ("5m", "15m")
     return sm.filter_key == mf
