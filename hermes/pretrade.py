@@ -181,21 +181,42 @@ def _lessons_for_sleeve(substrategy_id: str, lessons: str) -> list[str]:
     return hits[:8]
 
 
+def _maker_mode() -> bool:
+    return os.environ.get("HERMES_MAKER_MODE", "0").strip().lower() in ("1", "true", "yes")
+
+
 def _recalc_live_ev(signal: Signal) -> tuple[float, float, str]:
-    """Recalc EV after cost using orderbook slip when possible + Chainlink context."""
+    """Recalc EV after cost using orderbook slip when possible + Chainlink context.
+
+    The slip estimate MUST match the lane's actual fill mode, or the slippage
+    gate rejects a fill it will never make. Maker lanes rest near the mid
+    (conceding 25% of the half-spread — same as fill_model maker=True), so their
+    entry slip is a fraction of the taker VWAP walk; measuring them as takers
+    (the old bug) rejected every maker entry on the thin 15m books.
+    """
     slip_bps = SLIPPAGE_BPS_FLOOR
     note = "floor_slip"
     token = signal.clob_token_id
+    maker = _maker_mode()
     if token:
         try:
             from connectors.polymarket import PolymarketClient
 
             pm = PolymarketClient()
-            if signal.direction.value in ("YES", "UP"):
-                _, slip_bps = pm.simulate_buy_vwap(token, max(25.0, signal.size_usd_suggested))
+            if maker:
+                book = pm.get_orderbook(token)
+                mid = float(book.mid or 0.0)
+                best_ask = float(book.best_ask or 0.0)
+                if mid > 0 and best_ask > 0:
+                    maker_px = mid + 0.25 * max(0.0, best_ask - mid)
+                    slip_bps = max(0.0, (maker_px - mid) / mid * 10_000.0)
+                    note = f"maker_slip={slip_bps:.1f}bps"
+                else:
+                    _, slip_bps = pm.simulate_buy_vwap(token, max(25.0, signal.size_usd_suggested))
+                    note = f"book_slip={slip_bps:.1f}bps(maker_no_mid)"
             else:
                 _, slip_bps = pm.simulate_buy_vwap(token, max(25.0, signal.size_usd_suggested))
-            note = f"book_slip={slip_bps:.1f}bps"
+                note = f"book_slip={slip_bps:.1f}bps"
         except Exception as exc:  # noqa: BLE001
             note = f"book_unavailable:{exc}"
     # Oracle alignment soft-adjusts EV for crypto HF
